@@ -1,0 +1,121 @@
+import { z } from 'zod';
+import type { Timestamp } from 'firebase/firestore';
+import type { CamposAuditoria } from './auditoria';
+
+/**
+ * Postulación = la unión candidato↔proceso.
+ * Mientras el `proceso` representa "una vacante que se está intentando llenar",
+ * la `postulacion` representa "este candidato concreto compitiendo por ese proceso".
+ *
+ * Importante:
+ * - El estado vive aquí (no en el candidato), porque el mismo candidato puede
+ *   estar en varias postulaciones a la vez (Módulo 11 · base cross-vacante).
+ * - El historial completo de hitos vive en `marcas` (mapa nombre_hito→Timestamp).
+ *   Las claves de `marcas` son descriptivas (no atadas al enum) para soportar
+ *   también marcas no-de-estado como `decidido_en`, `apto_medico_en`, etc.
+ *   `ultima_transicion_estado` es solo conveniencia para queries.
+ *
+ * Este enum tiene 16 estados (vs 14 del legado) para capturar finos del flujo:
+ *  - pre_entrevistado en pendiente/ok/no_interesado (el candidato puede no responder)
+ *  - pruebas en enviadas/completadas (Magneto envía, candidato puede no completar)
+ *  - filtrado_no_cumple como descarte temprano (Dolor #5)
+ *  - desistio_candidato como salida explícita (común cuando consigue otra oferta)
+ *
+ * Decisión 2026-04-29: este enum reemplaza al `estadoPostulacion` legado en enums.ts.
+ */
+
+export const estadoPostulacion = z.enum([
+  // Sourcing IA (paso 4.5) — identificado por Gemini, sin contacto humano todavía
+  'sourceado_por_ia',
+
+  // Entrada
+  'postulado',
+
+  // Pre-entrevista (paso 6) — desglose para capturar "el candidato no contesta"
+  'pre_entrevistado_pendiente',
+  'pre_entrevistado_ok',
+  'pre_entrevistado_no_interesado',
+
+  // Filtro duro (Dolor #5)
+  'filtrado_no_cumple',
+
+  // Pruebas (paso 7)
+  'pruebas_enviadas',
+  'pruebas_completadas',
+
+  // Entrevista analista (paso 8)
+  'entrevistado_analista',
+
+  // Referencias (paso 9)
+  'referencias_validadas',
+
+  // Terna y decisión (pasos 12-14)
+  'en_terna',
+  'seleccionado_por_lider',
+  'descartado_por_lider',
+
+  // Ingreso (pasos 15-19)
+  'descartado_examenes_medicos',
+  'en_contratacion',
+  'contratado',
+
+  // Salida del candidato (transversal)
+  'desistio_candidato',
+]);
+export type EstadoPostulacion = z.infer<typeof estadoPostulacion>;
+
+export const fuentePostulacion = z.enum([
+  'postulacion_directa',
+  'magneto',
+  'hunter_linkedin',
+  'referido',
+  'base_interna',
+  'caja_compensacion',
+  'instituciones',
+]);
+export type FuentePostulacion = z.infer<typeof fuentePostulacion>;
+
+/**
+ * Mapa de hitos: cada hito relevante deja sello de tiempo.
+ * Las claves son descriptivas (`postulado_en`, `decidido_en`, `apto_medico_en`, etc.)
+ * — no necesariamente coinciden con los valores del enum. Se preserva todo el
+ * historial; nunca se sobreescribe.
+ */
+export type MarcasPostulacion = Record<string, Timestamp>;
+
+export const postulacionInputSchema = z.object({
+  // Referencias
+  candidato_id: z.string().min(1),
+  candidato_nombre: z.string().min(1),
+  proceso_id: z.string().min(1),
+  vacante_id: z.string().min(1),
+  vacante_consecutivo: z.string().min(1),
+
+  // Datos denormalizados (evitan join al listar)
+  candidato_email: z.string().email().or(z.literal('')).default(''),
+  candidato_telefono: z.string().default(''),
+  candidato_cv_url: z.string().url().nullable().default(null),
+  cargo_nombre: z.string().min(1),
+
+  // Trazabilidad de origen
+  fuente: fuentePostulacion,
+  origen_publicacion_id: z.string().nullable().default(null),
+  analista_uid: z.string().nullable().default(null),
+
+  // Estado
+  estado: estadoPostulacion.default('postulado'),
+  cumple_criterios: z.boolean().nullable().default(null),
+  razon_descarte: z.string().nullable().default(null),
+  /** Etapa donde se descartó. Texto libre — los descartes ad-hoc (ej. `'entrevista_lider'`) no siempre son un estado del enum. */
+  descarte_etapa: z.string().nullable().default(null),
+});
+
+export type PostulacionInput = z.infer<typeof postulacionInputSchema>;
+
+export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
+  id: string;
+  fecha_postulacion: Timestamp;
+  ultima_transicion_estado: Timestamp;
+  /** Historial completo de hitos por estado. */
+  marcas: MarcasPostulacion;
+}

@@ -1,0 +1,242 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Helpers =====
+    function signedIn() { return request.auth != null; }
+    function rol() { return request.auth.token.rol; }
+    function isAdmin() { return signedIn() && rol() == 'admin'; }
+    function isCoord() { return signedIn() && rol() == 'coordinador'; }
+    function isGH() { return signedIn() && rol() == 'gh'; }
+    function isLider() { return signedIn() && rol() == 'lider'; }
+    function isAnalista() { return signedIn() && rol() == 'analista'; }
+    function isApoyo() { return signedIn() && rol() == 'apoyo'; }
+    function staff() { return isAdmin() || isCoord() || isGH(); }
+
+    function nuevoConAuditoria() {
+      return request.resource.data.creado_por == request.auth.uid
+        && request.resource.data.actualizado_por == request.auth.uid;
+    }
+    function preservaCreador() {
+      return request.resource.data.creado_por == resource.data.creado_por
+        && request.resource.data.creado_en == resource.data.creado_en
+        && request.resource.data.actualizado_por == request.auth.uid;
+    }
+
+    // ===== Catálogos =====
+    match /empresas/{id} {
+      allow read: if signedIn();
+      allow create: if (isAdmin() || isGH()) && nuevoConAuditoria();
+      allow update: if (isAdmin() || isGH()) && preservaCreador();
+      allow delete: if false;
+    }
+    match /sedes/{id} {
+      allow read: if signedIn();
+      allow create: if (isAdmin() || isGH()) && nuevoConAuditoria();
+      allow update: if (isAdmin() || isGH()) && preservaCreador();
+      allow delete: if false;
+    }
+    match /unidades/{id} {
+      allow read: if signedIn();
+      allow create: if (isAdmin() || isGH()) && nuevoConAuditoria();
+      allow update: if (isAdmin() || isGH()) && preservaCreador();
+      allow delete: if false;
+    }
+    match /cargos_catalogo/{id} {
+      allow read: if signedIn();
+      allow create: if (isAdmin() || isGH()) && nuevoConAuditoria();
+      allow update: if (isAdmin() || isGH()) && preservaCreador();
+      allow delete: if false;
+    }
+    match /festivos/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    match /plantillas_comunicacion/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isGH();
+    }
+    match /plantillas_graficas/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isGH();
+    }
+
+    // ===== Usuarios =====
+    match /usuarios/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || staff());
+      allow create: if isAdmin() && nuevoConAuditoria();
+      allow update: if (isAdmin() || request.auth.uid == uid) && preservaCreador();
+      allow delete: if false;
+    }
+
+    // ===== Contadores (sólo Admin SDK) =====
+    match /contadores/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ===== Vacantes =====
+    match /vacantes/{id} {
+      // get evalúa por-doc (tiene resource disponible).
+      // Los candidatos anónimos en la landing pueden leer vacantes publicadas
+      // y en proceso para ver descripción y postular.
+      allow get: if signedIn() && (
+        staff()
+        || isAnalista()
+        || isApoyo()
+        || (isLider() && resource.data.lider_uid == request.auth.uid)
+        || resource.data.estado == 'publicada'
+        || resource.data.estado == 'en_proceso'
+      );
+      // list NO tiene resource; cualquier autenticado puede listar,
+      // el cliente debe filtrar (ej. lider por lider_uid).
+      // Cada doc individual sigue pasando por allow get.
+      allow list: if signedIn();
+      allow create: if (
+        (isLider() && request.resource.data.lider_uid == request.auth.uid)
+        || isCoord()
+        || isAdmin()
+      ) && nuevoConAuditoria()
+        && request.resource.data.estado == 'borrador'
+        && request.resource.data.aval_url is string
+        && request.resource.data.aval_url.size() > 0;
+      allow update: if signedIn() && (
+        staff()
+        || (isAnalista() && (
+              resource.data.analista_uid == null
+              || resource.data.analista_uid == request.auth.uid
+            ))
+      ) && preservaCreador();
+      allow delete: if false;
+    }
+
+    // ===== Procesos y colecciones derivadas =====
+    match /procesos/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || (isAnalista());
+    }
+    match /publicaciones/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /candidatos/{id} {
+      allow read: if signedIn();
+      // Permite que candidatos anónimos creen su registro desde la landing.
+      allow create: if signedIn();
+      allow update: if staff() || isAnalista();
+      allow delete: if false;
+    }
+    match /postulaciones/{id} {
+      allow read: if signedIn();
+      // Permite postulación desde landing pública.
+      allow create: if signedIn();
+      allow update: if staff() || isAnalista();
+      allow delete: if false;
+    }
+    match /contactos_candidato/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /pruebas/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /entrevistas/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista() || (isLider() && resource.data.entrevistador_uid == request.auth.uid);
+    }
+    match /referencias/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /documentos_candidato/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /informes/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /ternas/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /decisiones/{id} {
+      allow read: if signedIn();
+      allow create: if isLider() && request.resource.data.lider_uid == request.auth.uid
+        || staff();
+      allow update, delete: if false;
+    }
+    match /validaciones_salariales/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /examenes_medicos/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /carpetas_digitales/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /tickets_conexion/{id} {
+      allow get: if staff() || isAnalista()
+        || (isApoyo() && resource.data.area == request.auth.token.area_apoyo);
+      allow list: if staff() || isAnalista() || isApoyo();
+      allow create: if staff() || isAnalista();
+      allow update: if staff() || isAnalista()
+        || (isApoyo() && resource.data.area == request.auth.token.area_apoyo);
+      allow delete: if false;
+    }
+
+    match /busquedas_sourcing/{id} {
+      allow read: if signedIn();
+      allow write: if false; // solo Cloud Functions vía Admin SDK
+    }
+
+    match /debida_diligencia/{id} {
+      allow read: if signedIn();
+      allow create: if isAnalista() || staff();
+      allow update: if isAnalista() || staff();
+      allow delete: if false;
+    }
+
+    match /datos_basicos_integrante/{id} {
+      allow read: if signedIn();
+      allow create: if isAnalista() || staff();
+      allow update: if isAnalista() || staff();
+      allow delete: if false;
+    }
+
+    match /conceptos_atraccion/{id} {
+      allow read: if signedIn();
+      allow create: if isAnalista() || staff();
+      allow update: if isAnalista() || staff();
+      allow delete: if false;
+    }
+
+    // ===== Transversales =====
+    match /ans_seguimiento/{id} {
+      allow read: if signedIn();
+      allow write: if staff() || isAnalista();
+    }
+    match /eventos/{id} {
+      allow read: if staff();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+    match /notificaciones/{id} {
+      allow get: if signedIn() && resource.data.destinatario_uid == request.auth.uid;
+      allow list: if signedIn();
+      allow update: if signedIn() && resource.data.destinatario_uid == request.auth.uid;
+      allow create: if staff();
+      allow delete: if false;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
