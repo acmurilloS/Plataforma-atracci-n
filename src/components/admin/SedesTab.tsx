@@ -70,7 +70,19 @@ export function SedesTab() {
             <tbody>
               {sedes.map((s) => (
                 <tr key={s.id} className="border-t border-navy-50">
-                  <td className="px-4 py-2 font-mono text-navy-900">{s.codigo}</td>
+                  <td className="px-4 py-2 font-mono text-navy-900">
+                    <div className="flex items-center gap-1.5">
+                      {s.codigo}
+                      {s.es_provisional && (
+                        <span
+                          title="Código provisional · pendiente de validar con GH (ATR-21)"
+                          className="rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+                        >
+                          prov
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-2">{s.nombre}</td>
                   <td className="px-4 py-2 text-navy-600">{s.empresa_codigo}</td>
                   <td className="px-4 py-2 text-navy-600">{s.ciudad}</td>

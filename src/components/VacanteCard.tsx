@@ -147,7 +147,7 @@ export function VacanteCard({ vacante }: Props) {
 
   return (
     <Link to={`/vacantes/${vacante.id}`} className="block group">
-      <Card interactive elevation="sm" className="h-full flex flex-col">
+      <Card interactive elevation="elevated" className="h-full flex flex-col">
         <div className="flex items-start justify-between gap-2 mb-1">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] text-navy-500">

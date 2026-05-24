@@ -9,7 +9,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "emulators": "firebase emulators:start --import=.emulator-data --export-on-exit"
+    "emulators": "node scripts/start-emulators.mjs",
+    "emulators:fresh": "firebase emulators:start --export-on-exit=./emulator-data"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

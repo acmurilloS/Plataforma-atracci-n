@@ -9,6 +9,8 @@ export const sedeInputSchema = z.object({
   direccion: z.string().max(200).default(''),
   ciudad: z.string().min(1).max(80),
   activo: z.boolean().default(true),
+  /** Mismo flag que empresas — código pendiente de validar con GH (ATR-21). */
+  es_provisional: z.boolean().default(false),
 });
 
 export type SedeInput = z.infer<typeof sedeInputSchema>;

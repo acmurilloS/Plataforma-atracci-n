@@ -46,7 +46,19 @@ export function EmpresasTab() {
             <tbody>
               {empresas.map((e) => (
                 <tr key={e.id} className="border-t border-navy-50">
-                  <td className="px-4 py-2 font-mono text-navy-900">{e.codigo}</td>
+                  <td className="px-4 py-2 font-mono text-navy-900">
+                    <div className="flex items-center gap-1.5">
+                      {e.codigo}
+                      {e.es_provisional && (
+                        <span
+                          title="Código provisional · pendiente de validar con GH (ATR-21)"
+                          className="rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+                        >
+                          prov
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-2">{e.nombre}</td>
                   <td className="px-4 py-2 text-navy-600">{e.nit}</td>
                   <td className="px-4 py-2">{e.activo ? '✓' : '—'}</td>
