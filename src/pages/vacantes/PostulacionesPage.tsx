@@ -28,6 +28,9 @@ export default function PostulacionesPage() {
     telefono: string;
     documento_tipo: string;
     documento_numero: string;
+    ciudad_residencia: string;
+    especialidad_tecnica: string;
+    anios_experiencia: string;
     fuente: FuentePostulacion;
   }>({
     nombres: '',
@@ -36,12 +39,16 @@ export default function PostulacionesPage() {
     telefono: '',
     documento_tipo: 'CC',
     documento_numero: '',
+    ciudad_residencia: '',
+    especialidad_tecnica: '',
+    anios_experiencia: '',
     fuente: 'magneto',
   });
   const [err, setErr] = useState<string | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [soloInternos, setSoloInternos] = useState(false);
   const inputFilesRef = useRef<HTMLInputElement>(null);
   const [subiendoCVs, setSubiendoCVs] = useState(false);
   const [progresoCVs, setProgresoCVs] = useState<{ hechos: number; total: number } | null>(null);
@@ -52,6 +59,7 @@ export default function PostulacionesPage() {
     setProcesando(true);
     setErr(null);
     try {
+      const aniosNum = form.anios_experiencia ? parseInt(form.anios_experiencia, 10) : null;
       const candidatoId = await crear('candidatos', {
         nombres: form.nombres,
         apellidos: form.apellidos,
@@ -60,7 +68,12 @@ export default function PostulacionesPage() {
         documento_tipo: form.documento_tipo,
         documento_numero: form.documento_numero,
         provisional: !form.documento_numero,
-        ciudad_residencia: null,
+        // Pool-ready (ATR-11) desde día 1
+        ciudad_residencia: form.ciudad_residencia || null,
+        dominio_principal: 'sin_clasificar',
+        especialidad_tecnica: form.especialidad_tecnica.trim(),
+        skills_tags: [],
+        anios_experiencia_aproximados: aniosNum,
         origen: form.fuente,
         magneto_id: null,
         linkedin_url: null,
@@ -68,6 +81,16 @@ export default function PostulacionesPage() {
         observaciones: '',
         alertas: [],
         alertas_tipos: [],
+        total_postulaciones: 1,
+        resultado_ultima_postulacion: 'sin_resultado_aun',
+        fecha_ultima_postulacion: Timestamp.now(),
+        ultima_vacante_id: vacante.id,
+        ultima_vacante_consecutivo: vacante.consecutivo,
+        pruebas_historial: [],
+        apto_para_pool_futuro: true,
+        motivo_no_apto_pool: null,
+        duplicado_de: null,
+        duplicado_detectado_en: null,
       });
       const nombreCompleto = `${form.nombres} ${form.apellidos}`.trim();
       const ahora = Timestamp.now();
@@ -102,6 +125,9 @@ export default function PostulacionesPage() {
         telefono: '',
         documento_tipo: 'CC',
         documento_numero: '',
+        ciudad_residencia: '',
+        especialidad_tecnica: '',
+        anios_experiencia: '',
         fuente: 'magneto',
       });
     } catch (e) {
@@ -149,7 +175,12 @@ export default function PostulacionesPage() {
           documento_tipo: null,
           documento_numero: null,
           provisional: true,
+          // Pool-ready: en bulk import vienen vacíos, la analista los llena después
           ciudad_residencia: null,
+          dominio_principal: 'sin_clasificar',
+          especialidad_tecnica: '',
+          skills_tags: [],
+          anios_experiencia_aproximados: null,
           origen: 'magneto',
           magneto_id: null,
           linkedin_url: null,
@@ -157,6 +188,16 @@ export default function PostulacionesPage() {
           observaciones: `CV importado masivamente · archivo original: ${file.name}`,
           alertas: [],
           alertas_tipos: [],
+          total_postulaciones: 1,
+          resultado_ultima_postulacion: 'sin_resultado_aun',
+          fecha_ultima_postulacion: Timestamp.now(),
+          ultima_vacante_id: vacante.id,
+          ultima_vacante_consecutivo: vacante.consecutivo,
+          pruebas_historial: [],
+          apto_para_pool_futuro: true,
+          motivo_no_apto_pool: null,
+          duplicado_de: null,
+          duplicado_detectado_en: null,
         });
         const ahora = Timestamp.now();
         await crear('postulaciones', {
@@ -211,6 +252,7 @@ export default function PostulacionesPage() {
 
   const filtradas = postulaciones.filter((p) => {
     if (filtroEstado && p.estado !== filtroEstado) return false;
+    if (soloInternos && p.fuente !== 'base_interna') return false;
     if (busqueda) {
       const q = busqueda.toLowerCase();
       return (
@@ -220,6 +262,8 @@ export default function PostulacionesPage() {
     }
     return true;
   });
+
+  const totalInternos = postulaciones.filter((p) => p.fuente === 'base_interna').length;
 
   if (!vacante) return <div className="px-6 py-10 text-sm text-navy-500">Cargando vacante…</div>;
 
@@ -318,6 +362,22 @@ export default function PostulacionesPage() {
             </select>
           </label>
           <Input label="Doc. número" v={form.documento_numero} onChange={(v) => setForm({ ...form, documento_numero: v })} />
+          <Input
+            label="Ciudad"
+            v={form.ciudad_residencia}
+            onChange={(v) => setForm({ ...form, ciudad_residencia: v })}
+          />
+          <Input
+            label="Especialidad"
+            v={form.especialidad_tecnica}
+            onChange={(v) => setForm({ ...form, especialidad_tecnica: v })}
+          />
+          <Input
+            label="Años exp."
+            type="number"
+            v={form.anios_experiencia}
+            onChange={(v) => setForm({ ...form, anios_experiencia: v })}
+          />
           <label className="block">
             <span className="text-xs font-medium text-navy-700">Fuente</span>
             <select
@@ -345,12 +405,12 @@ export default function PostulacionesPage() {
         </div>
       </form>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center flex-wrap">
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre o email…"
-          className="flex-1 rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
+          className="flex-1 min-w-[200px] rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
         />
         <select
           value={filtroEstado}
@@ -364,6 +424,18 @@ export default function PostulacionesPage() {
             </option>
           ))}
         </select>
+        <label
+          className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs cursor-pointer ${
+            soloInternos ? 'border-navy-300 bg-navy-50 text-navy-900' : 'border-navy-200 bg-white text-navy-700'
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={soloInternos}
+            onChange={(e) => setSoloInternos(e.target.checked)}
+          />
+          🏢 Solo internos ({totalInternos})
+        </label>
       </div>
 
       <div className="rounded-xl border border-navy-100 bg-white overflow-hidden">
@@ -394,7 +466,16 @@ export default function PostulacionesPage() {
             )}
             {filtradas.map((p) => (
               <tr key={p.id} className="border-t border-navy-50">
-                <td className="px-4 py-2 font-medium">{p.candidato_nombre}</td>
+                <td className="px-4 py-2 font-medium">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {p.candidato_nombre}
+                    {p.fuente === 'base_interna' && (
+                      <span className="rounded-full bg-navy-100 text-navy-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                        🏢 Interno
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-4 py-2 text-xs text-navy-600">
                   {p.candidato_email || <span className="italic text-navy-400">sin email</span>}
                   <br />

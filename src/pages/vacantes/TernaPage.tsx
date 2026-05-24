@@ -6,9 +6,17 @@ import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useFestivosAnio } from '../../hooks/useCatalogos';
-import { validarTransicion } from '../../schemas';
+import {
+  MOTIVOS_RECICLABLES,
+  politicaParaCriticidad,
+  validarTransicion,
+  type MotivoDescarte,
+} from '../../schemas';
 import type { VacanteDoc, PostulacionDoc, ProcesoDoc } from '../../schemas';
 import { crearTicketsConexion } from '../../utils/crearTicketsConexion';
+import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
+import { DescarteModal } from '../../components/vacantes/DescarteModal';
+import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 
 export default function TernaPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +33,7 @@ export default function TernaPage() {
   const festivos = useFestivosAnio(new Date().getFullYear());
   const [procesando, setProcesando] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [descarteAbierto, setDescarteAbierto] = useState<PostulacionDoc | null>(null);
 
   const enTerna = postulaciones.filter((p) => p.estado === 'en_terna');
   const descartadosLider = postulaciones.filter((p) => p.estado === 'descartado_por_lider');
@@ -38,6 +47,19 @@ export default function TernaPage() {
 
   const esLider = rol === 'lider' || rol === 'admin';
   const puedeReabrir = rol === 'analista' || rol === 'coordinador' || rol === 'admin';
+  const puedeCerrarTerna = rol === 'analista' || rol === 'coordinador' || rol === 'admin';
+
+  const ternaEnviada = vacante?.terna_enviada_en ?? null;
+  const ternaRespondida = vacante?.terna_respondida_en ?? null;
+  const relojActivo = !!ternaEnviada && !ternaRespondida && vacante?.estado === 'terna_enviada';
+  const politica = vacante ? politicaParaCriticidad(vacante.criticidad) : null;
+  const minCandidatos = politica?.min_candidatos_terna ?? 1;
+  const faltanCandidatos = enTerna.length < minCandidatos;
+  const msRestantes = ternaEnviada
+    ? 48 * 60 * 60 * 1000 - (Date.now() - ternaEnviada.toMillis())
+    : 0;
+  const horasRestantes = Math.max(0, Math.floor(msRestantes / (60 * 60 * 1000)));
+  const vencido = relojActivo && msRestantes <= 0;
 
   async function aprobar(p: PostulacionDoc) {
     if (!vacante || !user || !perfil) return;
@@ -61,7 +83,11 @@ export default function TernaPage() {
         ultima_transicion_estado: ahora,
         'marcas.decidido_en': ahora,
       });
-      await actualizar('vacantes', vacante.id, { estado: 'seleccionado' });
+      await actualizar('vacantes', vacante.id, {
+        estado: 'seleccionado',
+        // Detiene el reloj de 48h del líder (paso 13).
+        terna_respondida_en: ahora,
+      });
       // Auto-dispara solicitud de exámenes médicos (paso 15)
       await crear('examenes_medicos', {
         postulacion_id: p.id,
@@ -89,6 +115,15 @@ export default function TernaPage() {
         festivosIsoSet: festivos,
         disparadoPor: 'automatico_terna',
       });
+      // Denormaliza al candidato: lo deja como "contratado" en su resumen
+      // cross-vacante para que no aparezca en pool ni en queries futuras.
+      await actualizarResultadoCandidato({
+        candidato_id: p.candidato_id,
+        resultado: 'contratado',
+        vacante_id: vacante.id,
+        vacante_consecutivo: vacante.consecutivo,
+        uid: user.uid,
+      });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos aprobar.');
     } finally {
@@ -96,10 +131,15 @@ export default function TernaPage() {
     }
   }
 
-  async function descartar(p: PostulacionDoc) {
+  /**
+   * Descarte tipificado del líder (paso 14).
+   *
+   * En vez de un `window.prompt` libre, abrimos un modal con motivos del enum
+   * `motivoDescarte`. Esto permite que el pool futuro (ATR-11) distinga
+   * reciclables (feedback blando) de duros (no apto, sin perfil).
+   */
+  async function descartarConMotivo(p: PostulacionDoc, motivo: MotivoDescarte, notas: string) {
     if (!vacante || !user || !perfil) return;
-    const razon = window.prompt('Razón del descarte:');
-    if (razon == null) return;
     setProcesando(p.id);
     setErr(null);
     try {
@@ -110,7 +150,8 @@ export default function TernaPage() {
         lider_uid: user.uid,
         lider_nombre: `${perfil.nombre} ${perfil.apellido}`,
         aprobado: false,
-        feedback_lider: razon,
+        feedback_lider: notas,
+        motivo_descarte: motivo,
         condiciones_adicionales: null,
         decidido_en: Timestamp.now(),
       });
@@ -118,12 +159,29 @@ export default function TernaPage() {
       await actualizar('postulaciones', p.id, {
         estado: 'descartado_por_lider',
         ultima_transicion_estado: ahora,
-        razon_descarte: razon,
+        motivo_descarte: motivo,
+        razon_descarte: notas || null,
         descarte_etapa: 'entrevista_lider',
         'marcas.descartado_en': ahora,
       });
+      // Denormaliza al candidato (pool-ready): los reciclables quedan como
+      // 'apto_no_contratado' para que el pool los identifique como candidatos
+      // viables; los duros bajan el flag apto_para_pool_futuro.
+      await actualizarResultadoCandidato({
+        candidato_id: p.candidato_id,
+        resultado: MOTIVOS_RECICLABLES.has(motivo) ? 'apto_no_contratado' : 'descartado_lider',
+        vacante_id: vacante.id,
+        vacante_consecutivo: vacante.consecutivo,
+        motivo_descarte: motivo,
+        uid: user.uid,
+      });
+      // Cualquier decisión del líder detiene el reloj de 48h (paso 13).
+      if (vacante.terna_enviada_en && !vacante.terna_respondida_en) {
+        await actualizar('vacantes', vacante.id, { terna_respondida_en: ahora });
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos descartar.');
+      throw e;
     } finally {
       setProcesando(null);
     }
@@ -136,6 +194,41 @@ export default function TernaPage() {
       ultima_transicion_estado: ahora,
       'marcas.en_terna_en': ahora,
     });
+  }
+
+  /**
+   * Cierra la terna y arranca el reloj de 48h del líder (paso 12 → paso 13).
+   * Setea vacante.estado=terna_enviada + terna_enviada_en=now. La scheduled
+   * function `revisarRecordatoriosLider` cada hora chequea esta vacante y
+   * dispara recordatorios a las 24h y expiración a las 48h.
+   */
+  async function cerrarTerna() {
+    if (!vacante) return;
+    if (enTerna.length === 0) {
+      setErr('No hay candidatos en terna para enviar al líder.');
+      return;
+    }
+    if (!window.confirm(
+      `¿Cerrar la terna con ${enTerna.length} candidato(s) y enviar al líder ${vacante.lider_nombre}?\n\n` +
+        'Arranca un reloj de 48h. A las 24h le mandamos recordatorio; a las 48h sin respuesta, la vacante se pausa.',
+    )) return;
+    setProcesando('cerrar-terna');
+    setErr(null);
+    try {
+      const ahora = Timestamp.now();
+      await actualizar('vacantes', vacante.id, {
+        estado: 'terna_enviada',
+        terna_enviada_en: ahora,
+        terna_respondida_en: null,
+        recordatorio_48h_enviado_en: null,
+        recordatorio_24h_enviado_en: null,
+        recordatorio_expirado_en: null,
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No pudimos cerrar la terna.');
+    } finally {
+      setProcesando(null);
+    }
   }
 
   /**
@@ -188,6 +281,94 @@ export default function TernaPage() {
 
       {err && <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{err}</div>}
 
+      <PoliticaCriticidadBanner criticidad={vacante.criticidad} />
+
+      {/* Reloj 48h del líder (paso 13). Visible para todos los roles cuando la terna
+          ya fue enviada y aún no hay respuesta. */}
+      {relojActivo && (
+        <div
+          className={`rounded-xl border p-4 ${
+            vencido
+              ? 'border-red-300 bg-red-50'
+              : horasRestantes <= 24
+                ? 'border-amber-300 bg-amber-50'
+                : 'border-navy-200 bg-cream-50'
+          }`}
+        >
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <p className="text-xs uppercase tracking-widest font-semibold text-navy-700">
+                Reloj del líder · paso 13
+              </p>
+              <p className="text-sm text-navy-800 mt-1">
+                Terna enviada a <strong>{vacante.lider_nombre}</strong>{' '}
+                el {vacante.terna_enviada_en?.toDate().toLocaleString('es-CO')}.
+              </p>
+            </div>
+            <div className="text-right">
+              <p
+                className={`font-display text-2xl font-bold ${
+                  vencido ? 'text-red-700' : horasRestantes <= 24 ? 'text-amber-700' : 'text-navy-900'
+                }`}
+              >
+                {vencido ? 'Vencido' : `${horasRestantes}h restantes`}
+              </p>
+              <p className="text-xs text-navy-500">
+                {vencido
+                  ? 'La vacante se pausará en el próximo ciclo de revisión.'
+                  : horasRestantes <= 24
+                    ? 'Recordatorio de 24h enviado.'
+                    : 'Sin respuesta aún.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CTA para cerrar la terna y arrancar el reloj. Solo si aún no se envió.
+          Bloqueado si faltan candidatos según política de criticidad. */}
+      {puedeCerrarTerna && enTerna.length > 0 && !ternaEnviada && (
+        <div
+          className={`rounded-xl border p-4 flex items-center justify-between flex-wrap gap-3 ${
+            faltanCandidatos ? 'border-amber-300 bg-amber-50' : 'border-gold-200 bg-cream-50'
+          }`}
+        >
+          <div>
+            <p className="text-sm font-semibold text-navy-900">
+              Cerrar terna y enviar al líder
+            </p>
+            <p className="text-xs text-navy-700 mt-1">
+              Tienes {enTerna.length} candidato(s) listos.{' '}
+              {faltanCandidatos ? (
+                <span className="text-amber-800 font-medium">
+                  La política de criticidad {vacante.criticidad} exige mínimo {minCandidatos}.
+                  {rol === 'admin' && ' Puedes forzar el cierre como admin.'}
+                </span>
+              ) : (
+                <>
+                  Política {vacante.criticidad}: {minCandidatos} mínimo,{' '}
+                  {politica?.candidatos_terna_sugeridos} sugeridos. Al enviar arranca el reloj de
+                  48h.
+                </>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={cerrarTerna}
+            disabled={
+              procesando === 'cerrar-terna' || (faltanCandidatos && rol !== 'admin')
+            }
+            className="rounded-md bg-gold-700 text-white px-4 py-2 text-sm font-semibold hover:bg-gold-800 disabled:bg-gold-300"
+          >
+            {procesando === 'cerrar-terna'
+              ? '…'
+              : faltanCandidatos && rol !== 'admin'
+                ? `Faltan ${minCandidatos - enTerna.length}`
+                : '📤 Cerrar terna y notificar líder'}
+          </button>
+        </div>
+      )}
+
       <section>
         <h2 className="font-display text-xl font-semibold text-navy-900 mb-3">
           Candidatos en terna ({enTerna.length})
@@ -213,7 +394,7 @@ export default function TernaPage() {
               {esLider && (
                 <div className="flex gap-2">
                   <button
-                    onClick={() => descartar(p)}
+                    onClick={() => setDescarteAbierto(p)}
                     disabled={procesando === p.id}
                     className="rounded-md border border-red-200 text-red-700 px-3 py-1.5 text-sm font-medium hover:bg-red-50 disabled:opacity-50"
                   >
@@ -324,6 +505,17 @@ export default function TernaPage() {
         médicos (paso 15), dispara los <Link to="/tickets" className="text-gold-700 hover:underline">tickets de conexión</Link> a IT
         / compras / bodega / contabilidad / talentos (paso 20) y mueve la vacante a estado <code>seleccionado</code>.
       </p>
+
+      {descarteAbierto && (
+        <DescarteModal
+          open={!!descarteAbierto}
+          candidatoNombre={descarteAbierto.candidato_nombre}
+          onClose={() => setDescarteAbierto(null)}
+          onConfirmar={async (motivo, notas) => {
+            await descartarConMotivo(descarteAbierto, motivo, notas);
+          }}
+        />
+      )}
     </div>
   );
 }

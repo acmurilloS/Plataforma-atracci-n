@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Timestamp } from 'firebase/firestore';
 import type { CamposAuditoria } from './auditoria';
+import { motivoDescarte } from './enums';
 
 /**
  * Postulación = la unión candidato↔proceso.
@@ -105,6 +106,11 @@ export const postulacionInputSchema = z.object({
   // Estado
   estado: estadoPostulacion.default('postulado'),
   cumple_criterios: z.boolean().nullable().default(null),
+  /**
+   * Motivo tipificado del descarte. Permite agregar para análisis del pool
+   * (ATR-11). Si el motivo es `otro`, se DEBE complementar con `razon_descarte`.
+   */
+  motivo_descarte: motivoDescarte.nullable().default(null),
   razon_descarte: z.string().nullable().default(null),
   /** Etapa donde se descartó. Texto libre — los descartes ad-hoc (ej. `'entrevista_lider'`) no siempre son un estado del enum. */
   descarte_etapa: z.string().nullable().default(null),

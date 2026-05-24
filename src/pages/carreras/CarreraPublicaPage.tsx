@@ -32,6 +32,9 @@ export default function CarreraPublicaPage() {
     telefono: '',
     documento_tipo: 'CC',
     documento_numero: '',
+    ciudad_residencia: '',
+    especialidad_tecnica: '',
+    anios_experiencia: '',
     experiencia_texto: '',
     linkedin_url: '',
   });
@@ -100,6 +103,7 @@ export default function CarreraPublicaPage() {
       const cv_url = await getDownloadURL(storageRef);
 
       const uid = auth.currentUser.uid;
+      const aniosNum = form.anios_experiencia ? parseInt(form.anios_experiencia, 10) : null;
       const candRef = await addDoc(collection(db, 'candidatos'), {
         nombres: form.nombres,
         apellidos: form.apellidos,
@@ -108,7 +112,12 @@ export default function CarreraPublicaPage() {
         documento_tipo: form.documento_tipo,
         documento_numero: form.documento_numero || null,
         provisional: !form.documento_numero,
-        ciudad_residencia: null,
+        // Pool-ready (ATR-11): capturamos desde día 1 para que el pool madure
+        ciudad_residencia: form.ciudad_residencia || null,
+        dominio_principal: 'sin_clasificar',
+        especialidad_tecnica: form.especialidad_tecnica.trim(),
+        skills_tags: [],
+        anios_experiencia_aproximados: aniosNum,
         origen: 'equitel_reclutamiento',
         magneto_id: null,
         linkedin_url: form.linkedin_url || null,
@@ -116,6 +125,17 @@ export default function CarreraPublicaPage() {
         observaciones: form.experiencia_texto,
         alertas: [],
         alertas_tipos: [],
+        // Estado consolidado del candidato (se actualiza con cada postulación)
+        total_postulaciones: 1,
+        resultado_ultima_postulacion: 'sin_resultado_aun',
+        fecha_ultima_postulacion: Timestamp.now(),
+        ultima_vacante_id: vacante.id,
+        ultima_vacante_consecutivo: vacante.consecutivo,
+        pruebas_historial: [],
+        apto_para_pool_futuro: true,
+        motivo_no_apto_pool: null,
+        duplicado_de: null,
+        duplicado_detectado_en: null,
         creado_en: serverTimestamp(),
         creado_por: uid,
         actualizado_en: serverTimestamp(),
@@ -357,6 +377,31 @@ export default function CarreraPublicaPage() {
                 />
               </div>
               <Input
+                label="Ciudad de residencia"
+                placeholder="Bogotá, Medellín, Cali…"
+                required
+                value={form.ciudad_residencia}
+                onChange={(e) => setForm({ ...form, ciudad_residencia: e.target.value })}
+              />
+              <div className="grid grid-cols-3 gap-3">
+                <Input
+                  label="Años exp."
+                  type="number"
+                  min={0}
+                  max={50}
+                  className="col-span-1"
+                  value={form.anios_experiencia}
+                  onChange={(e) => setForm({ ...form, anios_experiencia: e.target.value })}
+                />
+                <Input
+                  label="Especialidad principal"
+                  className="col-span-2"
+                  placeholder="ej. Backend Node.js, Comercial B2B…"
+                  value={form.especialidad_tecnica}
+                  onChange={(e) => setForm({ ...form, especialidad_tecnica: e.target.value })}
+                />
+              </div>
+              <Input
                 label="LinkedIn (opcional)"
                 placeholder="https://linkedin.com/in/…"
                 value={form.linkedin_url}
@@ -364,7 +409,7 @@ export default function CarreraPublicaPage() {
               />
               <Textarea
                 label="Experiencia breve"
-                placeholder="Años de experiencia, rol anterior, algo que te destaque"
+                placeholder="Resumen breve de tu trayectoria, logros relevantes"
                 rows={3}
                 value={form.experiencia_texto}
                 onChange={(e) => setForm({ ...form, experiencia_texto: e.target.value })}

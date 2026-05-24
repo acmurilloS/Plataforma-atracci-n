@@ -105,7 +105,15 @@ export default function TicketsPage() {
         t.estado !== 'cancelado' &&
         (t.ans_expira_en?.toMillis?.() ?? Infinity) < ahora,
     ).length;
-    return { total, abiertos, enProgreso, bloqueados, resueltos, vencidos };
+    const preavisos = tickets.filter(
+      (t) =>
+        t.disparado_por === 'automatico_perfilamiento' &&
+        !t.candidato_id &&
+        t.estado !== 'resuelto' &&
+        t.estado !== 'cancelado' &&
+        t.estado !== 'no_aplica',
+    ).length;
+    return { total, abiertos, enProgreso, bloqueados, resueltos, vencidos, preavisos };
   }, [tickets]);
 
   async function acusarRecibo(t: TicketConexionDoc) {
@@ -213,8 +221,9 @@ export default function TicketsPage() {
         <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{err}</div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
         <Stat label="Total" valor={stats.total} />
+        <Stat label="Pre-aviso" valor={stats.preavisos} tono="amber" />
         <Stat label="Abiertos" valor={stats.abiertos} tono="navy" />
         <Stat label="En progreso" valor={stats.enProgreso} tono="amber" />
         <Stat label="Bloqueados" valor={stats.bloqueados} tono="red" />
@@ -288,11 +297,24 @@ export default function TicketsPage() {
             {tickets.map((t) => {
               const ans = semaforoANS(t);
               const acusado = !!t.acuse_recibo_en;
+              const esPreaviso = t.disparado_por === 'automatico_perfilamiento' && !t.candidato_id;
               return (
                 <tr key={t.id} className="border-t border-navy-50 align-top">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-navy-900">{t.titulo}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-navy-900">{t.titulo}</p>
+                      {esPreaviso && (
+                        <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                          Pre-aviso
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-navy-500">{TIPO_LABEL[t.tipo]}</p>
+                    {esPreaviso && t.fecha_requerida_ingreso && (
+                      <p className="text-[11px] text-amber-700 mt-1">
+                        🎯 Ingreso estimado: {formatearFecha(t.fecha_requerida_ingreso.toDate())}
+                      </p>
+                    )}
                     {t.estado === 'bloqueado' && t.bloqueo_razon && (
                       <p className="text-xs text-red-700 mt-1 italic">⛔ {t.bloqueo_razon}</p>
                     )}
@@ -304,7 +326,11 @@ export default function TicketsPage() {
                     <td className="px-4 py-3 text-xs text-navy-600">{AREA_LABEL[t.area]}</td>
                   )}
                   <td className="px-4 py-3 text-xs text-navy-600">
-                    {t.candidato_nombre || '—'}
+                    {esPreaviso ? (
+                      <span className="italic text-amber-700">Sin candidato aún</span>
+                    ) : (
+                      t.candidato_nombre || '—'
+                    )}
                     <br />
                     <Link
                       to={`/vacantes/${t.vacante_id}`}

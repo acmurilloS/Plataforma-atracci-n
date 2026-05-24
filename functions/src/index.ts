@@ -6,3 +6,8 @@ export { scheduledSeedFestivos, sembrarFestivosCallable } from './festivos/festi
 export { seedInicial } from './seed/seedInicial';
 export { buscarCandidatosIA } from './sourcing/buscarCandidatosIA';
 export { recibirCandidatosClay } from './sourcing/recibirCandidatosClay';
+export {
+  revisarRecordatoriosLider,
+  revisarRecordatoriosLiderCallable,
+} from './notificaciones/recordatoriosLider';
+export { analizarPerfilIA } from './perfilamiento/analizarPerfilIA';

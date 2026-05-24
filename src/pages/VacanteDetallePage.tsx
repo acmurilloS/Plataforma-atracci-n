@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { FlujogramaTimeline } from '../components/FlujogramaTimeline';
+import { PoliticaCriticidadBanner } from '../components/vacantes/PoliticaCriticidadBanner';
 import { Badge, Card, PageHeader, type BadgeVariant } from '../components/ui';
 import { useVacantes } from '../hooks/useVacantes';
 import { formatearFecha } from '../utils/fechas';
@@ -61,6 +62,7 @@ export default function VacanteDetallePage() {
         accion={<Badge variant={ESTADO_BADGE[vac.estado] ?? 'neutral'}>{vac.estado}</Badge>}
       />
 
+      <PoliticaCriticidadBanner criticidad={vac.criticidad} />
 
       <Card padding="lg">
         <h2 className="font-display text-lg font-bold text-navy-900">Empresa y cargo</h2>

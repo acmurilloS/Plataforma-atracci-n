@@ -1,28 +1,48 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { Sparkles } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
+import { useFestivosAnio } from '../../hooks/useCatalogos';
+import { functions } from '../../lib/firebase';
 import {
   fechaInputValue,
   parsearFechaInput,
   sumarDiasHabiles,
 } from '../../utils/fechas';
-import type { VacanteDoc } from '../../schemas';
+import { crearPreavisosTickets } from '../../utils/crearPreavisosTickets';
+import {
+  validarPerfilUnicornio,
+  type AlertaUnicornio,
+} from '../../utils/validadorPerfilUnicornio';
+import { AlertasUnicornio } from '../../components/vacantes/AlertasUnicornio';
+import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
+import type { CargoDoc, VacanteDoc } from '../../schemas';
 import type { ProcesoDoc } from '../../schemas/procesoSchema';
+
+interface AnalisisIA {
+  diagnostico: string;
+  alertas_adicionales: string[];
+  recomendacion_global: string;
+  perfil_es_realista: boolean;
+}
 
 export default function PerfilamientoPage() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
   const { perfil, user } = useAuth();
   const { doc: vacante, cargando: cargandoVac } = useDoc<VacanteDoc>('vacantes', id);
+  const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
   const { docs: procesos } = useColeccion<ProcesoDoc>('procesos', {
     filtros: id ? [['vacante_id', '==', id], ['estado', '==', 'activo']] : [],
     limit: 1,
   });
   const { crear, actualizar } = useMutacion();
+  const festivos = useFestivosAnio(new Date().getFullYear());
 
   const procesoActivo = procesos[0] ?? null;
 
@@ -38,6 +58,49 @@ export default function PerfilamientoPage() {
   });
   const [enviando, setEnviando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [analisisIA, setAnalisisIA] = useState<(AnalisisIA & { cargando?: boolean }) | null>(null);
+  const [errIA, setErrIA] = useState<string | null>(null);
+
+  // ─── Validador anti-unicornio en tiempo real (heurística) ─────────────
+  const alertas: AlertaUnicornio[] = useMemo(() => {
+    if (!vacante) return [];
+    return validarPerfilUnicornio({
+      criteriosTexto: criterios,
+      salarioBase: vacante.salario_base,
+      cargo,
+      empresasCompetencia: competencia.split(',').map((s) => s.trim()).filter(Boolean),
+      criticidad: vacante.criticidad,
+    });
+  }, [criterios, competencia, vacante, cargo]);
+
+  async function pedirAnalisisIA() {
+    if (!vacante) return;
+    if (criterios.trim().length < 20) {
+      setErrIA('Escribe primero los criterios (al menos 20 caracteres) antes de pedir análisis.');
+      return;
+    }
+    setErrIA(null);
+    setAnalisisIA({ diagnostico: '', alertas_adicionales: [], recomendacion_global: '', perfil_es_realista: true, cargando: true });
+    try {
+      const fn = httpsCallable<unknown, AnalisisIA>(functions, 'analizarPerfilIA');
+      const res = await fn({
+        cargo_nombre: vacante.cargo_nombre,
+        categoria_cargo: cargo?.categoria ?? null,
+        salario_base: vacante.salario_base,
+        banda_min: cargo?.banda_min ?? null,
+        banda_max: cargo?.banda_max ?? null,
+        criticidad: vacante.criticidad,
+        empresa_nombre: vacante.empresa_nombre,
+        sede_ciudad: vacante.sede_nombre,
+        criterios_texto: criterios,
+        empresas_competencia: competencia.split(',').map((s) => s.trim()).filter(Boolean),
+      });
+      setAnalisisIA({ ...res.data, cargando: false });
+    } catch (e) {
+      setErrIA(e instanceof Error ? e.message : 'No pudimos consultar IA.');
+      setAnalisisIA(null);
+    }
+  }
 
   useEffect(() => {
     if (procesoActivo?.perfilamiento) {
@@ -108,6 +171,28 @@ export default function PerfilamientoPage() {
         analista_uid: user.uid,
         analista_nombre: `${perfil.nombre} ${perfil.apellido}`,
       });
+      // Disparo ADELANTADO de pre-avisos a IT/talentos/compras/etc.
+      // (Dolor #4: candidatos con 15 días sin equipo). Refleja lo que Karen
+      // ya hace operativamente copiando a IT desde el inicio del proceso.
+      try {
+        await crearPreavisosTickets({
+          vacante,
+          procesoActivo: {
+            ...(procesoActivo ?? ({} as ProcesoDoc)),
+            id: procesoId,
+            perfilamiento: {
+              ...perfilamientoData,
+              fecha_entrevista_lider_pactada: Timestamp.fromDate(fechaDate),
+            },
+          } as ProcesoDoc,
+          uid: user.uid,
+          festivosIsoSet: festivos,
+        });
+      } catch (errPre) {
+        // No bloqueamos el avance del paso 3 si el pre-aviso falla.
+        // El analista puede regresar y re-guardar; la operación es idempotente.
+        console.error('[preavisos] no se pudieron crear', errPre);
+      }
       nav(`/vacantes/${vacante.id}/publicacion`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos guardar.');
@@ -132,21 +217,29 @@ export default function PerfilamientoPage() {
         </p>
       </div>
 
+      <PoliticaCriticidadBanner criticidad={vacante.criticidad} />
+
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="rounded-xl border border-navy-100 bg-white p-5 space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium text-navy-800">
-              Criterios específicos (qué busca el líder)
-            </span>
-            <textarea
-              value={criterios}
-              onChange={(e) => setCriterios(e.target.value)}
-              rows={4}
-              required
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-              placeholder="Experiencia mínima, habilidades técnicas, competencias blandas…"
-            />
-          </label>
+          <div>
+            <label className="block">
+              <span className="text-sm font-medium text-navy-800">
+                Criterios específicos (qué busca el líder)
+              </span>
+              <textarea
+                value={criterios}
+                onChange={(e) => setCriterios(e.target.value)}
+                rows={5}
+                required
+                className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
+                placeholder="Experiencia mínima, habilidades técnicas, idiomas, competencias blandas…"
+              />
+            </label>
+            <p className="text-[11px] text-navy-500 mt-1">
+              💡 Mientras escribes, detectamos si lo pedido es coherente con el salario ($
+              {vacante.salario_base.toLocaleString('es-CO')}) y la categoría del cargo.
+            </p>
+          </div>
           <label className="block">
             <span className="text-sm font-medium text-navy-800">
               Empresas competencia (separadas por coma)
@@ -201,6 +294,33 @@ export default function PerfilamientoPage() {
             />
           </label>
         </div>
+
+        {/* Validador anti-unicornio (heurística + opción IA) */}
+        <AlertasUnicornio alertas={alertas} analisisIA={analisisIA} />
+
+        {errIA && (
+          <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {errIA}
+          </div>
+        )}
+
+        {criterios.trim().length >= 20 && (
+          <div className="flex items-center justify-between flex-wrap gap-3 rounded-xl border border-navy-100 bg-cream-50/40 px-4 py-3">
+            <p className="text-xs text-navy-700">
+              ¿Quieres una segunda opinión más profunda? Gemini analiza coherencia salario ↔ skills
+              ↔ mercado colombiano.
+            </p>
+            <button
+              type="button"
+              onClick={pedirAnalisisIA}
+              disabled={analisisIA?.cargando}
+              className="inline-flex items-center gap-1.5 rounded-md border border-equitel-rojo-300 bg-white px-3 py-1.5 text-xs font-semibold text-equitel-rojo-700 hover:bg-equitel-rojo-50 disabled:opacity-50"
+            >
+              <Sparkles size={14} />
+              {analisisIA?.cargando ? 'Analizando…' : 'Pedir análisis IA'}
+            </button>
+          </div>
+        )}
 
         {err && <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{err}</div>}
 

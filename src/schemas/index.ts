@@ -19,3 +19,5 @@ export * from './datosBasicosIntegranteSchema';
 export * from './conceptoAtraccionSchema';
 export * from './notificacionSchema';
 export * from './ticketConexionSchema';
+export * from './candidatoSchema';
+export * from './politicasCriticidad';

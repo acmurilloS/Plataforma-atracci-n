@@ -10,17 +10,42 @@ import { ReferenciasTab } from './ReferenciasTab';
 import { DocumentosTab } from './DocumentosTab';
 import { DebidaDiligenciaTab } from './DebidaDiligenciaTab';
 import { DatosBasicosTab } from './DatosBasicosTab';
-import type { PostulacionDoc } from '../../schemas';
+import { politicaParaCriticidad } from '../../schemas';
+import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
+import type { PostulacionDoc, VacanteDoc, Criticidad } from '../../schemas';
 
 const TABS = ['pruebas', 'entrevistas', 'referencias', 'documentos', 'informe', 'diligencia', 'datos básicos'] as const;
 type Tab = (typeof TABS)[number];
 
+/**
+ * Mapeo tab → propiedad de la política. Las tabs sin entrada se asumen obligatorias.
+ */
+function tabEsOpcional(tab: Tab, criticidad: Criticidad | null): boolean {
+  if (!criticidad) return false;
+  const p = politicaParaCriticidad(criticidad);
+  switch (tab) {
+    case 'pruebas':
+      return !p.pruebas.obligatorio;
+    case 'referencias':
+      return !p.referencias.obligatorio;
+    case 'informe':
+      return !p.informe_formal.obligatorio;
+    case 'diligencia':
+      return !p.debida_diligencia.obligatorio;
+    default:
+      return false;
+  }
+}
+
 export default function PostulacionDetallePage() {
   const { id } = useParams<{ id: string }>();
   const { doc: post } = useDoc<PostulacionDoc>('postulaciones', id);
+  const { doc: vacante } = useDoc<VacanteDoc>('vacantes', post?.vacante_id ?? null);
   const [tab, setTab] = useState<Tab>('pruebas');
 
   if (!post) return <div className="px-6 py-10 text-sm text-navy-500">Cargando…</div>;
+
+  const criticidad = vacante?.criticidad ?? null;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10 space-y-6">
@@ -53,20 +78,30 @@ export default function PostulacionDetallePage() {
         </div>
       </div>
 
-      <div className="border-b border-navy-100 flex gap-6">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`pb-3 text-sm font-medium capitalize transition ${
-              tab === t
-                ? 'text-navy-900 border-b-2 border-gold-500'
-                : 'text-navy-500 hover:text-navy-800'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+      {criticidad && <PoliticaCriticidadBanner criticidad={criticidad} />}
+
+      <div className="border-b border-navy-100 flex gap-6 flex-wrap">
+        {TABS.map((t) => {
+          const opcional = tabEsOpcional(t, criticidad);
+          return (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`pb-3 text-sm font-medium capitalize transition flex items-center gap-1.5 ${
+                tab === t
+                  ? 'text-navy-900 border-b-2 border-gold-500'
+                  : 'text-navy-500 hover:text-navy-800'
+              }`}
+            >
+              {t}
+              {opcional && (
+                <span className="rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider normal-case">
+                  opcional
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'pruebas' && <PruebasTab postulacion={post} />}

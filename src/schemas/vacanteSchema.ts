@@ -61,6 +61,18 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
   analista_nombre: string | null;
   cerrada_en: Timestamp | null;
   razon_cierre: string | null;
+  /**
+   * Reloj de 48h del líder (paso 13).
+   * `terna_enviada_en` arranca cuando la analista cierra la terna y la envía al líder.
+   * Los `recordatorio_*_enviado_en` se setean por la scheduled function para evitar
+   * duplicados. `terna_respondida_en` se setea cuando el líder toma cualquier
+   * decisión (aprobar/descartar) en /vacantes/:id/terna, lo que detiene los recordatorios.
+   */
+  terna_enviada_en: Timestamp | null;
+  terna_respondida_en: Timestamp | null;
+  recordatorio_48h_enviado_en: Timestamp | null;
+  recordatorio_24h_enviado_en: Timestamp | null;
+  recordatorio_expirado_en: Timestamp | null;
 }
 
 export { estadoVacante };

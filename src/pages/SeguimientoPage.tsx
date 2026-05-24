@@ -74,10 +74,16 @@ export default function SeguimientoPage() {
       const f = FASES.find((fase) => fase.estados.includes(v.estado));
       if (f) porFase[f.clave] += 1;
     });
+    // Segmentación crítico vs no crítico (pedido por Cristina).
+    // Alta = críticos (técnicos/comerciales). Baja + Media = no críticos.
+    const criticasActivas = activas.filter((v) => v.criticidad === 'Alta').length;
+    const noCriticasActivas = activas.filter((v) => v.criticidad !== 'Alta').length;
     return {
       total: vacantes.length,
       activas: activas.length,
       cerradas: vacantes.filter((v) => TERMINADAS.includes(v.estado)).length,
+      criticasActivas,
+      noCriticasActivas,
       porFase,
     };
   }, [vacantes]);
@@ -111,6 +117,36 @@ export default function SeguimientoPage() {
             variant={f.variant}
           />
         ))}
+      </div>
+
+      {/* Segmentación crítico vs no crítico — eje pedido por Cristina */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="rounded-xl border border-red-200 bg-red-50/50 px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-red-700 font-semibold">
+              🔥 Críticas (Alta) · flujo completo
+            </p>
+            <p className="text-xs text-red-800 mt-1">
+              Técnico / comercial / director. Foco humano del equipo.
+            </p>
+          </div>
+          <p className="font-display text-3xl font-bold text-red-700">
+            {stats.criticasActivas}
+          </p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">
+              🌿 No críticas (Media + Baja) · flujo automatizable
+            </p>
+            <p className="text-xs text-emerald-800 mt-1">
+              Admin / operativo / roles intermedios. Pasos opcionales.
+            </p>
+          </div>
+          <p className="font-display text-3xl font-bold text-emerald-700">
+            {stats.noCriticasActivas}
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">

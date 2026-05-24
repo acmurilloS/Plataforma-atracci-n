@@ -24,6 +24,8 @@ import PublicacionPage from './pages/vacantes/PublicacionPage';
 import SourcingPage from './pages/vacantes/SourcingPage';
 import TernaPage from './pages/vacantes/TernaPage';
 import ConceptoAtraccionPage from './pages/vacantes/ConceptoAtraccionPage';
+import PoolPage from './pages/pool/PoolPage';
+import VacantesAbiertasPage from './pages/internos/VacantesAbiertasPage';
 
 function AppShell() {
   return (
@@ -95,6 +97,15 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/pool"
+              element={
+                <ProtectedRoute roles={['analista', 'coordinador', 'admin']}>
+                  <PoolPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/vacantes-abiertas" element={<VacantesAbiertasPage />} />
             <Route
               path="/dashboard"
               element={

@@ -77,6 +77,16 @@ export const ANS_DIAS_POR_CRITICIDAD: Record<'Alta' | 'Media' | 'Baja', number> 
   Baja: 7,
 };
 
+/**
+ * Días hábiles después de la fecha de entrevista líder hasta el ingreso
+ * estimado. Usado por los pre-avisos (paso 3) para que IT/compras tengan
+ * fecha objetivo de cuándo todo debe estar listo.
+ *
+ * Asunción: entre la entrevista líder (paso 13) y el ingreso (paso 20)
+ * pasan ~5 días hábiles (decisión + médicos + carpeta + alistamiento).
+ */
+export const DIAS_HABILES_ENTREVISTA_A_INGRESO = 5;
+
 // ─── Documento Firestore ────────────────────────────────────────────────
 
 export interface TicketConexionDoc extends CamposAuditoria {
@@ -85,8 +95,14 @@ export interface TicketConexionDoc extends CamposAuditoria {
   // Contexto de la vacante / postulación
   vacante_id: string;
   vacante_consecutivo: string;
-  postulacion_id: string;
-  candidato_id: string;
+  /**
+   * `postulacion_id` y `candidato_id` son `null` para tickets pre-aviso
+   * (disparados desde el perfilamiento, paso 3, antes de tener candidato).
+   * Se actualizan al aprobar al candidato en el paso 14 (TernaPage.aprobar).
+   */
+  postulacion_id: string | null;
+  candidato_id: string | null;
+  /** Vacío para pre-avisos. Se llena al aprobar candidato. */
   candidato_nombre: string;
   cargo_nombre: string;
   empresa_codigo: string;
@@ -105,6 +121,12 @@ export interface TicketConexionDoc extends CamposAuditoria {
   criticidad: 'Alta' | 'Media' | 'Baja';
   ans_dias_habiles: number;
   ans_expira_en: Timestamp;
+  /**
+   * Fecha en que el equipo/accesos/dotación debe estar listo. Sólo se
+   * setea para pre-avisos (= fecha_entrevista_lider + 5 días hábiles).
+   * Para tickets disparados al aprobar candidato (paso 14), null.
+   */
+  fecha_requerida_ingreso: Timestamp | null;
 
   // Acuse de recibo
   acuse_recibo_en: Timestamp | null;
@@ -126,9 +148,9 @@ export interface TicketConexionDoc extends CamposAuditoria {
 export const ticketConexionInputSchema = z.object({
   vacante_id: z.string().min(1),
   vacante_consecutivo: z.string(),
-  postulacion_id: z.string().min(1),
-  candidato_id: z.string().min(1),
-  candidato_nombre: z.string().min(1),
+  postulacion_id: z.string().nullable(),
+  candidato_id: z.string().nullable(),
+  candidato_nombre: z.string(),
   cargo_nombre: z.string().min(1),
   empresa_codigo: z.string().min(1),
   empresa_nombre: z.string().min(1),

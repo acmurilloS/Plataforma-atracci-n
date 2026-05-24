@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { cn } from '../utils/cn';
 import type { RolUsuario } from '../schemas';
 import { EquitelLogo } from './EquitelLogo';
+import { Campanita } from './Campanita';
 
 interface ItemNav {
   to: string;
@@ -21,6 +22,12 @@ const ITEMS: ItemNav[] = [
   { to: '/examenes-medicos', label: 'Exámenes', roles: ['gh', 'coordinador', 'admin'] },
   { to: '/carpetas', label: 'Carpetas', roles: ['gh', 'analista', 'coordinador', 'admin'] },
   { to: '/tickets', label: 'Tickets', roles: ['apoyo', 'analista', 'coordinador', 'admin'] },
+  { to: '/pool', label: 'Pool', roles: ['analista', 'coordinador', 'admin'] },
+  {
+    to: '/vacantes-abiertas',
+    label: 'Vacantes abiertas',
+    roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin'],
+  },
   { to: '/admin/catalogos', label: 'Catálogos', roles: ['admin'] },
 ];
 
@@ -68,6 +75,7 @@ export function Layout() {
               </NavLink>
             )}
             <div className="flex items-center gap-3 pl-6 ml-2 text-sm">
+              <Campanita />
               <span className="text-navy-700">
                 {perfil?.nombre ?? ''} <span className="text-navy-400">· {rol ?? '—'}</span>
               </span>

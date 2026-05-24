@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
 import { formatearFecha } from '../../utils/fechas';
@@ -13,6 +13,11 @@ export default function MisVacantesPage() {
     filtros: user ? [['lider_uid', '==', user.uid]] : [],
     orden: ['creado_en', 'desc'],
   });
+
+  // Ternas con reloj activo: ya enviadas y sin respuesta del líder.
+  const ternasPendientes = vacantes.filter(
+    (v) => v.estado === 'terna_enviada' && v.terna_enviada_en && !v.terna_respondida_en,
+  );
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10 space-y-6">
@@ -28,6 +33,61 @@ export default function MisVacantesPage() {
           </Link>
         }
       />
+
+      {ternasPendientes.length > 0 && (
+        <div className="space-y-2">
+          {ternasPendientes.map((v) => {
+            const inicioMs = v.terna_enviada_en?.toMillis() ?? 0;
+            const msRestantes = 48 * 60 * 60 * 1000 - (Date.now() - inicioMs);
+            const horasRestantes = Math.max(0, Math.floor(msRestantes / (60 * 60 * 1000)));
+            const vencido = msRestantes <= 0;
+            const urgente = horasRestantes <= 24;
+            return (
+              <div
+                key={v.id}
+                className={`rounded-xl border p-4 flex items-center justify-between flex-wrap gap-3 ${
+                  vencido
+                    ? 'border-red-300 bg-red-50'
+                    : urgente
+                      ? 'border-amber-300 bg-amber-50'
+                      : 'border-gold-300 bg-cream-50'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <AlertTriangle
+                    size={20}
+                    className={
+                      vencido ? 'text-red-700' : urgente ? 'text-amber-700' : 'text-gold-700'
+                    }
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-navy-900">
+                      Ya te conseguimos candidatos para {v.cargo_nombre}
+                    </p>
+                    <p className="text-xs text-navy-700">
+                      {v.consecutivo} · {v.empresa_nombre} - {v.sede_nombre}
+                    </p>
+                    <p
+                      className={`text-xs font-semibold mt-1 ${
+                        vencido ? 'text-red-700' : urgente ? 'text-amber-700' : 'text-navy-700'
+                      }`}
+                    >
+                      {vencido
+                        ? '⏱ Vencido · esta vacante se pausará en el próximo ciclo'
+                        : `⏱ Te quedan ${horasRestantes}h para revisar la terna`}
+                    </p>
+                  </div>
+                </div>
+                <Link to={`/vacantes/${v.id}/terna`}>
+                  <Button variant={vencido ? 'destructive' : 'primary'} size="sm">
+                    Revisar terna ahora →
+                  </Button>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {cargando && <p className="text-sm text-navy-500">Cargando…</p>}
       {!cargando && vacantes.length === 0 && (

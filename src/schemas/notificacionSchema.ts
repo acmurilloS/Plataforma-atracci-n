@@ -16,6 +16,10 @@ export const tipoNotificacion = z.enum([
   'exam_solicitado',
   'exam_concepto_recibido',
   'terna_lista',
+  'terna_recordatorio_48h',
+  'terna_recordatorio_24h',
+  'terna_expirada_lider',
+  'terna_expirada_coordinador',
   'ticket_creado',
   'generica',
 ]);

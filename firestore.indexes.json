@@ -111,6 +111,48 @@
         { "fieldPath": "leida", "order": "ASCENDING" },
         { "fieldPath": "creado_en", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "notificaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "destinatario_uid", "order": "ASCENDING" },
+        { "fieldPath": "creado_en", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "candidatos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "apto_para_pool_futuro", "order": "ASCENDING" },
+        { "fieldPath": "dominio_principal", "order": "ASCENDING" },
+        { "fieldPath": "fecha_ultima_postulacion", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "candidatos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "apto_para_pool_futuro", "order": "ASCENDING" },
+        { "fieldPath": "ciudad_residencia", "order": "ASCENDING" },
+        { "fieldPath": "fecha_ultima_postulacion", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "candidatos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "resultado_ultima_postulacion", "order": "ASCENDING" },
+        { "fieldPath": "fecha_ultima_postulacion", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "postulaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "motivo_descarte", "order": "ASCENDING" },
+        { "fieldPath": "ultima_transicion_estado", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
