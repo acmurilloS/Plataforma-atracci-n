@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Building2,
   CheckCircle2,
+  ChevronDown,
   ExternalLink,
   FileText,
   FolderOpen,
@@ -113,6 +114,18 @@ export default function CarpetasPage() {
   const { crear, actualizar } = useMutacion();
   const { user } = useAuth();
   const [procesando, setProcesando] = useState<string | null>(null);
+  // Por default todas colapsadas; el usuario abre las que quiera revisar.
+  // Evita que la página crezca a la altura de 18 docs × N carpetas.
+  const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
+
+  function toggleExpandir(id: string) {
+    setExpandidas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function resolverInfo(c: CarpetaDoc) {
     const post = postPorId.get(c.postulacion_id);
@@ -340,6 +353,7 @@ export default function CarpetasPage() {
           const tono = ESTADO_TONO[c.estado] ?? 'neutral';
           const info = resolverInfo(c);
           const completitud = calcularCompletitud(c.postulacion_id);
+          const abierta = expandidas.has(c.id);
 
           return (
             <Card key={c.id} padding="lg">
@@ -425,85 +439,113 @@ export default function CarpetasPage() {
                 </div>
               </div>
 
-              {/* Documentos reales agrupados por sección */}
-              <div className="space-y-5">
-                {SECCIONES.map((sec) => {
-                  const items = CATALOGO_DOCUMENTOS_CARPETA.filter((d) => d.seccion === sec);
-                  return (
-                    <div key={sec}>
-                      <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted mb-2">
-                        {SECCIONES_LABEL[sec]}
-                      </p>
-                      <ul className="rounded-md border border-slate-200 overflow-hidden divide-y divide-slate-100">
-                        {items.map((cat) => {
-                          const doc = completitud.docsPorClave.get(cat.clave);
-                          const estado: EstadoDocumento = doc?.estado ?? 'pendiente';
-                          const tonoDoc = DOC_ESTADO_TONO[estado];
-                          const verificadoOk = estado === 'verificado';
-                          const noAplica = estado === 'no_aplica';
-                          return (
-                            <li
-                              key={cat.clave}
-                              className="px-3.5 py-2.5 flex items-center gap-3 bg-white hover:bg-slate-50/40 transition-colors"
-                            >
-                              <FileText
-                                size={13}
-                                strokeWidth={1.5}
-                                className={cn(
-                                  'shrink-0',
-                                  verificadoOk
-                                    ? 'text-success-600'
-                                    : noAplica
-                                      ? 'text-text-subtle'
-                                      : estado === 'entregado'
-                                        ? 'text-warning-600'
-                                        : 'text-text-subtle',
-                                )}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <p
+              {/* Toggle expandir/colapsar el detalle de documentos */}
+              <button
+                type="button"
+                onClick={() => toggleExpandir(c.id)}
+                className={cn(
+                  'w-full inline-flex items-center justify-between gap-2',
+                  'rounded-md px-3 py-2 text-[12px] font-medium',
+                  'border border-slate-200 bg-slate-50/60 hover:bg-slate-100/60',
+                  'transition-colors',
+                )}
+                aria-expanded={abierta}
+              >
+                <span className="inline-flex items-center gap-2 text-text-body">
+                  <FileText size={13} strokeWidth={1.75} className="text-text-subtle" />
+                  {abierta ? 'Ocultar detalle de documentos' : 'Ver detalle de los 18 documentos'}
+                </span>
+                <ChevronDown
+                  size={14}
+                  strokeWidth={1.75}
+                  className={cn(
+                    'text-text-muted transition-transform duration-200 ease-cult',
+                    abierta && 'rotate-180',
+                  )}
+                />
+              </button>
+
+              {/* Documentos reales agrupados por sección · colapsable */}
+              {abierta && (
+                <div className="space-y-5 mt-4">
+                  {SECCIONES.map((sec) => {
+                    const items = CATALOGO_DOCUMENTOS_CARPETA.filter((d) => d.seccion === sec);
+                    return (
+                      <div key={sec}>
+                        <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted mb-2">
+                          {SECCIONES_LABEL[sec]}
+                        </p>
+                        <ul className="rounded-md border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                          {items.map((cat) => {
+                            const doc = completitud.docsPorClave.get(cat.clave);
+                            const estado: EstadoDocumento = doc?.estado ?? 'pendiente';
+                            const tonoDoc = DOC_ESTADO_TONO[estado];
+                            const verificadoOk = estado === 'verificado';
+                            const noAplica = estado === 'no_aplica';
+                            return (
+                              <li
+                                key={cat.clave}
+                                className="px-3.5 py-2.5 flex items-center gap-3 bg-white hover:bg-slate-50/40 transition-colors"
+                              >
+                                <FileText
+                                  size={13}
+                                  strokeWidth={1.5}
                                   className={cn(
-                                    'text-[13px]',
+                                    'shrink-0',
                                     verificadoOk
-                                      ? 'text-text-strong font-medium'
-                                      : 'text-text-body',
+                                      ? 'text-success-600'
+                                      : noAplica
+                                        ? 'text-text-subtle'
+                                        : estado === 'entregado'
+                                          ? 'text-warning-600'
+                                          : 'text-text-subtle',
                                   )}
-                                >
-                                  {cat.nombre}
-                                  {cat.opcional && (
-                                    <span className="ml-2 text-[10px] text-text-subtle uppercase tracking-wide">
-                                      opcional
-                                    </span>
-                                  )}
-                                </p>
-                                {doc?.verificado_por_nombre && verificadoOk && (
-                                  <p className="text-[10px] text-text-subtle mt-0.5">
-                                    Verificado por {doc.verificado_por_nombre}
-                                    {doc.verificado_en &&
-                                      ` · ${formatearFecha(doc.verificado_en.toDate())}`}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p
+                                    className={cn(
+                                      'text-[13px]',
+                                      verificadoOk
+                                        ? 'text-text-strong font-medium'
+                                        : 'text-text-body',
+                                    )}
+                                  >
+                                    {cat.nombre}
+                                    {cat.opcional && (
+                                      <span className="ml-2 text-[10px] text-text-subtle uppercase tracking-wide">
+                                        opcional
+                                      </span>
+                                    )}
                                   </p>
+                                  {doc?.verificado_por_nombre && verificadoOk && (
+                                    <p className="text-[10px] text-text-subtle mt-0.5">
+                                      Verificado por {doc.verificado_por_nombre}
+                                      {doc.verificado_en &&
+                                        ` · ${formatearFecha(doc.verificado_en.toDate())}`}
+                                    </p>
+                                  )}
+                                </div>
+                                {doc?.archivo_url && (
+                                  <a
+                                    href={doc.archivo_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+                                  >
+                                    <ExternalLink size={10} strokeWidth={1.75} />
+                                    Ver PDF
+                                  </a>
                                 )}
-                              </div>
-                              {doc?.archivo_url && (
-                                <a
-                                  href={doc.archivo_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
-                                >
-                                  <ExternalLink size={10} strokeWidth={1.75} />
-                                  Ver PDF
-                                </a>
-                              )}
-                              <Pill tono={tonoDoc}>{DOC_ESTADO_LABEL[estado]}</Pill>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
+                                <Pill tono={tonoDoc}>{DOC_ESTADO_LABEL[estado]}</Pill>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Observación de GH */}
               {c.observaciones_gh && (
