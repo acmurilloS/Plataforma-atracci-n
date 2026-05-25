@@ -1,17 +1,34 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
-import { ExternalLink, Loader2, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  Check,
+  ExternalLink,
+  Loader2,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useSourcing } from '../../hooks/useSourcing';
+import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { cn } from '../../utils/cn';
 import type {
   BusquedaSourcingDoc,
   EstadoPostulacion,
   PostulacionDoc,
   VacanteDoc,
 } from '../../schemas';
+
+/**
+ * SourcingPage · sistema brand.
+ *
+ * Paso 4.5 · candidatos encontrados por Gemini que esperan validación
+ * humana antes de pasar al flujo normal del paso 5.
+ */
 
 interface PostulacionSourceada extends PostulacionDoc {
   sourcing_busqueda_id?: string;
@@ -20,6 +37,12 @@ interface PostulacionSourceada extends PostulacionDoc {
   sourcing_empresa_actual?: string | null;
   sourcing_cargo_actual?: string | null;
   sourcing_justificacion?: string;
+}
+
+function tonoScore(score: number): PillTono {
+  if (score >= 85) return 'success';
+  if (score >= 70) return 'warning';
+  return 'neutral';
 }
 
 export default function SourcingPage() {
@@ -56,7 +79,11 @@ export default function SourcingPage() {
     }
   }
 
-  async function transicionar(p: PostulacionSourceada, nuevo: EstadoPostulacion, marca: string) {
+  async function transicionar(
+    p: PostulacionSourceada,
+    nuevo: EstadoPostulacion,
+    marca: string,
+  ) {
     setAccionando(p.id);
     setErrorAccion(null);
     try {
@@ -73,126 +100,160 @@ export default function SourcingPage() {
     }
   }
 
-  if (!vacante) return <div className="px-6 py-10 text-sm text-navy-500">Cargando vacante…</div>;
+  if (!vacante)
+    return (
+      <div className="max-w-5xl mx-auto px-6 py-12 text-text-muted text-sm">
+        Cargando vacante…
+      </div>
+    );
 
-  const ordenados = [...docs].sort((a, b) => (b.sourcing_score ?? 0) - (a.sourcing_score ?? 0));
+  const ordenados = [...docs].sort(
+    (a, b) => (b.sourcing_score ?? 0) - (a.sourcing_score ?? 0),
+  );
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10 space-y-6">
+    <div className="max-w-5xl mx-auto px-6 py-12 space-y-10">
+      {/* Volver */}
+      <Link
+        to={`/vacantes/${vacante.id}`}
+        className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-text-strong transition-colors"
+      >
+        <ArrowLeft size={13} strokeWidth={1.75} />
+        Volver al detalle
+      </Link>
+
+      {/* Hero */}
       <div>
-        <Link to={`/vacantes/${vacante.id}`} className="text-xs text-navy-500 hover:text-navy-800">
-          ← Volver a detalle
-        </Link>
-        <p className="text-xs uppercase tracking-widest text-gold-700 mt-2">
+        <Pill tono="brand" dot>
           Paso 4.5 · Búsqueda activa con IA
-        </p>
-        <h1 className="font-display text-3xl font-semibold text-navy-900">
+        </Pill>
+        <h1
+          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
+          style={{ textWrap: 'balance' }}
+        >
           Candidatos sourceados
         </h1>
-        <p className="text-sm text-navy-600 mt-1">
-          {vacante.cargo_nombre} · {ordenados.length} pendientes de validar
+        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
+          {vacante.cargo_nombre} ·{' '}
+          <span className="tabular-nums font-semibold text-text-body">
+            {ordenados.length} pendientes de validar
+          </span>
+          . Promover a postulado los mueve al flujo normal del paso 5.
         </p>
       </div>
 
-      <section className="rounded-xl border-2 border-gold-300 bg-gradient-to-br from-gold-50 to-cream-50 p-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] uppercase tracking-widest text-gold-700 font-bold">
-              Búsqueda IA
-            </p>
-            <h2 className="font-display text-xl font-semibold text-navy-900 mt-0.5">
+      {/* Buscar más con IA */}
+      <Card padding="lg" className="border-brand-200 bg-gradient-to-br from-brand-50/40 to-white">
+        <div className="flex items-start gap-4 flex-wrap">
+          <div className="w-12 h-12 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+            <Sparkles size={20} strokeWidth={1.75} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <Pill tono="brand">Búsqueda IA</Pill>
+            <h2 className="mt-2 text-[18px] font-semibold tracking-[-0.012em] text-text-strong">
               Encontrar más candidatos en internet
             </h2>
-            <p className="text-sm text-navy-700 mt-1 max-w-2xl">
-              Gemini hace deep research sobre perfiles públicos (LinkedIn, GitHub, sitios profesionales)
-              que coinciden con esta vacante. Devuelve hasta 15 personas — tú validas y promueves a
-              postulado las que tengan sentido.
+            <p className="text-[13px] text-text-muted mt-1.5 max-w-2xl">
+              Gemini hace deep research sobre perfiles públicos (LinkedIn, GitHub, sitios
+              profesionales) que coinciden con la vacante. Devuelve hasta 15 personas — tú validas
+              y promueves al flujo las que tengan sentido.
             </p>
           </div>
-          <button
+          <Button
             onClick={buscarMas}
             disabled={ejecutando}
-            className="inline-flex items-center gap-1.5 rounded-md bg-navy-700 text-white px-4 py-2.5 text-sm font-semibold hover:bg-navy-800 disabled:bg-navy-300 whitespace-nowrap"
+            loading={ejecutando}
+            variant="brand-primary"
+            icon={<Sparkles size={13} strokeWidth={1.75} />}
           >
-            <Sparkles size={14} />
             {ejecutando ? 'Buscando…' : 'Buscar candidatos'}
-          </button>
+          </Button>
         </div>
-        {error && <p className="mt-3 text-xs text-red-700">{error}</p>}
-      </section>
+        {error && (
+          <p className="mt-3 text-[12px] text-danger-700 inline-flex items-center gap-1.5">
+            <X size={11} strokeWidth={1.75} />
+            {error}
+          </p>
+        )}
+      </Card>
 
       {errorAccion && (
-        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+        <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
           {errorAccion}
         </div>
       )}
 
+      {/* Búsqueda en proceso */}
       {busquedasEnProceso.length > 0 && (
-        <div className="rounded-xl border border-navy-100 bg-white p-5 flex items-center gap-3">
-          <Loader2 size={18} className="animate-spin text-equitel-rojo-600" />
-          <div className="flex-1">
-            <p className="font-display text-sm font-semibold text-navy-900">
-              Buscando candidatos en internet…
-            </p>
-            <p className="text-xs text-navy-600 mt-0.5">
-              Clay está rastreando perfiles públicos. Esto puede tomar entre 1 y 5 minutos. Los
-              resultados aparecerán abajo automáticamente cuando terminen.
-            </p>
+        <Card padding="md" className="border-info-500/30 bg-info-50/40">
+          <div className="flex items-center gap-3">
+            <Loader2
+              size={18}
+              strokeWidth={1.75}
+              className="animate-spin text-info-700 shrink-0"
+            />
+            <div className="flex-1">
+              <p className="text-[13px] font-semibold text-text-strong">
+                Buscando candidatos en internet…
+              </p>
+              <p className="text-[11px] text-text-muted mt-0.5">
+                Clay está rastreando perfiles públicos. Puede tomar entre 1 y 5 minutos. Los
+                resultados aparecerán abajo automáticamente.
+              </p>
+            </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      {cargando && (
-        <p className="text-sm text-navy-500">Cargando candidatos…</p>
-      )}
+      {cargando && <p className="text-[13px] text-text-muted">Cargando candidatos…</p>}
 
       {!cargando && ordenados.length === 0 && (
-        <div className="rounded-xl border border-dashed border-navy-200 bg-cream-50 p-10 text-center">
-          <p className="font-display text-lg font-semibold text-navy-900">
+        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-12 text-center">
+          <div className="w-12 h-12 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center mx-auto mb-3">
+            <Sparkles size={20} strokeWidth={1.5} />
+          </div>
+          <p className="text-[15px] font-medium text-text-strong">
             Sin candidatos sourceados todavía
           </p>
-          <p className="text-sm text-navy-600 mt-1 max-w-md mx-auto">
-            Si las publicaciones pasivas no traen suficientes HVs, lanza una búsqueda con IA y verás
-            aparecer perfiles aquí.
+          <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
+            Si las publicaciones pasivas no traen suficientes HVs, lanza una búsqueda con IA y
+            verás aparecer perfiles aquí.
           </p>
         </div>
       )}
 
       <div className="space-y-3">
         {ordenados.map((p) => (
-          <div key={p.id} className="rounded-xl border border-navy-100 bg-white p-5 space-y-3">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
+          <Card key={p.id} padding="lg">
+            <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-display text-lg font-semibold text-navy-900">
+                  <h3 className="text-[17px] font-semibold tracking-[-0.012em] text-text-strong">
                     {p.candidato_nombre}
                   </h3>
                   {typeof p.sourcing_score === 'number' && (
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                        p.sourcing_score >= 85
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : p.sourcing_score >= 70
-                            ? 'bg-amber-50 text-amber-800'
-                            : 'bg-navy-50 text-navy-700'
-                      }`}
-                    >
-                      {p.sourcing_score}% match
-                    </span>
+                    <Pill tono={tonoScore(p.sourcing_score)}>
+                      <span className="tabular-nums">{p.sourcing_score}% match</span>
+                    </Pill>
                   )}
                 </div>
                 {p.sourcing_headline && (
-                  <p className="text-sm text-navy-700 mt-1">{p.sourcing_headline}</p>
+                  <p className="text-[13px] text-text-body mt-1.5">{p.sourcing_headline}</p>
                 )}
                 {(p.sourcing_empresa_actual || p.sourcing_cargo_actual) && (
-                  <p className="text-xs text-navy-500 mt-1">
+                  <p className="text-[12px] text-text-muted mt-1 inline-flex items-center gap-1.5">
+                    <Building2
+                      size={11}
+                      strokeWidth={1.5}
+                      className="text-text-subtle"
+                    />
                     {p.sourcing_cargo_actual && <span>{p.sourcing_cargo_actual}</span>}
-                    {p.sourcing_cargo_actual && p.sourcing_empresa_actual && <span> · </span>}
+                    {p.sourcing_cargo_actual && p.sourcing_empresa_actual && <span>·</span>}
                     {p.sourcing_empresa_actual && <span>{p.sourcing_empresa_actual}</span>}
                   </p>
                 )}
                 {p.sourcing_justificacion && (
-                  <p className="mt-2 text-sm text-navy-600 italic border-l-2 border-gold-300 pl-3">
+                  <p className="mt-3 text-[13px] text-text-body italic border-l-2 border-brand-400 pl-3 leading-relaxed">
                     {p.sourcing_justificacion}
                   </p>
                 )}
@@ -201,38 +262,51 @@ export default function SourcingPage() {
                     href={p.candidato_cv_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-gold-700 hover:underline"
+                    className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
                   >
-                    <ExternalLink size={12} /> Ver perfil
+                    <ExternalLink size={11} strokeWidth={1.75} /> Ver perfil público
                   </a>
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 justify-end">
-              <button
+            <div className="flex flex-wrap gap-2 justify-end mt-4 pt-4 border-t border-slate-100">
+              <Button
+                variant="destructive-secondary"
+                size="medium"
                 onClick={() => transicionar(p, 'filtrado_no_cumple', 'filtrado_no_cumple_en')}
                 disabled={accionando === p.id}
-                className="rounded-md border border-red-200 text-red-700 px-3 py-1.5 text-xs font-medium hover:bg-red-50 disabled:opacity-50"
+                icon={<X size={13} strokeWidth={1.75} />}
               >
                 Descartar
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="brand-primary"
+                size="medium"
                 onClick={() => transicionar(p, 'postulado', 'postulado_en')}
                 disabled={accionando === p.id}
-                className="rounded-md bg-navy-700 text-white px-3 py-1.5 text-xs font-semibold hover:bg-navy-800 disabled:bg-navy-300"
+                loading={accionando === p.id}
+                icon={<Check size={13} strokeWidth={1.75} />}
               >
-                {accionando === p.id ? '…' : 'Promover a postulado'}
-              </button>
+                Promover a postulado
+              </Button>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
       {ordenados.length > 0 && (
-        <p className="text-xs text-navy-500">
-          Promover a postulado mueve al candidato al flujo normal del paso 5. Recuerda incluir un
-          mensaje de opt-in claro al primer contacto (Habeas Data).
-        </p>
+        <div
+          className={cn(
+            'rounded-md border border-warning-500/30 bg-warning-50/40',
+            'px-4 py-3 text-[12px] text-warning-700',
+          )}
+        >
+          <p>
+            <span className="font-semibold">Habeas Data:</span> promover a postulado mueve al
+            candidato al flujo normal del paso 5. Recuerda incluir un mensaje de opt-in claro al
+            primer contacto.
+          </p>
+        </div>
       )}
     </div>
   );

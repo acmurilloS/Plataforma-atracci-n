@@ -1,17 +1,45 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
-import { FileUp, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  FileText,
+  FileUp,
+  Search,
+  UploadCloud,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { storage } from '../../lib/firebase';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
-import type { VacanteDoc, PostulacionDoc, EstadoPostulacion, FuentePostulacion } from '../../schemas';
+import type {
+  EstadoPostulacion,
+  FuentePostulacion,
+  PostulacionDoc,
+  VacanteDoc,
+} from '../../schemas';
 import { estadoPostulacion, fuentePostulacion } from '../../schemas';
+import { Button, Card, Pill } from '../../components/brand';
+import { cn } from '../../utils/cn';
+
+/**
+ * PostulacionesPage · sistema brand.
+ *
+ * Hero header + Card hero "Importar CVs en lote" con drop zone brand.
+ * Card "Agregar candidato manual" con inputs sunken.
+ * Filtros (busqueda + estado + toggle internos).
+ * Tabla brand con pill por fuente (interno) + select compacto de estado.
+ */
 
 const ESTADOS = estadoPostulacion.options;
 const FUENTES = fuentePostulacion.options;
+
+const inputClass =
+  'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong placeholder:text-text-subtle transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40';
 
 export default function PostulacionesPage() {
   const { id } = useParams<{ id: string }>();
@@ -68,7 +96,6 @@ export default function PostulacionesPage() {
         documento_tipo: form.documento_tipo,
         documento_numero: form.documento_numero,
         provisional: !form.documento_numero,
-        // Pool-ready (ATR-11) desde día 1
         ciudad_residencia: form.ciudad_residencia || null,
         dominio_principal: 'sin_clasificar',
         especialidad_tecnica: form.especialidad_tecnica.trim(),
@@ -164,8 +191,10 @@ export default function PostulacionesPage() {
 
         const nombreBase = file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ');
         const partes = nombreBase.split(/\s+/).filter(Boolean);
-        const nombres = partes.slice(0, Math.max(1, Math.floor(partes.length / 2))).join(' ') || 'Candidato';
-        const apellidos = partes.slice(Math.max(1, Math.floor(partes.length / 2))).join(' ') || 'sin apellido';
+        const nombres =
+          partes.slice(0, Math.max(1, Math.floor(partes.length / 2))).join(' ') || 'Candidato';
+        const apellidos =
+          partes.slice(Math.max(1, Math.floor(partes.length / 2))).join(' ') || 'sin apellido';
 
         const candidatoId = await crear('candidatos', {
           nombres,
@@ -175,7 +204,6 @@ export default function PostulacionesPage() {
           documento_tipo: null,
           documento_numero: null,
           provisional: true,
-          // Pool-ready: en bulk import vienen vacíos, la analista los llena después
           ciudad_residencia: null,
           dominio_principal: 'sin_clasificar',
           especialidad_tecnica: '',
@@ -263,53 +291,89 @@ export default function PostulacionesPage() {
     return true;
   });
 
-  const totalInternos = postulaciones.filter((p) => p.fuente === 'base_interna').length;
+  const stats = useMemo(() => {
+    const total = postulaciones.length;
+    const internos = postulaciones.filter((p) => p.fuente === 'base_interna').length;
+    const enTerna = postulaciones.filter((p) => p.estado === 'en_terna').length;
+    const filtrados = postulaciones.filter((p) =>
+      ['filtrado_no_cumple', 'pre_entrevistado_no_interesado', 'desistio_candidato'].includes(
+        p.estado,
+      ),
+    ).length;
+    return { total, internos, enTerna, filtrados };
+  }, [postulaciones]);
 
-  if (!vacante) return <div className="px-6 py-10 text-sm text-navy-500">Cargando vacante…</div>;
+  if (!vacante)
+    return (
+      <div className="max-w-5xl mx-auto px-6 py-12 text-text-muted text-sm">
+        Cargando vacante…
+      </div>
+    );
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-6">
-      <div>
-        <Link to={`/vacantes/${vacante.id}`} className="text-xs text-navy-500 hover:text-navy-800">
-          ← Volver a detalle
-        </Link>
-        <p className="text-xs uppercase tracking-widest text-gold-700 mt-2">
-          Pasos 5-11 · Analista
-        </p>
-        <h1 className="font-display text-3xl font-semibold text-navy-900">Postulaciones</h1>
-        <p className="text-sm text-navy-600 mt-1">
-          {vacante.cargo_nombre} · {filtradas.length} / {postulaciones.length} candidatos
-        </p>
+    <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
+      {/* Volver */}
+      <Link
+        to={`/vacantes/${vacante.id}`}
+        className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-text-strong transition-colors"
+      >
+        <ArrowLeft size={13} strokeWidth={1.75} />
+        Volver al detalle
+      </Link>
+
+      {/* ─── Hero ─────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between flex-wrap gap-6">
+        <div className="max-w-2xl">
+          <Pill tono="brand" dot>
+            Pasos 5 – 11 · Analista
+          </Pill>
+          <h1
+            className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
+            style={{ textWrap: 'balance' }}
+          >
+            Postulaciones
+          </h1>
+          <p className="mt-3 flex items-center gap-1.5 text-[14px] text-text-muted">
+            <Building2 size={13} strokeWidth={1.5} className="text-text-subtle" />
+            {vacante.cargo_nombre} · {vacante.empresa_nombre} · {vacante.sede_nombre}
+          </p>
+        </div>
       </div>
 
-      <section className="rounded-xl border-2 border-dashed border-navy-200 bg-cream-50 p-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+      {/* ─── Stats inline ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MiniStat label="Total" valor={stats.total} icono={<Users size={14} strokeWidth={1.75} />} />
+        <MiniStat label="Internos" valor={stats.internos} tono="info" />
+        <MiniStat label="En terna" valor={stats.enTerna} tono="brand" />
+        <MiniStat label="Filtrados / desistieron" valor={stats.filtrados} tono="neutral" />
+      </div>
+
+      {/* ─── Importar CVs en lote ─────────────────────────────── */}
+      <Card padding="lg">
+        <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
           <div className="min-w-0 flex-1">
-            <h2 className="font-display text-lg font-semibold text-navy-900">
-              Importar CVs en lote (Magneto, Drive, etc.)
-            </h2>
-            <p className="text-sm text-navy-600 mt-1">
-              Selecciona varios PDFs a la vez. Cada archivo crea un candidato provisional + una
-              postulación con el CV adjunto. Luego editas sus datos en{' '}
-              <span className="font-medium">Abrir →</span>.
+            <div className="flex items-center gap-2">
+              <UploadCloud size={14} strokeWidth={1.75} className="text-text-muted" />
+              <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                Importar CVs en lote
+              </p>
+            </div>
+            <p className="text-[13px] text-text-muted mt-2 max-w-2xl leading-relaxed">
+              Selecciona varios PDFs a la vez (Magneto, Drive). Cada archivo crea un candidato
+              provisional + una postulación con el CV adjunto. Luego editas los datos en{' '}
+              <span className="font-semibold text-text-body">Abrir →</span>.
             </p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="brand-primary"
             onClick={() => inputFilesRef.current?.click()}
             disabled={subiendoCVs}
-            className="inline-flex items-center gap-1.5 rounded-md bg-gold-500 text-navy-900 px-4 py-2.5 text-sm font-bold hover:bg-gold-400 disabled:opacity-50 whitespace-nowrap"
+            loading={subiendoCVs}
+            icon={<FileUp size={13} strokeWidth={1.75} />}
           >
-            {subiendoCVs ? (
-              <>
-                <Loader2 size={14} className="animate-spin" /> Subiendo…
-              </>
-            ) : (
-              <>
-                <FileUp size={14} /> Subir CVs (PDF)
-              </>
-            )}
-          </button>
+            {subiendoCVs ? 'Subiendo…' : 'Subir CVs (PDF)'}
+          </Button>
           <input
             ref={inputFilesRef}
             type="file"
@@ -320,198 +384,288 @@ export default function PostulacionesPage() {
           />
         </div>
         {progresoCVs && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-navy-600 mb-1">
-              <span>
+          <div className="rounded-md bg-slate-50 border border-slate-200 p-3.5">
+            <div className="flex items-center justify-between text-[12px] mb-2">
+              <span className="text-text-body font-medium tabular-nums">
                 {progresoCVs.hechos} / {progresoCVs.total} archivos
               </span>
               {progresoCVs.hechos === progresoCVs.total && !subiendoCVs && (
-                <span className="text-emerald-700 font-semibold">✓ Listo</span>
+                <Pill tono="success" dot>
+                  Listo
+                </Pill>
               )}
             </div>
-            <div className="h-1.5 rounded bg-navy-100 overflow-hidden">
+            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
               <div
-                className="h-full bg-gold-500 transition-all"
+                className="h-full bg-brand-600 transition-all duration-200 ease-out"
                 style={{
-                  width: `${progresoCVs.total > 0 ? (progresoCVs.hechos / progresoCVs.total) * 100 : 0}%`,
+                  width: `${
+                    progresoCVs.total > 0 ? (progresoCVs.hechos / progresoCVs.total) * 100 : 0
+                  }%`,
                 }}
               />
             </div>
           </div>
         )}
-      </section>
+      </Card>
 
-      <form onSubmit={agregarPostulacion} className="rounded-xl border border-navy-100 bg-white p-5 space-y-3">
-        <h2 className="font-display text-lg font-semibold text-navy-900">Agregar candidato manual</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Input label="Nombres" v={form.nombres} onChange={(v) => setForm({ ...form, nombres: v })} required />
-          <Input label="Apellidos" v={form.apellidos} onChange={(v) => setForm({ ...form, apellidos: v })} required />
-          <Input label="Email" type="email" v={form.email} onChange={(v) => setForm({ ...form, email: v })} required />
-          <Input label="Teléfono" v={form.telefono} onChange={(v) => setForm({ ...form, telefono: v })} required />
-          <label className="block">
-            <span className="text-xs font-medium text-navy-700">Doc. tipo</span>
-            <select
-              value={form.documento_tipo}
-              onChange={(e) => setForm({ ...form, documento_tipo: e.target.value })}
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-            >
-              <option value="CC">CC</option>
-              <option value="CE">CE</option>
-              <option value="PEP">PEP</option>
-              <option value="PA">PA</option>
-            </select>
-          </label>
-          <Input label="Doc. número" v={form.documento_numero} onChange={(v) => setForm({ ...form, documento_numero: v })} />
-          <Input
-            label="Ciudad"
-            v={form.ciudad_residencia}
-            onChange={(v) => setForm({ ...form, ciudad_residencia: v })}
-          />
-          <Input
-            label="Especialidad"
-            v={form.especialidad_tecnica}
-            onChange={(v) => setForm({ ...form, especialidad_tecnica: v })}
-          />
-          <Input
-            label="Años exp."
-            type="number"
-            v={form.anios_experiencia}
-            onChange={(v) => setForm({ ...form, anios_experiencia: v })}
-          />
-          <label className="block">
-            <span className="text-xs font-medium text-navy-700">Fuente</span>
-            <select
-              value={form.fuente}
-              onChange={(e) => setForm({ ...form, fuente: e.target.value as FuentePostulacion })}
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-            >
-              {FUENTES.map((f) => (
-                <option key={f} value={f}>
-                  {f.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-          </label>
+      {/* ─── Agregar candidato manual ─────────────────────────── */}
+      <Card padding="lg">
+        <div className="flex items-center gap-2 mb-5">
+          <UserPlus size={14} strokeWidth={1.75} className="text-text-muted" />
+          <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+            Agregar candidato manual
+          </p>
         </div>
-        {err && <p className="text-sm text-red-600">{err}</p>}
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={procesando}
-            className="rounded-md bg-navy-700 text-white px-4 py-2 text-sm font-semibold hover:bg-navy-800 disabled:bg-navy-300"
-          >
-            {procesando ? 'Guardando…' : 'Agregar candidato'}
-          </button>
-        </div>
-      </form>
 
+        <form onSubmit={agregarPostulacion} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <BrandLabel label="Nombres" requerido>
+              <input
+                value={form.nombres}
+                onChange={(e) => setForm({ ...form, nombres: e.target.value })}
+                required
+                className={inputClass}
+              />
+            </BrandLabel>
+            <BrandLabel label="Apellidos" requerido>
+              <input
+                value={form.apellidos}
+                onChange={(e) => setForm({ ...form, apellidos: e.target.value })}
+                required
+                className={inputClass}
+              />
+            </BrandLabel>
+            <BrandLabel label="Email" requerido>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+                className={inputClass}
+              />
+            </BrandLabel>
+            <BrandLabel label="Teléfono" requerido>
+              <input
+                value={form.telefono}
+                onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                required
+                className={inputClass}
+              />
+            </BrandLabel>
+            <BrandLabel label="Doc. tipo">
+              <select
+                value={form.documento_tipo}
+                onChange={(e) => setForm({ ...form, documento_tipo: e.target.value })}
+                className={inputClass}
+              >
+                <option value="CC">CC</option>
+                <option value="CE">CE</option>
+                <option value="PEP">PEP</option>
+                <option value="PA">PA</option>
+              </select>
+            </BrandLabel>
+            <BrandLabel label="Doc. número">
+              <input
+                value={form.documento_numero}
+                onChange={(e) => setForm({ ...form, documento_numero: e.target.value })}
+                className={inputClass}
+              />
+            </BrandLabel>
+            <BrandLabel label="Ciudad">
+              <input
+                value={form.ciudad_residencia}
+                onChange={(e) => setForm({ ...form, ciudad_residencia: e.target.value })}
+                className={inputClass}
+              />
+            </BrandLabel>
+            <BrandLabel label="Especialidad">
+              <input
+                value={form.especialidad_tecnica}
+                onChange={(e) => setForm({ ...form, especialidad_tecnica: e.target.value })}
+                placeholder="ej. Backend Node.js"
+                className={inputClass}
+              />
+            </BrandLabel>
+            <BrandLabel label="Años exp.">
+              <input
+                type="number"
+                min={0}
+                max={50}
+                value={form.anios_experiencia}
+                onChange={(e) => setForm({ ...form, anios_experiencia: e.target.value })}
+                className={inputClass}
+              />
+            </BrandLabel>
+            <BrandLabel label="Fuente">
+              <select
+                value={form.fuente}
+                onChange={(e) =>
+                  setForm({ ...form, fuente: e.target.value as FuentePostulacion })
+                }
+                className={inputClass}
+              >
+                {FUENTES.map((f) => (
+                  <option key={f} value={f}>
+                    {f.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            </BrandLabel>
+          </div>
+          {err && (
+            <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
+              {err}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              variant="brand-primary"
+              disabled={procesando}
+              loading={procesando}
+            >
+              {procesando ? 'Guardando…' : 'Agregar candidato'}
+            </Button>
+          </div>
+        </form>
+      </Card>
+
+      {/* ─── Filtros ──────────────────────────────────────────── */}
       <div className="flex gap-3 items-center flex-wrap">
-        <input
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre o email…"
-          className="flex-1 min-w-[200px] rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
-        />
+        <div className="flex-1 min-w-[220px] relative">
+          <Search
+            size={15}
+            strokeWidth={1.75}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle pointer-events-none"
+          />
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre o email…"
+            className={cn(inputClass, 'pl-9')}
+          />
+        </div>
         <select
           value={filtroEstado}
           onChange={(e) => setFiltroEstado(e.target.value)}
-          className="rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
+          className={cn(inputClass, 'md:w-auto')}
         >
           <option value="">Todos los estados</option>
           {ESTADOS.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {s.replace(/_/g, ' ')}
             </option>
           ))}
         </select>
         <label
-          className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs cursor-pointer ${
-            soloInternos ? 'border-navy-300 bg-navy-50 text-navy-900' : 'border-navy-200 bg-white text-navy-700'
-          }`}
+          className={cn(
+            'inline-flex items-center gap-2 rounded-brand-input border px-3.5 py-2.5 text-[13px] cursor-pointer transition-colors duration-150 ease-out',
+            soloInternos
+              ? 'border-info-500 bg-info-50 text-info-700'
+              : 'border-slate-200 bg-white text-text-body hover:bg-slate-50',
+          )}
         >
           <input
             type="checkbox"
             checked={soloInternos}
             onChange={(e) => setSoloInternos(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-info-600 focus:ring-info-300/40"
           />
-          🏢 Solo internos ({totalInternos})
+          <span className="font-medium">Solo internos</span>
+          <span className="tabular-nums text-text-subtle">({stats.internos})</span>
         </label>
       </div>
 
-      <div className="rounded-xl border border-navy-100 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-cream-100 text-navy-700 text-left">
+      {/* ─── Tabla ────────────────────────────────────────────── */}
+      <Card padding="none" className="overflow-hidden">
+        <table className="w-full text-[13px]">
+          <thead className="bg-slate-50 text-text-muted">
             <tr>
-              <th className="px-4 py-2 font-medium">Candidato</th>
-              <th className="px-4 py-2 font-medium">Contacto</th>
-              <th className="px-4 py-2 font-medium">CV</th>
-              <th className="px-4 py-2 font-medium">Estado</th>
-              <th className="px-4 py-2"></th>
+              <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-[0.06em] text-left">
+                Candidato
+              </th>
+              <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-[0.06em] text-left">
+                Contacto
+              </th>
+              <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-[0.06em] text-left">
+                CV
+              </th>
+              <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-[0.06em] text-left">
+                Estado
+              </th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {cargando && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-navy-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-text-muted">
                   Cargando…
                 </td>
               </tr>
             )}
             {!cargando && filtradas.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-navy-500">
-                  Sin postulaciones.
+                <td colSpan={5} className="px-4 py-8 text-center text-text-muted text-[13px]">
+                  Sin postulaciones con esos filtros.
                 </td>
               </tr>
             )}
             {filtradas.map((p) => (
-              <tr key={p.id} className="border-t border-navy-50">
-                <td className="px-4 py-2 font-medium">
+              <tr
+                key={p.id}
+                className="border-t border-slate-100 hover:bg-slate-50/30 transition-colors"
+              >
+                <td className="px-4 py-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {p.candidato_nombre}
+                    <span className="font-medium text-text-strong">{p.candidato_nombre}</span>
                     {p.fuente === 'base_interna' && (
-                      <span className="rounded-full bg-navy-100 text-navy-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
-                        🏢 Interno
-                      </span>
+                      <Pill tono="info">🏢 Interno</Pill>
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-2 text-xs text-navy-600">
-                  {p.candidato_email || <span className="italic text-navy-400">sin email</span>}
+                <td className="px-4 py-3 text-text-muted text-[12px]">
+                  {p.candidato_email || (
+                    <span className="italic text-text-subtle">sin email</span>
+                  )}
                   <br />
-                  {p.candidato_telefono || <span className="italic text-navy-400">sin tel.</span>}
+                  {p.candidato_telefono || (
+                    <span className="italic text-text-subtle">sin tel.</span>
+                  )}
                 </td>
-                <td className="px-4 py-2 text-xs">
+                <td className="px-4 py-3">
                   {p.candidato_cv_url ? (
                     <a
                       href={p.candidato_cv_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-gold-700 hover:underline font-medium"
+                      className="inline-flex items-center gap-1.5 text-brand-700 hover:text-brand-800 hover:underline text-[12px] font-medium"
                     >
-                      Ver PDF ↗
+                      <FileText size={12} strokeWidth={1.75} />
+                      Ver PDF
                     </a>
                   ) : (
-                    <span className="text-navy-400">—</span>
+                    <span className="text-text-subtle">—</span>
                   )}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-3">
                   <select
                     value={p.estado}
                     onChange={(e) => cambiarEstado(p, e.target.value as EstadoPostulacion)}
-                    className="rounded-md border border-navy-200 px-2 py-1 text-xs"
+                    className="rounded-brand-input bg-white border border-slate-200 px-2 py-1 text-[12px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
                   >
                     {ESTADOS.map((s) => (
                       <option key={s} value={s}>
-                        {s}
+                        {s.replace(/_/g, ' ')}
                       </option>
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-3 text-right">
                   <Link
                     to={`/postulaciones/${p.id}`}
-                    className="text-gold-700 hover:underline text-xs"
+                    className="text-brand-700 hover:text-brand-800 hover:underline text-[12px] font-medium"
                   >
                     Abrir →
                   </Link>
@@ -520,50 +674,74 @@ export default function PostulacionesPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
 
-      <div className="flex justify-end gap-2 flex-wrap">
-        <Link
-          to={`/vacantes/${vacante.id}/concepto-atraccion`}
-          className="rounded-md border border-navy-200 bg-white text-navy-700 px-4 py-2 text-sm font-medium hover:bg-cream-100"
-        >
-          Generar concepto VIDA-F-03 →
+      {/* ─── CTAs siguiente paso ──────────────────────────────── */}
+      <div className="flex justify-end gap-3 flex-wrap pt-2">
+        <Link to={`/vacantes/${vacante.id}/concepto-atraccion`}>
+          <Button variant="neutral-secondary">Generar concepto VIDA-F-03 →</Button>
         </Link>
-        <Link
-          to={`/vacantes/${vacante.id}/terna`}
-          className="rounded-md border border-navy-200 text-navy-700 px-4 py-2 text-sm font-medium hover:bg-cream-100"
-        >
-          Ir a terna →
+        <Link to={`/vacantes/${vacante.id}/terna`}>
+          <Button variant="brand-primary">Ir a terna →</Button>
         </Link>
       </div>
     </div>
   );
 }
 
-function Input({
+function BrandLabel({
   label,
-  v,
-  onChange,
-  type,
-  required,
+  requerido,
+  children,
 }: {
   label: string;
-  v: string;
-  onChange: (v: string) => void;
-  type?: string;
-  required?: boolean;
+  requerido?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-navy-700">{label}</span>
-      <input
-        type={type ?? 'text'}
-        value={v}
-        required={required}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-      />
+      <span className="block text-[13px] font-medium text-text-strong mb-1.5">
+        {label} {requerido && <span className="text-brand-600">*</span>}
+      </span>
+      {children}
     </label>
+  );
+}
+
+function MiniStat({
+  label,
+  valor,
+  tono = 'neutral',
+  icono,
+}: {
+  label: string;
+  valor: number;
+  tono?: 'brand' | 'info' | 'success' | 'neutral';
+  icono?: React.ReactNode;
+}) {
+  const claseValor =
+    tono === 'brand'
+      ? 'text-brand-700'
+      : tono === 'info'
+        ? 'text-info-700'
+        : tono === 'success'
+          ? 'text-success-700'
+          : 'text-text-strong';
+  return (
+    <div className="bg-white rounded-md border border-slate-200 p-4 shadow-brand-card">
+      <div className="flex items-center gap-1.5 text-text-muted">
+        {icono}
+        <p className="text-[10px] font-bold tracking-[0.10em] uppercase">{label}</p>
+      </div>
+      <p
+        className={cn(
+          'mt-2 text-[36px] font-extralight leading-[0.95] tracking-[-0.045em] tabular-nums',
+          claseValor,
+        )}
+      >
+        {valor}
+      </p>
+    </div>
   );
 }
 

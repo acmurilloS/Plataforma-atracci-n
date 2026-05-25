@@ -1,9 +1,26 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
+import {
+  ExternalLink,
+  HeartPulse,
+  Send,
+  Stethoscope,
+  XCircle,
+} from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
+import { Button, Card, Pill, type PillTono } from '../../components/brand';
+
+/**
+ * ExamenesMedicosPage · sistema brand.
+ *
+ * Pasos 15-17 del flujograma:
+ *  - 15 · solicitada (analista al aprobar al candidato)
+ *  - 16 · enviada (GH selecciona centro médico y envía orden)
+ *  - 17 · concepto recibido (GH registra apto / no apto + recomendaciones)
+ */
 
 interface ExamenDoc {
   id: string;
@@ -20,6 +37,13 @@ interface ExamenDoc {
   estado: string;
   [k: string]: unknown;
 }
+
+const ESTADO_TONO: Record<string, PillTono> = {
+  solicitada: 'warning',
+  enviada: 'info',
+  apto: 'success',
+  no_apto: 'danger',
+};
 
 export default function ExamenesMedicosPage() {
   const { docs, cargando } = useColeccion<ExamenDoc>('examenes_medicos', {
@@ -65,76 +89,193 @@ export default function ExamenesMedicosPage() {
     setProcesando(null);
   }
 
+  const stats = useMemo(() => {
+    return {
+      total: docs.length,
+      solicitadas: docs.filter((d) => d.estado === 'solicitada').length,
+      enviadas: docs.filter((d) => d.estado === 'enviada').length,
+      aptos: docs.filter((d) => d.estado === 'apto').length,
+      no_aptos: docs.filter((d) => d.estado === 'no_apto').length,
+    };
+  }, [docs]);
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10 space-y-6">
+    <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
+      {/* Hero */}
       <div>
-        <p className="text-xs uppercase tracking-widest text-gold-700">Pasos 15-17 · GH</p>
-        <h1 className="font-display text-3xl font-semibold text-navy-900">Exámenes médicos</h1>
-        <p className="text-sm text-navy-600 mt-1">
-          Orden, envío al candidato y registro del concepto médico.
+        <Pill tono="brand" dot>
+          Pasos 15 – 17 · GH
+        </Pill>
+        <h1
+          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
+          style={{ textWrap: 'balance' }}
+        >
+          Exámenes médicos
+        </h1>
+        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
+          Cuando el líder aprueba un candidato, se dispara automáticamente la solicitud. GH
+          envía la orden al centro médico y registra el concepto recibido.
         </p>
       </div>
 
-      {cargando && <p className="text-sm text-navy-500">Cargando…</p>}
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <MiniStat label="Total" valor={stats.total} icono={<HeartPulse size={14} strokeWidth={1.75} />} />
+        <MiniStat label="Solicitadas" valor={stats.solicitadas} tono="warning" />
+        <MiniStat label="Enviadas" valor={stats.enviadas} tono="info" />
+        <MiniStat label="Aptos" valor={stats.aptos} tono="success" />
+        <MiniStat label="No aptos" valor={stats.no_aptos} tono="danger" />
+      </div>
+
+      {cargando && <p className="text-[13px] text-text-muted">Cargando…</p>}
       {!cargando && docs.length === 0 && (
-        <p className="text-sm text-navy-500">Sin exámenes pendientes.</p>
+        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
+          <p className="text-[14px] font-medium text-text-strong">Sin exámenes pendientes</p>
+          <p className="text-[12px] text-text-muted mt-1">
+            Cuando el líder apruebe un candidato en la terna, aparecerá aquí la solicitud.
+          </p>
+        </div>
       )}
 
       <div className="space-y-3">
-        {docs.map((ex) => (
-          <div key={ex.id} className="rounded-xl border border-navy-100 bg-white p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-mono text-xs text-navy-500">examen {ex.id.slice(0, 8)}</p>
-                <h3 className="font-display text-lg font-semibold text-navy-900">
-                  <Link to={`/postulaciones/${ex.postulacion_id}`} className="hover:underline">
-                    Candidato de postulación {ex.postulacion_id.slice(0, 8)}
-                  </Link>
-                </h3>
-                <p className="text-xs text-navy-600 mt-1">
-                  Solicitada {formatearFecha(ex.solicitada_en.toDate())}
-                  {ex.enviada_al_candidato_en &&
-                    ` · enviada ${formatearFecha(ex.enviada_al_candidato_en.toDate())}`}
-                  {ex.centro_medico && ` · ${ex.centro_medico}`}
-                </p>
+        {docs.map((ex) => {
+          const tono = ESTADO_TONO[ex.estado] ?? 'neutral';
+          return (
+            <Card key={ex.id} padding="md">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] uppercase tracking-[0.06em] text-text-subtle font-mono">
+                    examen {ex.id.slice(0, 8)}
+                  </p>
+                  <h3 className="mt-1 text-[16px] font-semibold tracking-[-0.012em] text-text-strong">
+                    <Link
+                      to={`/postulaciones/${ex.postulacion_id}`}
+                      className="hover:text-brand-700 transition-colors"
+                    >
+                      Candidato de postulación {ex.postulacion_id.slice(0, 8)}
+                    </Link>
+                  </h3>
+                  <p className="text-[12px] text-text-muted mt-1.5 inline-flex items-center gap-2 flex-wrap">
+                    <span className="tabular-nums">
+                      Solicitada {formatearFecha(ex.solicitada_en.toDate())}
+                    </span>
+                    {ex.enviada_al_candidato_en && (
+                      <>
+                        <span className="text-text-subtle">·</span>
+                        <span className="tabular-nums">
+                          Enviada {formatearFecha(ex.enviada_al_candidato_en.toDate())}
+                        </span>
+                      </>
+                    )}
+                    {ex.centro_medico && (
+                      <>
+                        <span className="text-text-subtle">·</span>
+                        <span className="inline-flex items-center gap-1 text-text-body font-medium">
+                          <Stethoscope size={11} strokeWidth={1.75} className="text-text-subtle" />
+                          {ex.centro_medico}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                  {ex.recomendaciones && (
+                    <p className="mt-2 rounded-md bg-slate-50 border border-slate-200 px-3 py-2 text-[12px] text-text-body italic">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-subtle not-italic">
+                        Recomendaciones:{' '}
+                      </span>
+                      {ex.recomendaciones}
+                    </p>
+                  )}
+                </div>
+                <Pill tono={tono} dot>
+                  {ex.estado.replace(/_/g, ' ')}
+                </Pill>
               </div>
-              <span className="rounded-full bg-navy-50 text-navy-700 px-2 py-0.5 text-xs">
-                {ex.estado}
-              </span>
-            </div>
-            <div className="mt-4 flex gap-2 justify-end">
-              {ex.estado === 'solicitada' && (
-                <button
-                  onClick={() => enviar(ex)}
-                  disabled={procesando === ex.id}
-                  className="rounded-md border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-cream-100"
-                >
-                  Enviar al candidato (paso 16)
-                </button>
-              )}
-              {ex.estado === 'enviada' && (
-                <button
-                  onClick={() => registrarConcepto(ex)}
-                  disabled={procesando === ex.id}
-                  className="rounded-md bg-navy-700 text-white px-3 py-1.5 text-xs font-semibold hover:bg-navy-800"
-                >
-                  Registrar concepto (paso 17)
-                </button>
-              )}
-              {(ex.estado === 'apto' || ex.estado === 'no_apto') && ex.concepto_url && (
-                <a
-                  href={ex.concepto_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-gold-700 hover:underline"
-                >
-                  Ver concepto ↗
-                </a>
-              )}
-            </div>
-          </div>
-        ))}
+
+              <div className="mt-4 flex gap-2 justify-end flex-wrap">
+                {ex.estado === 'solicitada' && (
+                  <Button
+                    onClick={() => enviar(ex)}
+                    disabled={procesando === ex.id}
+                    loading={procesando === ex.id}
+                    variant="brand-primary"
+                    size="medium"
+                    icon={<Send size={13} strokeWidth={1.75} />}
+                  >
+                    Enviar al candidato · paso 16
+                  </Button>
+                )}
+                {ex.estado === 'enviada' && (
+                  <Button
+                    onClick={() => registrarConcepto(ex)}
+                    disabled={procesando === ex.id}
+                    loading={procesando === ex.id}
+                    variant="brand-primary"
+                    size="medium"
+                    icon={<Stethoscope size={13} strokeWidth={1.75} />}
+                  >
+                    Registrar concepto · paso 17
+                  </Button>
+                )}
+                {(ex.estado === 'apto' || ex.estado === 'no_apto') && ex.concepto_url && (
+                  <a
+                    href={ex.concepto_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline underline-offset-2 font-medium"
+                  >
+                    <ExternalLink size={11} strokeWidth={1.75} />
+                    Ver concepto
+                  </a>
+                )}
+                {ex.estado === 'no_apto' && (
+                  <span className="inline-flex items-center gap-1.5 text-[12px] text-danger-700 font-medium">
+                    <XCircle size={12} strokeWidth={1.75} />
+                    Candidato descartado por médicos
+                  </span>
+                )}
+              </div>
+            </Card>
+          );
+        })}
       </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  valor,
+  tono = 'neutral',
+  icono,
+}: {
+  label: string;
+  valor: number;
+  tono?: 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
+  icono?: React.ReactNode;
+}) {
+  const claseValor =
+    tono === 'brand'
+      ? 'text-brand-700'
+      : tono === 'info'
+        ? 'text-info-700'
+        : tono === 'success'
+          ? 'text-success-700'
+          : tono === 'warning'
+            ? 'text-warning-700'
+            : tono === 'danger'
+              ? 'text-danger-700'
+              : 'text-text-strong';
+  return (
+    <div className="bg-white rounded-md border border-slate-200 p-4 shadow-brand-card">
+      <div className="flex items-center gap-1.5 text-text-muted">
+        {icono}
+        <p className="text-[10px] font-bold tracking-[0.10em] uppercase">{label}</p>
+      </div>
+      <p
+        className={`mt-2 text-[36px] font-extralight leading-[0.95] tracking-[-0.045em] tabular-nums ${claseValor}`}
+      >
+        {valor}
+      </p>
     </div>
   );
 }

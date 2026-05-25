@@ -1,6 +1,7 @@
 import { AlertTriangle, Info, Sparkles } from 'lucide-react';
 import type { AlertaUnicornio, SeveridadAlerta } from '../../utils/validadorPerfilUnicornio';
 import { resumirAlertas } from '../../utils/validadorPerfilUnicornio';
+import { cn } from '../../utils/cn';
 
 interface Props {
   alertas: AlertaUnicornio[];
@@ -12,21 +13,24 @@ interface Props {
   } | null;
 }
 
-const ESTILOS: Record<SeveridadAlerta, { caja: string; titulo: string; icono: string }> = {
+const ESTILOS: Record<
+  SeveridadAlerta,
+  { caja: string; titulo: string; icono: string }
+> = {
   unicornio: {
-    caja: 'border-red-300 bg-red-50',
-    titulo: 'text-red-800',
-    icono: 'text-red-600',
+    caja: 'border-danger-500/30 bg-danger-50',
+    titulo: 'text-danger-700',
+    icono: 'text-danger-700',
   },
   advertencia: {
-    caja: 'border-amber-300 bg-amber-50',
-    titulo: 'text-amber-800',
-    icono: 'text-amber-600',
+    caja: 'border-warning-500/30 bg-warning-50/60',
+    titulo: 'text-warning-700',
+    icono: 'text-warning-700',
   },
   info: {
-    caja: 'border-navy-200 bg-cream-50',
-    titulo: 'text-navy-800',
-    icono: 'text-navy-500',
+    caja: 'border-slate-200 bg-slate-50/60',
+    titulo: 'text-text-strong',
+    icono: 'text-text-muted',
   },
 };
 
@@ -39,34 +43,41 @@ export function AlertasUnicornio({ alertas, analisisIA }: Props) {
     <div className="space-y-3">
       {resumen.total > 0 && (
         <div
-          className={`rounded-xl border p-4 ${
+          className={cn(
+            'rounded-md border p-4',
             resumen.unicornio > 0
-              ? 'border-red-300 bg-red-50'
+              ? 'border-danger-500/30 bg-danger-50'
               : resumen.advertencia > 0
-                ? 'border-amber-300 bg-amber-50'
-                : 'border-navy-200 bg-cream-50'
-          }`}
+                ? 'border-warning-500/30 bg-warning-50/60'
+                : 'border-slate-200 bg-slate-50/60',
+          )}
         >
           <div className="flex items-start gap-3">
             <AlertTriangle
-              size={20}
-              className={
+              size={18}
+              strokeWidth={1.75}
+              className={cn(
+                'mt-0.5 shrink-0',
                 resumen.unicornio > 0
-                  ? 'text-red-700'
+                  ? 'text-danger-700'
                   : resumen.advertencia > 0
-                    ? 'text-amber-700'
-                    : 'text-navy-600'
-              }
+                    ? 'text-warning-700'
+                    : 'text-text-muted',
+              )}
             />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-navy-900">
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-text-strong">
                 {resumen.unicornio > 0
-                  ? `Estás buscando ${resumen.unicornio} unicornio${resumen.unicornio > 1 ? 's' : ''}`
+                  ? `Estás buscando ${resumen.unicornio} unicornio${
+                      resumen.unicornio > 1 ? 's' : ''
+                    }`
                   : resumen.advertencia > 0
-                    ? `Hay ${resumen.advertencia} inconsistencia${resumen.advertencia > 1 ? 's' : ''} en el perfil`
+                    ? `Hay ${resumen.advertencia} inconsistencia${
+                        resumen.advertencia > 1 ? 's' : ''
+                      } en el perfil`
                     : 'Observaciones'}
               </p>
-              <p className="text-xs text-navy-600 mt-1">
+              <p className="text-[12px] text-text-muted mt-0.5 leading-[1.5]">
                 Revisa lo que pide el líder vs lo que ofrece la vacante antes de publicar. Cada
                 alerta abajo tiene una sugerencia de ajuste.
               </p>
@@ -78,18 +89,24 @@ export function AlertasUnicornio({ alertas, analisisIA }: Props) {
       {alertas.map((a) => {
         const e = ESTILOS[a.severidad];
         return (
-          <div key={a.id} className={`rounded-lg border p-3 ${e.caja}`}>
-            <div className="flex items-start gap-2">
+          <div key={a.id} className={cn('rounded-md border p-3.5', e.caja)}>
+            <div className="flex items-start gap-2.5">
               {a.severidad === 'info' ? (
-                <Info size={16} className={`mt-0.5 ${e.icono}`} />
+                <Info size={14} strokeWidth={1.75} className={cn('mt-0.5 shrink-0', e.icono)} />
               ) : (
-                <AlertTriangle size={16} className={`mt-0.5 ${e.icono}`} />
+                <AlertTriangle
+                  size={14}
+                  strokeWidth={1.75}
+                  className={cn('mt-0.5 shrink-0', e.icono)}
+                />
               )}
-              <div className="flex-1">
-                <p className={`text-sm font-semibold ${e.titulo}`}>{a.titulo}</p>
-                <p className="text-xs text-navy-700 mt-1">{a.mensaje}</p>
+              <div className="flex-1 min-w-0">
+                <p className={cn('text-[13px] font-semibold', e.titulo)}>{a.titulo}</p>
+                <p className="text-[12px] text-text-body mt-0.5 leading-[1.5]">{a.mensaje}</p>
                 {a.sugerencia && (
-                  <p className="text-xs text-navy-600 mt-2 italic">→ {a.sugerencia}</p>
+                  <p className="text-[12px] text-text-muted mt-1.5 italic leading-[1.5]">
+                    → {a.sugerencia}
+                  </p>
                 )}
               </div>
             </div>
@@ -98,24 +115,31 @@ export function AlertasUnicornio({ alertas, analisisIA }: Props) {
       })}
 
       {analisisIA && (
-        <div className="rounded-xl border border-equitel-rojo-200 bg-gradient-to-br from-cream-50 to-equitel-rojo-50/40 p-4">
+        <div className="rounded-md border border-brand-200 bg-gradient-to-br from-brand-50/40 to-white p-4">
           <div className="flex items-start gap-3">
-            <Sparkles size={18} className="text-equitel-rojo-700 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-navy-900">Análisis IA del perfil</p>
+            <div className="w-8 h-8 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+              <Sparkles size={14} strokeWidth={1.75} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-text-strong">Análisis IA del perfil</p>
               {analisisIA.cargando ? (
-                <p className="text-xs text-navy-600 mt-1 italic">Analizando con Gemini…</p>
+                <p className="text-[12px] text-text-muted mt-1 italic">Analizando con Gemini…</p>
               ) : (
                 <>
-                  <p className="text-xs text-navy-700 mt-1">{analisisIA.diagnostico}</p>
+                  <p className="text-[12px] text-text-body mt-1 leading-[1.55]">
+                    {analisisIA.diagnostico}
+                  </p>
                   {analisisIA.alertas_adicionales.length > 0 && (
-                    <ul className="text-xs text-navy-700 mt-2 space-y-1 list-disc list-inside">
+                    <ul className="text-[12px] text-text-body mt-2 space-y-1 leading-[1.5]">
                       {analisisIA.alertas_adicionales.map((a, i) => (
-                        <li key={i}>{a}</li>
+                        <li key={i} className="flex items-start gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-text-subtle mt-1.5 shrink-0" />
+                          <span>{a}</span>
+                        </li>
                       ))}
                     </ul>
                   )}
-                  <p className="text-xs text-navy-800 mt-2 italic font-medium">
+                  <p className="text-[12px] text-brand-700 mt-2 italic font-medium border-l-2 border-brand-400 pl-2.5">
                     → {analisisIA.recomendacion_global}
                   </p>
                 </>

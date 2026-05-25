@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { X, Recycle, Ban } from 'lucide-react';
 import { Modal } from '../ui';
+import { Button } from '../brand';
 import { motivoDescarte, MOTIVO_DESCARTE_LABEL, MOTIVOS_RECICLABLES, type MotivoDescarte } from '../../schemas';
+import { cn } from '../../utils/cn';
 
 interface Props {
   open: boolean;
@@ -10,13 +13,11 @@ interface Props {
 }
 
 /**
- * Modal para descarte tipificado.
+ * DescarteModal · sistema brand.
  *
- * Pide al usuario un motivo del enum `motivoDescarte` (+ notas libres opcionales).
- * Sin tipificar es imposible agregar datos para el pool futuro (ATR-11).
- *
- * Visualmente separa los motivos "reciclables" (candidato podría volver al pool
- * para otra vacante) de los "duros" (no reciclar al menos por 1 año).
+ * Pide motivo tipificado del enum `motivoDescarte` (+ notas opcionales).
+ * Separa visualmente reciclables (success) de duros (danger) para que el
+ * analista entienda la consecuencia en el pool futuro (ATR-11).
  */
 export function DescarteModal({ open, candidatoNombre, onClose, onConfirmar }: Props) {
   const [motivo, setMotivo] = useState<MotivoDescarte | ''>('');
@@ -58,96 +59,141 @@ export function DescarteModal({ open, candidatoNombre, onClose, onConfirmar }: P
       description="El motivo se guarda tipificado para que el pool futuro pueda distinguir reciclables de no reciclables."
       size="md"
       footer={
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={enviando}
-            className="rounded-md border border-navy-200 px-4 py-2 text-sm text-navy-700 hover:bg-cream-100"
-          >
+        <>
+          <Button variant="neutral-secondary" onClick={onClose} disabled={enviando}>
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="destructive-primary"
             onClick={confirmar}
             disabled={enviando || !motivo}
-            className="rounded-md bg-red-600 text-white px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:bg-red-300"
+            loading={enviando}
+            icon={<X size={13} strokeWidth={1.75} />}
           >
-            {enviando ? '…' : 'Descartar'}
-          </button>
-        </div>
+            {enviando ? 'Descartando…' : 'Descartar'}
+          </Button>
+        </>
       }
     >
-      <div className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-700 mb-1">
-            Motivos reciclables · candidato podría volver al pool
-          </p>
-          <div className="grid grid-cols-1 gap-1.5">
-            {reciclables.map((m) => (
-              <label
-                key={m}
-                className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
-                  motivo === m
-                    ? 'border-emerald-400 bg-emerald-50'
-                    : 'border-navy-100 hover:bg-cream-50'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="motivo"
-                  value={m}
-                  checked={motivo === m}
-                  onChange={() => setMotivo(m)}
-                />
-                <span>{MOTIVO_DESCARTE_LABEL[m]}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+      <div className="space-y-5">
+        <GrupoMotivos
+          titulo="Motivos reciclables · candidato podría volver al pool"
+          icono={<Recycle size={12} strokeWidth={1.75} />}
+          tono="success"
+          motivos={reciclables}
+          seleccionado={motivo}
+          onSeleccionar={setMotivo}
+        />
 
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-red-700 mb-1">
-            Motivos duros · no reciclar al menos por 1 año
-          </p>
-          <div className="grid grid-cols-1 gap-1.5">
-            {noReciclables.map((m) => (
-              <label
-                key={m}
-                className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
-                  motivo === m
-                    ? 'border-red-400 bg-red-50'
-                    : 'border-navy-100 hover:bg-cream-50'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="motivo"
-                  value={m}
-                  checked={motivo === m}
-                  onChange={() => setMotivo(m)}
-                />
-                <span>{MOTIVO_DESCARTE_LABEL[m]}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+        <GrupoMotivos
+          titulo="Motivos duros · no reciclar al menos por 1 año"
+          icono={<Ban size={12} strokeWidth={1.75} />}
+          tono="danger"
+          motivos={noReciclables}
+          seleccionado={motivo}
+          onSeleccionar={setMotivo}
+        />
 
         <label className="block">
-          <span className="text-sm font-medium text-navy-800">
-            Notas adicionales {motivo === 'otro' && <span className="text-red-600">*</span>}
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted mb-1.5">
+            Notas adicionales{' '}
+            {motivo === 'otro' && <span className="text-danger-700">*</span>}
           </span>
           <textarea
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
             rows={3}
-            className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
+            className={cn(
+              'block w-full bg-slate-50 border border-slate-200 rounded-md',
+              'px-3 py-2 text-[13px] text-text-strong placeholder:text-text-subtle',
+              'transition-colors duration-150 ease-out resize-y',
+              'focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40',
+            )}
             placeholder="Contexto adicional para auditoría / pool futuro."
           />
         </label>
 
         {err && (
-          <div className="rounded-md bg-red-50 border border-red-200 p-2 text-xs text-red-700">{err}</div>
+          <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3 py-2 text-[12px] text-danger-700">
+            {err}
+          </div>
         )}
       </div>
     </Modal>
+  );
+}
+
+function GrupoMotivos({
+  titulo,
+  icono,
+  tono,
+  motivos,
+  seleccionado,
+  onSeleccionar,
+}: {
+  titulo: string;
+  icono: React.ReactNode;
+  tono: 'success' | 'danger';
+  motivos: MotivoDescarte[];
+  seleccionado: MotivoDescarte | '';
+  onSeleccionar: (m: MotivoDescarte) => void;
+}) {
+  const tonoMap = {
+    success: {
+      header: 'text-success-700',
+      activo: 'border-success-400 bg-success-50',
+      radio: 'text-success-600',
+    },
+    danger: {
+      header: 'text-danger-700',
+      activo: 'border-danger-400 bg-danger-50',
+      radio: 'text-danger-600',
+    },
+  } as const;
+  const t = tonoMap[tono];
+
+  return (
+    <div>
+      <p
+        className={cn(
+          'flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.10em] mb-2',
+          t.header,
+        )}
+      >
+        {icono}
+        {titulo}
+      </p>
+      <div className="grid grid-cols-1 gap-1.5">
+        {motivos.map((m) => {
+          const activo = seleccionado === m;
+          return (
+            <label
+              key={m}
+              className={cn(
+                'flex items-center gap-2.5 rounded-md border px-3 py-2 cursor-pointer text-[13px] transition-colors',
+                activo
+                  ? t.activo
+                  : 'border-slate-200 hover:bg-slate-50',
+              )}
+            >
+              <input
+                type="radio"
+                name="motivo"
+                value={m}
+                checked={activo}
+                onChange={() => onSeleccionar(m)}
+                className={cn(
+                  'w-3.5 h-3.5 border-slate-300 focus:ring-brand-300/40',
+                  t.radio,
+                )}
+              />
+              <span className={cn(activo ? 'text-text-strong font-medium' : 'text-text-body')}>
+                {MOTIVO_DESCARTE_LABEL[m]}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }

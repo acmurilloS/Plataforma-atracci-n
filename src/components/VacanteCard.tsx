@@ -1,78 +1,40 @@
 import { Link } from 'react-router-dom';
-import { Building2 } from 'lucide-react';
+import { Building2, Clock3 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '../utils/cn';
-import { Avatar, Badge, Card, SemaforoANS } from './ui';
+import { Card, Pill, type PillTono } from './brand';
 import type { VacanteDoc } from '../schemas';
-import type { BadgeVariant } from './ui';
+
+/**
+ * VacanteCard · sistema brand.
+ *
+ * Card clickable con lift+scale hover (firma del estilo). La progresión
+ * por fase (A→F) se mantiene como barra de 6 segmentos por consistencia
+ * con el flujograma — recoloreada con tonos brand.
+ *
+ * El estado actual se comunica con:
+ *   1. Pill de criticidad arriba a la derecha.
+ *   2. Eyebrow con consecutivo + h3 cargo.
+ *   3. Barra 6-fase con etiqueta hairline.
+ *   4. Status label legible al final + responsable + tiempo abierta.
+ */
 
 interface FaseDef {
   clave: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
   label: string;
   estados: string[];
-  badge: BadgeVariant;
-  barraClase: string;
-  bloqueClase: string;
-  textoEstadoClase: string;
+  tono: PillTono;
+  barra: string; // bg-* para segmento activo / completado
 }
 
-// Escala monocromática rojo → negro alineada al brand book.
 const FASES: FaseDef[] = [
-  {
-    clave: 'A',
-    label: 'Inicio',
-    estados: ['borrador', 'aprobada'],
-    badge: 'fase-a',
-    barraClase: 'bg-gold-100',
-    bloqueClase: 'bg-gold-50',
-    textoEstadoClase: 'text-gold-700',
-  },
-  {
-    clave: 'B',
-    label: 'Reclutamiento',
-    estados: ['lista_para_publicar', 'publicada'],
-    badge: 'fase-b',
-    barraClase: 'bg-gold-200',
-    bloqueClase: 'bg-gold-100',
-    textoEstadoClase: 'text-gold-700',
-  },
-  {
-    clave: 'C',
-    label: 'Selección',
-    estados: ['en_proceso'],
-    badge: 'fase-c',
-    barraClase: 'bg-gold-300',
-    bloqueClase: 'bg-gold-200',
-    textoEstadoClase: 'text-gold-800',
-  },
-  {
-    clave: 'D',
-    label: 'Decisión',
-    estados: ['terna_enviada', 'seleccionado'],
-    badge: 'fase-d',
-    barraClase: 'bg-gold-400',
-    bloqueClase: 'bg-gold-400 text-white',
-    textoEstadoClase: 'text-white',
-  },
-  {
-    clave: 'E',
-    label: 'Ingreso',
-    estados: ['en_contratacion'],
-    badge: 'fase-e',
-    barraClase: 'bg-gold-600',
-    bloqueClase: 'bg-gold-600 text-white',
-    textoEstadoClase: 'text-white',
-  },
-  {
-    clave: 'F',
-    label: 'Vinculación',
-    estados: ['cerrada'],
-    badge: 'fase-f',
-    barraClase: 'bg-navy-900',
-    bloqueClase: 'bg-navy-900 text-white',
-    textoEstadoClase: 'text-white',
-  },
+  { clave: 'A', label: 'Inicio', estados: ['borrador', 'aprobada'], tono: 'brand', barra: 'bg-brand-200' },
+  { clave: 'B', label: 'Reclutamiento', estados: ['lista_para_publicar', 'publicada'], tono: 'warning', barra: 'bg-warning-500' },
+  { clave: 'C', label: 'Selección', estados: ['en_proceso'], tono: 'info', barra: 'bg-info-500' },
+  { clave: 'D', label: 'Decisión', estados: ['terna_enviada', 'seleccionado'], tono: 'danger', barra: 'bg-danger-500' },
+  { clave: 'E', label: 'Ingreso', estados: ['en_contratacion'], tono: 'success', barra: 'bg-success-500' },
+  { clave: 'F', label: 'Vinculación', estados: ['cerrada'], tono: 'neutral', barra: 'bg-slate-700' },
 ];
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -93,35 +55,57 @@ const ESTADO_LABEL: Record<string, string> = {
 interface Responsable {
   rol: string;
   nombre: string;
+  iniciales: string;
 }
 
 function faseDeEstado(estado: string): number {
   return FASES.findIndex((f) => f.estados.includes(estado));
 }
 
+function iniciales(nombre: string): string {
+  return nombre
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 function responsableDeEstado(v: VacanteDoc): Responsable {
+  const make = (rol: string, nombre: string): Responsable => ({
+    rol,
+    nombre,
+    iniciales: iniciales(nombre) || '?',
+  });
   switch (v.estado) {
     case 'borrador':
-      return { rol: 'gh', nombre: 'Equipo GH · Maribel' };
+      return make('GH', 'Maribel González');
     case 'aprobada':
     case 'lista_para_publicar':
     case 'publicada':
     case 'en_proceso':
-      return { rol: 'analista', nombre: v.analista_nombre ?? 'pendiente de asignar' };
+      return make('Analista', v.analista_nombre ?? 'Sin asignar');
     case 'terna_enviada':
-      return { rol: 'líder', nombre: v.lider_nombre ?? '—' };
+      return make('Líder', v.lider_nombre ?? '—');
     case 'seleccionado':
     case 'en_contratacion':
-      return { rol: 'gh', nombre: 'Equipo GH · Maribel' };
+      return make('GH', 'Maribel González');
     case 'cerrada':
-      return { rol: 'apoyo', nombre: 'IT · compras · bodega · contabilidad' };
+      return make('Apoyo', 'IT · compras · talentos');
     case 'desierta':
     case 'cancelada':
     case 'pausada':
-      return { rol: 'coordinación', nombre: 'Karen Bonilla' };
+      return make('Coordinación', 'Karen Bonilla');
     default:
-      return { rol: 'coordinación', nombre: 'Karen Bonilla' };
+      return make('Coordinación', 'Karen Bonilla');
   }
+}
+
+// Semáforo de días abierta con tonos brand semánticos.
+function semaforoDias(dias: number): { tono: PillTono; etiqueta: string } {
+  if (dias <= 10) return { tono: 'success', etiqueta: 'En meta' };
+  if (dias <= 15) return { tono: 'warning', etiqueta: 'Atención' };
+  return { tono: 'danger', etiqueta: 'Vencida' };
 }
 
 interface Props {
@@ -135,40 +119,41 @@ export function VacanteCard({ vacante }: Props) {
   const dias = Math.floor((Date.now() - creadoEn.getTime()) / (1000 * 60 * 60 * 24));
   const relativo = formatDistanceToNow(creadoEn, { locale: es, addSuffix: true });
   const terminada = ['cerrada', 'desierta', 'cancelada'].includes(vacante.estado);
-  const progresoPct = faseIdx >= 0 ? Math.round(((faseIdx + 1) / FASES.length) * 100) : 0;
   const faseActiva = faseIdx >= 0 ? FASES[faseIdx] : FASES[0];
+  const sem = semaforoDias(dias);
 
-  const criticidadBadge: BadgeVariant =
+  const criticidadTono: PillTono =
     vacante.criticidad === 'Alta'
-      ? 'criticidad-alta'
+      ? 'danger'
       : vacante.criticidad === 'Media'
-        ? 'criticidad-media'
-        : 'criticidad-baja';
+        ? 'warning'
+        : 'success';
 
   return (
     <Link to={`/vacantes/${vacante.id}`} className="block group">
-      <Card interactive elevation="elevated" className="h-full flex flex-col">
-        <div className="flex items-start justify-between gap-2 mb-1">
+      <Card clickable padding="md" className="h-full flex flex-col">
+        {/* Header: eyebrow + cargo + pill criticidad */}
+        <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[11px] text-navy-500">
-              {vacante.consecutivo || <span className="italic">pendiente</span>}
+            <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-subtle">
+              {vacante.consecutivo || <span className="italic normal-case">pendiente</span>}
             </p>
-            <h3 className="font-display text-lg font-semibold text-navy-900 truncate group-hover:text-equitel-rojo-700 transition-colors">
+            <h3 className="mt-1 text-[17px] font-semibold tracking-[-0.012em] text-text-strong truncate group-hover:text-brand-700 transition-colors">
               {vacante.cargo_nombre}
             </h3>
           </div>
-          <Badge variant={criticidadBadge} size="sm">
-            {vacante.criticidad}
-          </Badge>
+          <Pill tono={criticidadTono}>{vacante.criticidad}</Pill>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-navy-600">
-          <Building2 size={12} className="text-navy-400 flex-shrink-0" />
+        {/* Empresa / sede / unidad */}
+        <div className="flex items-center gap-1.5 text-[12px] text-text-muted">
+          <Building2 size={12} strokeWidth={1.5} className="text-text-subtle flex-shrink-0" />
           <span className="truncate">
             {vacante.empresa_nombre} · {vacante.sede_nombre} · {vacante.unidad_nombre}
           </span>
         </div>
 
+        {/* Progress 6-fase */}
         <div className="mt-5">
           <div className="flex items-center gap-1">
             {FASES.map((f, i) => {
@@ -178,15 +163,14 @@ export function VacanteCard({ vacante }: Props) {
                 <div
                   key={f.clave}
                   className={cn(
-                    'h-2 flex-1 rounded-full transition-all',
-                    done || active ? f.barraClase : 'bg-navy-100',
-                    active && 'animate-pulse-ring',
+                    'h-1.5 flex-1 rounded-full transition-all',
+                    done || active ? f.barra : 'bg-slate-100',
                   )}
                 />
               );
             })}
           </div>
-          <div className="flex justify-between mt-1.5 text-[9px] font-semibold uppercase tracking-wider">
+          <div className="flex justify-between mt-2 text-[9px] font-bold uppercase tracking-[0.08em]">
             {FASES.map((f, i) => {
               const active = faseIdx === i;
               const done = !terminada && faseIdx > i;
@@ -196,62 +180,66 @@ export function VacanteCard({ vacante }: Props) {
                   className={cn(
                     'flex-1 text-center',
                     active
-                      ? 'text-equitel-rojo-700'
+                      ? 'text-brand-700'
                       : done
-                        ? 'text-navy-700'
-                        : 'text-navy-300',
+                        ? 'text-text-strong'
+                        : 'text-slate-300',
                   )}
                 >
-                  {f.label}
+                  {f.clave}
                 </span>
               );
             })}
           </div>
         </div>
 
-        <div className={cn('mt-4 rounded-xl p-4', faseActiva.bloqueClase)}>
-          <p
-            className={cn(
-              'text-[10px] font-bold uppercase tracking-wider',
-              faseActiva.textoEstadoClase,
-            )}
-          >
-            {faseIdx >= 0 ? `Fase ${faseActiva.clave} · ${faseActiva.label}` : vacante.estado}
-          </p>
-          <p
-            className={cn(
-              'text-sm mt-1 font-medium leading-snug',
-              faseActiva.textoEstadoClase === 'text-white'
-                ? 'text-white'
-                : 'text-navy-900',
-            )}
-          >
+        {/* Estado actual (texto legible) */}
+        <div className="mt-5 pt-4 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span
+              className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                faseActiva.tono === 'brand' && 'bg-brand-500',
+                faseActiva.tono === 'warning' && 'bg-warning-500',
+                faseActiva.tono === 'info' && 'bg-info-500',
+                faseActiva.tono === 'danger' && 'bg-danger-500',
+                faseActiva.tono === 'success' && 'bg-success-500',
+                faseActiva.tono === 'neutral' && 'bg-slate-500',
+              )}
+            />
+            <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+              Fase {faseActiva.clave} · {faseActiva.label}
+            </p>
+          </div>
+          <p className="text-[13px] font-medium text-text-strong leading-snug">
             {ESTADO_LABEL[vacante.estado] ?? vacante.estado}
           </p>
-          {!terminada && (
-            <div className="mt-2 h-1 rounded-full bg-white/40 overflow-hidden">
-              <div
-                className={cn(
-                  'h-full transition-all',
-                  faseActiva.textoEstadoClase === 'text-white' ? 'bg-white' : faseActiva.barraClase,
-                )}
-                style={{ width: `${progresoPct}%` }}
-              />
-            </div>
-          )}
         </div>
 
-        <div className="mt-auto pt-4 flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <Avatar nombre={resp.nombre} size="sm" color="negro" />
+        {/* Footer: responsable + semáforo días */}
+        <div className="mt-auto pt-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center text-[11px] font-semibold text-text-strong">
+              {resp.iniciales}
+            </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wide text-navy-500 font-semibold">
+              <p className="text-[9px] uppercase tracking-[0.10em] text-text-subtle font-bold">
                 {resp.rol}
               </p>
-              <p className="text-navy-900 font-medium truncate">{resp.nombre}</p>
+              <p className="text-[12px] text-text-body font-medium truncate">{resp.nombre}</p>
             </div>
           </div>
-          <SemaforoANS dias={dias} etiqueta={`Abierta ${relativo}`} />
+          <div className="text-right shrink-0">
+            <div className="flex items-center gap-1 text-[10px] text-text-subtle">
+              <Clock3 size={10} strokeWidth={1.5} />
+              <span className="tabular-nums">{relativo}</span>
+            </div>
+            {!terminada && (
+              <Pill tono={sem.tono} className="mt-1 !text-[9px] !py-0 !px-1.5">
+                {sem.etiqueta} · {dias}d
+              </Pill>
+            )}
+          </div>
         </div>
       </Card>
     </Link>

@@ -1,11 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Timestamp } from 'firebase/firestore';
-import { ChevronDown, ChevronUp, IdCard, Plus, Trash2 } from 'lucide-react';
+import {
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  IdCard,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
 import { useEmpresas } from '../../hooks/useCatalogos';
 import { formatearFecha } from '../../utils/fechas';
+import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { cn } from '../../utils/cn';
 import type {
   DatosBasicosIntegranteDoc,
   EstadoCivil,
@@ -16,6 +25,14 @@ import type {
   PostulacionDoc,
   TipoContratacion,
 } from '../../schemas';
+
+/**
+ * DatosBasicosTab · sistema brand.
+ *
+ * Formato DGH-F-05 v8 — información del integrante para nómina (paso 18-19).
+ * Secciones colapsables tipo accordion brand. Workflow: borrador → diligenciado
+ * → autorizado GH → registrado nómina.
+ */
 
 interface Props {
   postulacion: PostulacionDoc;
@@ -28,11 +45,11 @@ const ESTADO_LABEL: Record<EstadoDatosBasicos, string> = {
   registrado_nomina: 'Registrado en nómina',
 };
 
-const ESTADO_COLOR: Record<EstadoDatosBasicos, string> = {
-  borrador: 'bg-navy-50 text-navy-700',
-  diligenciado_integrante: 'bg-amber-50 text-amber-800',
-  autorizado_gh: 'bg-blue-50 text-blue-800',
-  registrado_nomina: 'bg-emerald-50 text-emerald-700',
+const ESTADO_TONO: Record<EstadoDatosBasicos, PillTono> = {
+  borrador: 'neutral',
+  diligenciado_integrante: 'warning',
+  autorizado_gh: 'info',
+  registrado_nomina: 'success',
 };
 
 const SECCIONES = [
@@ -44,6 +61,11 @@ const SECCIONES = [
   { id: 'dotacion', label: '5. Dotación · tallajes' },
   { id: 'observaciones', label: '6. Observaciones y familiares en la organización' },
 ] as const;
+
+const inputClass =
+  'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong placeholder:text-text-subtle transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 disabled:bg-slate-100 disabled:text-text-subtle disabled:cursor-not-allowed';
+
+const textareaClass = inputClass + ' resize-none leading-relaxed';
 
 export function DatosBasicosTab({ postulacion }: Props) {
   const { docs } = useColeccion<DatosBasicosIntegranteDoc>('datos_basicos_integrante', {
@@ -60,26 +82,33 @@ export function DatosBasicosTab({ postulacion }: Props) {
   const esGH = rol === 'gh' || rol === 'admin' || rol === 'coordinador';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h3 className="font-display text-lg font-semibold text-navy-900 flex items-center gap-2">
-            <IdCard size={18} className="text-equitel-rojo-700" />
-            Datos básicos del integrante (paso 18-19)
-          </h3>
-          <p className="text-xs text-navy-500 mt-0.5">
-            Formato DGH-F-05 v8 · Información para registro en nómina
-          </p>
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
+            <IdCard size={18} strokeWidth={1.75} />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+              Datos básicos del integrante · paso 18-19
+            </p>
+            <p className="text-[16px] font-semibold tracking-[-0.012em] text-text-strong mt-1">
+              Formato DGH-F-05 v8
+            </p>
+            <p className="text-[11px] text-text-subtle italic mt-0.5">
+              Información para registro en nómina
+            </p>
+          </div>
         </div>
         {dato && (
-          <span className={`rounded-full px-3 py-1 text-xs font-bold ${ESTADO_COLOR[dato.estado]}`}>
+          <Pill tono={ESTADO_TONO[dato.estado]} dot>
             {ESTADO_LABEL[dato.estado]}
-          </span>
+          </Pill>
         )}
       </div>
 
       {err && (
-        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+        <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
           {err}
         </div>
       )}
@@ -133,7 +162,6 @@ export function DatosBasicosTab({ postulacion }: Props) {
 function CrearDatosBasicos({
   postulacion,
   empresas,
-  uid,
   onError,
   crear,
 }: {
@@ -153,7 +181,6 @@ function CrearDatosBasicos({
     try {
       const empresa = empresas.find((e) => e.codigo === empresaCodigo);
       const nombreCompleto = postulacion.candidato_nombre ?? '';
-      // Split heurístico nombre/apellidos
       const partes = nombreCompleto.trim().split(/\s+/);
       const nombres = partes.slice(0, Math.max(1, Math.floor(partes.length / 2))).join(' ');
       const apellidos = partes.slice(Math.max(1, Math.floor(partes.length / 2))).join(' ');
@@ -230,53 +257,88 @@ function CrearDatosBasicos({
   }
 
   return (
-    <form onSubmit={submit} className="rounded-xl border border-navy-100 bg-white p-5 space-y-4">
-      <div>
-        <h4 className="font-display text-base font-semibold text-navy-900">Iniciar datos básicos del integrante</h4>
-        <p className="text-xs text-navy-500 mt-1">
-          El candidato seleccionado completa la información personal, laboral y familiar. GH valida y
-          registra en nómina.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <label className="block">
-          <span className="text-xs font-medium text-navy-700">Tipo de contratación</span>
-          <select value={tipoContrat} onChange={(e) => setTipoContrat(e.target.value as TipoContratacion)} className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm bg-white">
-            <option value="directo">Directo</option>
-            <option value="temporal">Temporal</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-xs font-medium text-navy-700">Empresa</span>
-          <select value={empresaCodigo} onChange={(e) => setEmpresaCodigo(e.target.value)} required className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm bg-white">
-            {empresas.map((e) => (
-              <option key={e.codigo} value={e.codigo}>{e.nombre}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <button type="submit" disabled={creando} className="rounded-md bg-navy-700 text-white px-4 py-2 text-sm font-semibold hover:bg-navy-800 disabled:bg-navy-300">
-        {creando ? 'Creando…' : 'Iniciar datos básicos'}
-      </button>
-      <p className="text-[11px] text-navy-400">uid sesión: {uid.slice(0, 8)}…</p>
-    </form>
+    <Card padding="lg">
+      <form onSubmit={submit} className="space-y-5">
+        <div>
+          <h4 className="text-[16px] font-semibold tracking-[-0.012em] text-text-strong">
+            Iniciar datos básicos del integrante
+          </h4>
+          <p className="text-[12px] text-text-muted mt-1.5 max-w-2xl">
+            El candidato seleccionado completa la información personal, laboral y familiar.
+            GH valida y registra en nómina.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block">
+            <span className="block text-[13px] font-medium text-text-strong mb-1.5">
+              Tipo de contratación
+            </span>
+            <select
+              value={tipoContrat}
+              onChange={(e) => setTipoContrat(e.target.value as TipoContratacion)}
+              className={inputClass}
+            >
+              <option value="directo">Directo</option>
+              <option value="temporal">Temporal</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="block text-[13px] font-medium text-text-strong mb-1.5">Empresa</span>
+            <select
+              value={empresaCodigo}
+              onChange={(e) => setEmpresaCodigo(e.target.value)}
+              required
+              className={inputClass}
+            >
+              {empresas.map((e) => (
+                <option key={e.codigo} value={e.codigo}>
+                  {e.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <Button type="submit" variant="brand-primary" disabled={creando} loading={creando}>
+          {creando ? 'Creando…' : 'Iniciar datos básicos'}
+        </Button>
+      </form>
+    </Card>
   );
 }
 
 // ─── Sección colapsable ────────────────────────────────────────────────
 
-function Seccion({ label, abierta, onToggle, children }: { label: string; abierta: boolean; onToggle: () => void; children: React.ReactNode }) {
+function Seccion({
+  label,
+  abierta,
+  onToggle,
+  children,
+}: {
+  label: string;
+  abierta: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-xl border border-navy-100 bg-white overflow-hidden">
+    <div className="bg-white rounded-md border border-slate-200 shadow-brand-card overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full px-5 py-3 flex items-center justify-between bg-cream-50 hover:bg-cream-100"
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
       >
-        <span className="font-display text-sm font-bold text-navy-900">{label}</span>
-        {abierta ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        <span className="text-[13px] font-semibold text-text-strong">{label}</span>
+        <ChevronDown
+          size={16}
+          strokeWidth={1.5}
+          className={cn(
+            'text-text-muted transition-transform duration-200 ease-cult',
+            abierta && 'rotate-180',
+          )}
+        />
       </button>
-      {abierta && <div className="px-5 py-4">{children}</div>}
+      {abierta && (
+        <div className="border-t border-slate-100 px-5 py-5 animate-fade-in-up">{children}</div>
+      )}
     </div>
   );
 }
@@ -307,12 +369,17 @@ function ContenidoSeccion({
     setGuardado(false);
   }, [seccionId]);
 
-  function set<K extends keyof DatosBasicosIntegranteDoc>(key: K, value: DatosBasicosIntegranteDoc[K]) {
+  function set<K extends keyof DatosBasicosIntegranteDoc>(
+    key: K,
+    value: DatosBasicosIntegranteDoc[K],
+  ) {
     setLocal((prev) => ({ ...prev, [key]: value }));
     setGuardado(false);
   }
 
-  function get<K extends keyof DatosBasicosIntegranteDoc>(key: K): DatosBasicosIntegranteDoc[K] {
+  function get<K extends keyof DatosBasicosIntegranteDoc>(
+    key: K,
+  ): DatosBasicosIntegranteDoc[K] {
     return (local[key] ?? dato[key]) as DatosBasicosIntegranteDoc[K];
   }
 
@@ -334,14 +401,17 @@ function ContenidoSeccion({
   const hayCambios = Object.keys(local).length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {seccionId === 'cabecera' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <SelectField
             label="Tipo de contratación"
             value={get('tipo_contratacion') as string}
             onChange={(v) => set('tipo_contratacion', v as TipoContratacion)}
-            options={[{ value: 'directo', label: 'Directo' }, { value: 'temporal', label: 'Temporal' }]}
+            options={[
+              { value: 'directo', label: 'Directo' },
+              { value: 'temporal', label: 'Temporal' },
+            ]}
           />
           <SelectField
             label="Empresa"
@@ -357,7 +427,7 @@ function ContenidoSeccion({
       )}
 
       {seccionId === 'personal' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Nombres" value={get('nombres') as string} onChange={(v) => set('nombres', v)} />
           <Field label="Apellidos" value={get('apellidos') as string} onChange={(v) => set('apellidos', v)} />
           <SelectField
@@ -428,19 +498,23 @@ function ContenidoSeccion({
       )}
 
       {seccionId === 'laboral' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="N° cuenta de banco" value={get('cuenta_banco_numero') as string} onChange={(v) => set('cuenta_banco_numero', v)} />
             <Field label="Entidad bancaria" value={get('entidad_bancaria') as string} onChange={(v) => set('entidad_bancaria', v)} />
             <Field label="Fondo de pensiones obligatorias (AFP)" value={get('fondo_pensiones_obligatorias') as string} onChange={(v) => set('fondo_pensiones_obligatorias', v)} placeholder="ej. Porvenir, Protección, Colpensiones" />
             <Field label="EPS" value={get('entidad_promotora_salud') as string} onChange={(v) => set('entidad_promotora_salud', v)} placeholder="ej. Sura, Sanitas, Compensar" />
             <Field label="Fondo de cesantías" value={get('fondo_cesantias') as string} onChange={(v) => set('fondo_cesantias', v)} />
           </div>
-          <div className="rounded-md border border-navy-200 bg-cream-50 p-3 space-y-3">
-            <p className="text-[11px] uppercase tracking-widest text-navy-500 font-bold">
-              Solo diligenciado por Gestión Humana
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+          <div className="rounded-md border border-info-500/30 bg-info-50/40 p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-info-500" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-info-700">
+                Solo diligenciado por Gestión Humana
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Field
                 label="Caja de compensación"
                 value={get('caja_compensacion') as string}
@@ -464,7 +538,7 @@ function ContenidoSeccion({
               />
             </div>
             {!esGH && (
-              <p className="text-[11px] text-navy-500 italic">
+              <p className="text-[11px] text-info-700 italic">
                 Estos 3 campos los diligencia GH (Maribel) cuando autorice la contratación.
               </p>
             )}
@@ -473,10 +547,12 @@ function ContenidoSeccion({
       )}
 
       {seccionId === 'familiar' && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <h5 className="text-xs uppercase tracking-widest text-navy-500 font-bold mb-2">Cónyuge</h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-muted mb-3">
+              Cónyuge
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Nombre cónyuge" value={get('conyuge_nombre') as string} onChange={(v) => set('conyuge_nombre', v)} />
               <Field label="Documento de identidad" value={get('conyuge_documento') as string} onChange={(v) => set('conyuge_documento', v)} />
               <Field label="Profesión / actividad" value={get('conyuge_profesion_actividad') as string} onChange={(v) => set('conyuge_profesion_actividad', v)} />
@@ -484,35 +560,64 @@ function ContenidoSeccion({
             </div>
           </div>
           <div>
-            <h5 className="text-xs uppercase tracking-widest text-navy-500 font-bold mb-2">Hijos</h5>
-            <HijosEditor
-              hijos={get('hijos') as Hijo[]}
-              onChange={(v) => set('hijos', v)}
-            />
+            <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-muted mb-3">
+              Hijos
+            </p>
+            <HijosEditor hijos={get('hijos') as Hijo[]} onChange={(v) => set('hijos', v)} />
           </div>
         </div>
       )}
 
       {seccionId === 'emergencia' && (
         <div className="space-y-3">
-          <p className="text-xs text-navy-500">Hasta 2 contactos a quienes avisar en caso de emergencia.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="rounded-md border border-navy-100 p-3 space-y-2">
-              <p className="text-[11px] uppercase tracking-wide font-bold text-navy-600">Contacto 1</p>
-              <Field label="Nombre" value={(get('emergencia_contacto_1') as { nombre: string }).nombre} onChange={(v) => set('emergencia_contacto_1', { ...get('emergencia_contacto_1'), nombre: v })} />
-              <Field label="Teléfono" value={(get('emergencia_contacto_1') as { telefono: string }).telefono} onChange={(v) => set('emergencia_contacto_1', { ...get('emergencia_contacto_1'), telefono: v })} />
+          <p className="text-[12px] text-text-muted">
+            Hasta 2 contactos a quienes avisar en caso de emergencia.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-md border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+              <p className="text-[10px] uppercase tracking-[0.10em] font-bold text-text-muted">
+                Contacto 1
+              </p>
+              <Field
+                label="Nombre"
+                value={(get('emergencia_contacto_1') as { nombre: string }).nombre}
+                onChange={(v) =>
+                  set('emergencia_contacto_1', { ...get('emergencia_contacto_1'), nombre: v })
+                }
+              />
+              <Field
+                label="Teléfono"
+                value={(get('emergencia_contacto_1') as { telefono: string }).telefono}
+                onChange={(v) =>
+                  set('emergencia_contacto_1', { ...get('emergencia_contacto_1'), telefono: v })
+                }
+              />
             </div>
-            <div className="rounded-md border border-navy-100 p-3 space-y-2">
-              <p className="text-[11px] uppercase tracking-wide font-bold text-navy-600">Contacto 2</p>
-              <Field label="Nombre" value={(get('emergencia_contacto_2') as { nombre: string }).nombre} onChange={(v) => set('emergencia_contacto_2', { ...get('emergencia_contacto_2'), nombre: v })} />
-              <Field label="Teléfono" value={(get('emergencia_contacto_2') as { telefono: string }).telefono} onChange={(v) => set('emergencia_contacto_2', { ...get('emergencia_contacto_2'), telefono: v })} />
+            <div className="rounded-md border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+              <p className="text-[10px] uppercase tracking-[0.10em] font-bold text-text-muted">
+                Contacto 2
+              </p>
+              <Field
+                label="Nombre"
+                value={(get('emergencia_contacto_2') as { nombre: string }).nombre}
+                onChange={(v) =>
+                  set('emergencia_contacto_2', { ...get('emergencia_contacto_2'), nombre: v })
+                }
+              />
+              <Field
+                label="Teléfono"
+                value={(get('emergencia_contacto_2') as { telefono: string }).telefono}
+                onChange={(v) =>
+                  set('emergencia_contacto_2', { ...get('emergencia_contacto_2'), telefono: v })
+                }
+              />
             </div>
           </div>
         </div>
       )}
 
       {seccionId === 'dotacion' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Field label="N° calzado" value={get('talla_calzado') as string} onChange={(v) => set('talla_calzado', v)} placeholder="ej. 40" />
           <Field label="Pantalón" value={get('talla_pantalon') as string} onChange={(v) => set('talla_pantalon', v)} placeholder="ej. 32" />
           <Field label="Camisa / blusa" value={get('talla_camisa_blusa') as string} onChange={(v) => set('talla_camisa_blusa', v)} placeholder="ej. M, L" />
@@ -524,24 +629,42 @@ function ContenidoSeccion({
       )}
 
       {seccionId === 'observaciones' && (
-        <div className="space-y-3">
-          <TextareaField label="Observaciones" value={get('observaciones') as string} onChange={(v) => set('observaciones', v)} />
+        <div className="space-y-4">
+          <TextareaField
+            label="Observaciones"
+            value={get('observaciones') as string}
+            onChange={(v) => set('observaciones', v)}
+          />
           <CheckField
             label="¿Tiene familiares en la organización?"
             checked={get('tiene_familiares_organizacion') as boolean}
             onChange={(v) => set('tiene_familiares_organizacion', v)}
           />
           {(get('tiene_familiares_organizacion') as boolean) && (
-            <Field label="Nombre del familiar" value={get('nombre_familiar_organizacion') as string} onChange={(v) => set('nombre_familiar_organizacion', v)} />
+            <Field
+              label="Nombre del familiar"
+              value={get('nombre_familiar_organizacion') as string}
+              onChange={(v) => set('nombre_familiar_organizacion', v)}
+            />
           )}
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-navy-100">
-        {guardado && <span className="text-xs text-emerald-600 font-semibold">✓ Guardado</span>}
-        <button onClick={guardar} disabled={!hayCambios || guardando} className="rounded-md bg-navy-700 text-white px-4 py-2 text-sm font-semibold hover:bg-navy-800 disabled:bg-navy-300">
+      <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+        {guardado && (
+          <span className="text-[12px] text-success-700 font-medium inline-flex items-center gap-1">
+            <Check size={12} strokeWidth={2} />
+            Guardado
+          </span>
+        )}
+        <Button
+          onClick={guardar}
+          variant="brand-primary"
+          disabled={!hayCambios || guardando}
+          loading={guardando}
+        >
           {guardando ? 'Guardando…' : 'Guardar sección'}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -566,24 +689,45 @@ function HijosEditor({ hijos, onChange }: { hijos: Hijo[]; onChange: (v: Hijo[])
   return (
     <div className="space-y-2">
       {hijos.map((h, i) => (
-        <div key={i} className="flex gap-2 items-end">
+        <div key={i} className="flex gap-3 items-end">
           <div className="flex-1">
-            <Field label={`Hijo ${i + 1} · nombre`} value={h.nombre} onChange={(v) => actualizar(i, { nombre: v })} />
+            <Field
+              label={`Hijo ${i + 1} · nombre`}
+              value={h.nombre}
+              onChange={(v) => actualizar(i, { nombre: v })}
+            />
           </div>
           <div className="flex-1">
-            <Field label="Fecha de nacimiento" type="date" value={h.fecha_nacimiento ?? ''} onChange={(v) => actualizar(i, { fecha_nacimiento: v })} />
+            <Field
+              label="Fecha de nacimiento"
+              type="date"
+              value={h.fecha_nacimiento ?? ''}
+              onChange={(v) => actualizar(i, { fecha_nacimiento: v })}
+            />
           </div>
-          <button type="button" onClick={() => eliminar(i)} className="rounded-md p-2 hover:bg-red-50 text-red-600">
-            <Trash2 size={14} />
+          <button
+            type="button"
+            onClick={() => eliminar(i)}
+            className="rounded-md p-2 hover:bg-danger-50 text-danger-700 transition-colors"
+            aria-label="Eliminar hijo"
+          >
+            <Trash2 size={14} strokeWidth={1.75} />
           </button>
         </div>
       ))}
       {hijos.length < 5 && (
-        <button type="button" onClick={agregar} className="text-sm text-equitel-rojo-700 hover:underline font-semibold inline-flex items-center gap-1">
-          <Plus size={14} /> Agregar hijo
+        <button
+          type="button"
+          onClick={agregar}
+          className="text-[13px] text-brand-700 hover:text-brand-800 hover:underline font-semibold inline-flex items-center gap-1 mt-2"
+        >
+          <Plus size={14} strokeWidth={1.75} />
+          Agregar hijo
         </button>
       )}
-      <p className="text-[11px] text-navy-400">Máximo 5 hijos según el formato.</p>
+      <p className="text-[11px] text-text-subtle italic mt-1">
+        Máximo 5 hijos según el formato.
+      </p>
     </div>
   );
 }
@@ -606,7 +750,12 @@ function AccionesWorkflow({
   onError: (m: string) => void;
 }) {
   async function marcarDiligenciado() {
-    if (!dato.documento_numero || !dato.celular || !dato.correo_electronico || !dato.entidad_promotora_salud) {
+    if (
+      !dato.documento_numero ||
+      !dato.celular ||
+      !dato.correo_electronico ||
+      !dato.entidad_promotora_salud
+    ) {
       onError('Faltan campos mínimos: documento, celular, correo y EPS son obligatorios.');
       return;
     }
@@ -651,43 +800,59 @@ function AccionesWorkflow({
   }
 
   return (
-    <div className="rounded-xl border border-equitel-rojo-200 bg-equitel-rojo-50/30 p-5 flex items-center justify-between flex-wrap gap-3">
+    <div className="rounded-md border border-brand-200 bg-gradient-to-br from-brand-50/40 to-white px-5 py-4 flex items-center justify-between flex-wrap gap-3">
       <div>
-        <p className="font-display text-sm font-semibold text-navy-900">Workflow</p>
-        <p className="text-xs text-navy-600">
-          Estado actual: <strong>{ESTADO_LABEL[dato.estado]}</strong>
+        <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+          Workflow
+        </p>
+        <p className="text-[13px] text-text-body mt-1">
+          Estado actual:{' '}
+          <span className="font-semibold text-text-strong">{ESTADO_LABEL[dato.estado]}</span>
         </p>
         {dato.fecha_firma_integrante && (
-          <p className="text-[11px] text-navy-500">
+          <p className="text-[11px] text-text-subtle mt-0.5">
             Diligenciado: {formatearFecha(dato.fecha_firma_integrante.toDate())}
           </p>
         )}
         {dato.fecha_autorizacion_gh && dato.autorizacion_gh_nombre && (
-          <p className="text-[11px] text-navy-500">
-            Autorizado por {dato.autorizacion_gh_nombre} el {formatearFecha(dato.fecha_autorizacion_gh.toDate())}
+          <p className="text-[11px] text-text-subtle">
+            Autorizado por {dato.autorizacion_gh_nombre} el{' '}
+            {formatearFecha(dato.fecha_autorizacion_gh.toDate())}
           </p>
         )}
         {dato.fecha_registrado_nomina && dato.registrado_nomina_nombre && (
-          <p className="text-[11px] text-emerald-700 font-semibold">
-            ✓ Registrado en nómina por {dato.registrado_nomina_nombre} el {formatearFecha(dato.fecha_registrado_nomina.toDate())}
+          <p className="text-[12px] text-success-700 font-medium mt-1 inline-flex items-center gap-1.5">
+            <CheckCircle2 size={12} strokeWidth={1.75} />
+            Registrado en nómina por {dato.registrado_nomina_nombre} el{' '}
+            {formatearFecha(dato.fecha_registrado_nomina.toDate())}
           </p>
         )}
       </div>
       <div className="flex gap-2 flex-wrap">
         {dato.estado === 'borrador' && (
-          <button onClick={marcarDiligenciado} className="rounded-md bg-navy-700 text-white px-3 py-1.5 text-xs font-semibold hover:bg-navy-800">
+          <Button onClick={marcarDiligenciado} variant="brand-primary" size="medium">
             Marcar como diligenciado
-          </button>
+          </Button>
         )}
         {dato.estado === 'diligenciado_integrante' && esGH && (
-          <button onClick={autorizarGH} className="rounded-md bg-blue-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-blue-700">
+          <Button
+            onClick={autorizarGH}
+            variant="brand-primary"
+            size="medium"
+            icon={<CheckCircle2 size={13} strokeWidth={1.75} />}
+          >
             Autorizar GH
-          </button>
+          </Button>
         )}
         {dato.estado === 'autorizado_gh' && esGH && (
-          <button onClick={registrarNomina} className="rounded-md bg-emerald-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-emerald-700">
+          <Button
+            onClick={registrarNomina}
+            variant="brand-primary"
+            size="medium"
+            icon={<CheckCircle2 size={13} strokeWidth={1.75} />}
+          >
             Marcar como registrado en nómina
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -701,49 +866,103 @@ function fmtDate(t: Timestamp | null): string {
   return t.toDate().toISOString().slice(0, 10);
 }
 
-function Field({ label, value, onChange, type, placeholder, disabled }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; disabled?: boolean }) {
+function Field({
+  label,
+  value,
+  onChange,
+  type,
+  placeholder,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-navy-700">{label}</span>
+      <span className="block text-[13px] font-medium text-text-strong mb-1.5">{label}</span>
       <input
         type={type ?? 'text'}
         value={value ?? ''}
         placeholder={placeholder}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm focus:border-equitel-rojo-500 focus:outline-none focus:ring-2 focus:ring-equitel-rojo-500/20 disabled:bg-cream-100 disabled:text-navy-400"
+        className={inputClass}
       />
     </label>
   );
 }
 
-function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-navy-700">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm bg-white">
+      <span className="block text-[13px] font-medium text-text-strong mb-1.5">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
         {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
         ))}
       </select>
     </label>
   );
 }
 
-function TextareaField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function TextareaField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-navy-700">{label}</span>
-      <textarea rows={3} value={value ?? ''} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm" />
+      <span className="block text-[13px] font-medium text-text-strong mb-1.5">{label}</span>
+      <textarea
+        rows={3}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        className={textareaClass}
+      />
     </label>
   );
 }
 
-function CheckField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function CheckField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer">
-      <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} className="rounded" />
-      <span className="text-sm text-navy-800">{label}</span>
+    <label className="flex items-start gap-2.5 cursor-pointer group">
+      <input
+        type="checkbox"
+        checked={!!checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300/40"
+      />
+      <span className="text-[13px] text-text-body group-hover:text-text-strong transition-colors">
+        {label}
+      </span>
     </label>
   );
 }

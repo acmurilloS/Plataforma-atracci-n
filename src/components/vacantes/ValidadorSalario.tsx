@@ -1,4 +1,6 @@
+import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { formatearCOP, soloDigitos } from '../../utils/moneda';
+import { cn } from '../../utils/cn';
 
 interface Props {
   value: number | '';
@@ -9,6 +11,13 @@ interface Props {
   disabled?: boolean;
 }
 
+/**
+ * ValidadorSalario · sistema brand.
+ *
+ * Input sunken con borde semántico según validación contra banda del cargo:
+ * verde si está en banda, ámbar si está fuera, azul si no hay banda.
+ * Hint informativo debajo con tono que matchea el estado.
+ */
 export function ValidadorSalario({
   value,
   onChange,
@@ -32,6 +41,16 @@ export function ValidadorSalario({
     onChange(d.length === 0 ? '' : Number(d));
   }
 
+  const borderClass = error
+    ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/30'
+    : enBanda
+      ? 'border-success-500 focus:border-success-500 focus:ring-success-500/30'
+      : fueraBanda
+        ? 'border-warning-500 focus:border-warning-500 focus:ring-warning-500/30'
+        : sinBanda
+          ? 'border-info-500 focus:border-info-500 focus:ring-info-500/30'
+          : 'border-slate-200 focus:border-brand-400 focus:ring-brand-300/40';
+
   return (
     <div>
       <div className="relative">
@@ -41,63 +60,68 @@ export function ValidadorSalario({
           disabled={disabled}
           onChange={(e) => onInput(e.target.value)}
           placeholder="COP 0"
-          className={[
-            'w-full rounded-md border px-3 py-2 text-sm pr-10 bg-white',
-            error
-              ? 'border-red-400'
-              : enBanda
-                ? 'border-emerald-500'
-                : fueraBanda
-                  ? 'border-amber-500'
-                  : sinBanda
-                    ? 'border-blue-300'
-                    : 'border-navy-200',
-            disabled ? 'opacity-60' : '',
-          ].join(' ')}
+          className={cn(
+            'w-full rounded-brand-input bg-slate-50 px-3.5 py-2.5 text-[15px] font-medium text-text-strong tabular-nums',
+            'pr-11 border transition-colors duration-150 ease-out',
+            'focus:bg-white focus:outline-none focus:ring-2',
+            borderClass,
+            disabled && 'opacity-60',
+          )}
         />
         {enBanda && (
-          <svg
-            className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
+          <CheckCircle2
+            size={18}
+            strokeWidth={1.75}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-success-600"
+          />
         )}
         {fueraBanda && (
-          <svg
-            className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-amber-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-            />
-          </svg>
+          <AlertTriangle
+            size={18}
+            strokeWidth={1.75}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-warning-600"
+          />
+        )}
+        {sinBanda && (
+          <Info
+            size={18}
+            strokeWidth={1.75}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-info-600"
+          />
         )}
       </div>
+
       {tieneBanda && (
-        <p className="mt-1 text-xs text-navy-500">
-          Banda sugerida: {formatearCOP(bandaMin as number)} – {formatearCOP(bandaMax as number)}
+        <p className="mt-2 text-[11px] text-text-muted">
+          <span className="font-semibold text-text-body">Banda sugerida:</span>{' '}
+          <span className="tabular-nums">
+            {formatearCOP(bandaMin as number)} – {formatearCOP(bandaMax as number)}
+          </span>
         </p>
       )}
+
+      {enBanda && (
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-success-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.06em] text-success-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-success-500" />
+          En banda
+        </div>
+      )}
+
       {fueraBanda && (
-        <p className="mt-1 text-xs text-amber-700">
-          Este salario está fuera de banda, será revisado por Gestión Humana.
+        <p className="mt-2 text-[11px] text-warning-700 leading-relaxed">
+          ⚠ Fuera de banda. La solicitud quedará marcada para validación de
+          Gestión Humana antes de avanzar.
         </p>
       )}
+
       {sinBanda && (
-        <p className="mt-1 text-xs text-blue-700">
-          Este cargo aún no tiene banda salarial formalizada. La vacante avanza con marca para
-          revisión paralela de Gestión Humana.
+        <p className="mt-2 text-[11px] text-info-700 leading-relaxed">
+          ℹ Este cargo aún no tiene banda salarial formalizada. La vacante
+          avanza con marca para revisión paralela de Gestión Humana.
         </p>
       )}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+
+      {error && <p className="mt-2 text-[11px] text-danger-700">{error}</p>}
     </div>
   );
 }

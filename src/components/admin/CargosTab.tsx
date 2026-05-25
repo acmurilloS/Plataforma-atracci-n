@@ -1,12 +1,28 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Plus } from 'lucide-react';
 import { cargoInputSchema, type CargoInput } from '../../schemas';
 import { useCargos } from '../../hooks/useCatalogos';
 import { useAdminCatalogos } from '../../hooks/useAdminCatalogos';
 import { formatearCOP } from '../../utils/moneda';
+import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { cn } from '../../utils/cn';
+
+const inputClass = cn(
+  'block w-full bg-slate-50 border border-slate-200 rounded-md',
+  'px-3 py-2 text-[13px] text-text-strong placeholder:text-text-subtle',
+  'transition-colors duration-150 ease-out',
+  'focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40',
+);
 
 const HERRAMIENTAS = ['computador', 'office', 'labroides', 'dotacion'] as const;
+
+const CRITICIDAD_TONO: Record<string, PillTono> = {
+  Alta: 'danger',
+  Media: 'warning',
+  Baja: 'success',
+};
 
 export function CargosTab() {
   const { cargos } = useCargos();
@@ -54,124 +70,184 @@ export function CargosTab() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2">
-        <div className="rounded-xl border border-navy-100 bg-white overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-cream-100 text-navy-700 text-left">
-              <tr>
-                <th className="px-4 py-2 font-medium">Nombre</th>
-                <th className="px-4 py-2 font-medium">Categoría</th>
-                <th className="px-4 py-2 font-medium">Criticidad</th>
-                <th className="px-4 py-2 font-medium">Banda</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cargos.map((c) => (
-                <tr key={c.id} className="border-t border-navy-50">
-                  <td className="px-4 py-2">{c.nombre}</td>
-                  <td className="px-4 py-2 text-navy-600 capitalize">{c.categoria}</td>
-                  <td className="px-4 py-2">{c.criticidad_sugerida}</td>
-                  <td className="px-4 py-2 text-navy-600">
-                    {c.banda_min != null && c.banda_max != null
-                      ? `${formatearCOP(c.banda_min)} – ${formatearCOP(c.banda_max)}`
-                      : 'Sin banda'}
-                  </td>
+        <Card padding="none">
+          <div className="overflow-hidden rounded-md">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/60">
+                  <th className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
+                    Nombre
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
+                    Categoría
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
+                    Criticidad
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
+                    Banda
+                  </th>
                 </tr>
-              ))}
-              {cargos.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-navy-500">
-                    Sin cargos. Crea uno o corre el seed.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {cargos.map((c) => (
+                  <tr
+                    key={c.id}
+                    className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/40 transition-colors"
+                  >
+                    <td className="px-4 py-3 text-text-strong font-medium">{c.nombre}</td>
+                    <td className="px-4 py-3 text-text-muted capitalize">{c.categoria}</td>
+                    <td className="px-4 py-3">
+                      <Pill tono={CRITICIDAD_TONO[c.criticidad_sugerida] ?? 'neutral'}>
+                        {c.criticidad_sugerida}
+                      </Pill>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-text-body">
+                      {c.banda_min != null && c.banda_max != null ? (
+                        <span>
+                          {formatearCOP(c.banda_min)}{' '}
+                          <span className="text-text-subtle">–</span>{' '}
+                          {formatearCOP(c.banda_max)}
+                        </span>
+                      ) : (
+                        <span className="text-text-subtle italic">Sin banda</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {cargos.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-10 text-center text-[13px] text-text-muted italic"
+                    >
+                      Sin cargos. Crea uno o corre el seed.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       </div>
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="rounded-xl border border-navy-100 bg-white p-4 space-y-3"
-      >
-        <h3 className="font-display text-lg font-semibold text-navy-900">Nuevo cargo</h3>
-        <label className="block">
-          <span className="text-xs font-medium text-navy-700">Nombre</span>
-          <input
-            {...register('nombre')}
-            className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-          />
-          {errors.nombre && (
-            <span className="text-xs text-red-600">{errors.nombre.message}</span>
-          )}
-        </label>
-        <label className="block">
-          <span className="text-xs font-medium text-navy-700">Categoría</span>
-          <select
-            {...register('categoria')}
-            className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-          >
-            <option value="comercial">Comercial</option>
-            <option value="tecnico">Técnico</option>
-            <option value="administrativo">Administrativo</option>
-            <option value="operativo">Operativo</option>
-            <option value="liderazgo">Liderazgo</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-xs font-medium text-navy-700">Criticidad sugerida</span>
-          <select
-            {...register('criticidad_sugerida')}
-            className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-          >
-            <option value="Alta">Alta</option>
-            <option value="Media">Media</option>
-            <option value="Baja">Baja</option>
-          </select>
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="text-xs font-medium text-navy-700">Banda min</span>
-            <input
-              type="number"
-              {...register('banda_min', {
-                setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
-              })}
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-navy-700">Banda max</span>
-            <input
-              type="number"
-              {...register('banda_max', {
-                setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
-              })}
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
-            />
-          </label>
-        </div>
-        {(errors.banda_min || errors.banda_max) && (
-          <span className="text-xs text-red-600">
-            {errors.banda_min?.message ?? errors.banda_max?.message}
-          </span>
-        )}
-        <fieldset className="space-y-1">
-          <legend className="text-xs font-medium text-navy-700">Herramientas sugeridas</legend>
-          {HERRAMIENTAS.map((k) => (
-            <label key={k} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" {...register(`herramientas_sugeridas.${k}` as const)} />
-              <span className="capitalize">{k}</span>
-            </label>
-          ))}
-        </fieldset>
-        {err && <p className="text-sm text-red-600">{err}</p>}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded-md bg-navy-700 text-white py-2 text-sm font-semibold hover:bg-navy-800 disabled:bg-navy-300"
-        >
-          {isSubmitting ? 'Guardando…' : 'Crear cargo'}
-        </button>
+
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <Card padding="md">
+          <h3 className="text-[16px] font-semibold tracking-[-0.012em] text-text-strong mb-1">
+            Nuevo cargo
+          </h3>
+          <p className="text-[12px] text-text-muted mb-4">
+            Cargo del catálogo con banda salarial y herramientas sugeridas.
+          </p>
+          <div className="space-y-3">
+            <Field label="Nombre" error={errors.nombre?.message}>
+              <input {...register('nombre')} className={inputClass} />
+            </Field>
+            <Field label="Categoría">
+              <select {...register('categoria')} className={inputClass}>
+                <option value="comercial">Comercial</option>
+                <option value="tecnico">Técnico</option>
+                <option value="administrativo">Administrativo</option>
+                <option value="operativo">Operativo</option>
+                <option value="liderazgo">Liderazgo</option>
+              </select>
+            </Field>
+            <Field label="Criticidad sugerida">
+              <select {...register('criticidad_sugerida')} className={inputClass}>
+                <option value="Alta">Alta</option>
+                <option value="Media">Media</option>
+                <option value="Baja">Baja</option>
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Banda min">
+                <input
+                  type="number"
+                  {...register('banda_min', {
+                    setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+                  })}
+                  className={cn(inputClass, 'tabular-nums')}
+                />
+              </Field>
+              <Field label="Banda max">
+                <input
+                  type="number"
+                  {...register('banda_max', {
+                    setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+                  })}
+                  className={cn(inputClass, 'tabular-nums')}
+                />
+              </Field>
+            </div>
+            {(errors.banda_min || errors.banda_max) && (
+              <p className="text-[11px] text-danger-700">
+                {errors.banda_min?.message ?? errors.banda_max?.message}
+              </p>
+            )}
+
+            <fieldset>
+              <legend className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted mb-2">
+                Herramientas sugeridas
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                {HERRAMIENTAS.map((k) => (
+                  <label
+                    key={k}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50/60',
+                      'px-2.5 py-2 text-[12px] cursor-pointer hover:bg-slate-100/60 transition-colors',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      {...register(`herramientas_sugeridas.${k}` as const)}
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-300/40"
+                    />
+                    <span className="capitalize text-text-body">{k}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {err && (
+              <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3 py-2 text-[12px] text-danger-700">
+                {err}
+              </div>
+            )}
+            <Button
+              type="submit"
+              variant="brand-primary"
+              size="medium"
+              loading={isSubmitting}
+              disabled={isSubmitting}
+              icon={<Plus size={13} strokeWidth={1.75} />}
+              fullWidth
+            >
+              {isSubmitting ? 'Guardando…' : 'Crear cargo'}
+            </Button>
+          </div>
+        </Card>
       </form>
     </div>
+  );
+}
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted mb-1">
+        {label}
+      </span>
+      {children}
+      {error && <p className="mt-1 text-[11px] text-danger-700">{error}</p>}
+    </label>
   );
 }

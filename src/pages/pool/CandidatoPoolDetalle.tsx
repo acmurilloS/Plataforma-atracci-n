@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
-import { X, FileText, ExternalLink } from 'lucide-react';
+import { ExternalLink, FileText, Send, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -12,30 +12,33 @@ import {
   type PostulacionDoc,
   type VacanteDoc,
 } from '../../schemas';
+import { Button, Pill } from '../../components/brand';
+
+/**
+ * CandidatoPoolDetalle · sistema brand.
+ *
+ * Panel lateral (slide-over) con el historial cross-vacante del candidato.
+ * Acción principal: "Sugerir a vacante activa" — crea postulación nueva
+ * con fuente='base_interna' reusando el candidato existente.
+ */
 
 interface Props {
   candidato: CandidatoDoc;
   onClose: () => void;
 }
 
-/**
- * Panel lateral con el historial cross-vacante del candidato.
- *
- * Acción principal: "Sugerir a vacante activa" — crea una postulación nueva
- * con fuente='base_interna' en una vacante compatible. Reutiliza el candidato
- * existente sin abrir proceso nuevo.
- */
+const inputClass =
+  'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3 py-2 text-[13px] text-text-strong placeholder:text-text-subtle transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40';
+
 export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
   const { user, perfil } = useAuth();
   const { crear } = useMutacion();
 
-  // Todas las postulaciones del candidato (historial completo)
   const { docs: postulaciones } = useColeccion<PostulacionDoc>('postulaciones', {
     filtros: [['candidato_id', '==', candidato.id]],
     orden: ['fecha_postulacion', 'desc'],
   });
 
-  // Vacantes activas para sugerir (publicada o en_proceso)
   const { docs: vacantesPublicadas } = useColeccion<VacanteDoc>('vacantes', {
     filtros: [['estado', '==', 'publicada']],
   });
@@ -47,7 +50,6 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
     [vacantesPublicadas, vacantesEnProceso],
   );
 
-  // No re-sugerir a una vacante donde ya está postulado
   const vacantesIdsPostulado = useMemo(
     () => new Set(postulaciones.map((p) => p.vacante_id)),
     [postulaciones],
@@ -56,9 +58,10 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
 
   const [vacanteSugerir, setVacanteSugerir] = useState<string>('');
   const [sugiriendo, setSugiriendo] = useState(false);
-  const [resultadoSugerir, setResultadoSugerir] = useState<{ ok: boolean; msg: string } | null>(
-    null,
-  );
+  const [resultadoSugerir, setResultadoSugerir] = useState<{
+    ok: boolean;
+    msg: string;
+  } | null>(null);
 
   async function sugerirAVacante() {
     if (!user || !perfil || !vacanteSugerir) return;
@@ -107,31 +110,41 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-40 flex">
-      <div className="flex-1 bg-black/40" onClick={onClose} />
-      <div className="w-full max-w-xl bg-white border-l border-navy-100 overflow-y-auto shadow-2xl">
-        <div className="sticky top-0 bg-white border-b border-navy-100 px-6 py-4 flex items-start justify-between">
+      <div className="flex-1 bg-text-strong/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="w-full max-w-xl bg-white border-l border-slate-200 overflow-y-auto shadow-brand-modal animate-fade-in-up">
+        {/* Header */}
+        <div className="sticky top-0 brand-glass-strong border-b border-slate-200/80 px-6 py-4 flex items-start justify-between z-10">
           <div>
-            <p className="text-xs uppercase tracking-widest text-gold-700">Pool</p>
-            <h2 className="font-display text-xl font-semibold text-navy-900">
+            <Pill tono="brand" dot>
+              Pool
+            </Pill>
+            <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.018em] text-text-strong">
               {candidato.nombres} {candidato.apellidos}
             </h2>
-            <p className="text-xs text-navy-500 mt-1">
+            <p className="text-[11px] text-text-muted mt-1">
               {candidato.email || 'sin email'} · {candidato.telefono || 'sin tel.'} ·{' '}
               {candidato.ciudad_residencia || 'sin ciudad'}
             </p>
           </div>
-          <button onClick={onClose} className="text-navy-400 hover:text-navy-700">
-            <X size={18} />
+          <button
+            onClick={onClose}
+            className="text-text-muted hover:text-text-strong transition-colors p-1 rounded-md hover:bg-slate-100"
+            aria-label="Cerrar"
+          >
+            <X size={18} strokeWidth={1.75} />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Resumen del candidato */}
+        <div className="p-6 space-y-7">
+          {/* Perfil */}
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-navy-700 mb-2">
-              Perfil
-            </h3>
-            <div className="rounded-lg border border-navy-100 bg-cream-50/40 p-3 grid grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />
+              <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                Perfil
+              </p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50/40 p-4 grid grid-cols-2 gap-3">
               <Dato label="Dominio" valor={candidato.dominio_principal ?? 'sin_clasificar'} />
               <Dato label="Especialidad" valor={candidato.especialidad_tecnica || '—'} />
               <Dato
@@ -159,9 +172,9 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
                   href={candidato.linkedin_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="col-span-2 text-gold-700 hover:underline text-xs inline-flex items-center gap-1 mt-1"
+                  className="col-span-2 inline-flex items-center gap-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium mt-1"
                 >
-                  <ExternalLink size={12} /> LinkedIn
+                  <ExternalLink size={11} strokeWidth={1.75} /> LinkedIn
                 </a>
               )}
               {candidato.fuente_hv_url && (
@@ -169,9 +182,9 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
                   href={candidato.fuente_hv_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="col-span-2 text-gold-700 hover:underline text-xs inline-flex items-center gap-1"
+                  className="col-span-2 inline-flex items-center gap-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
                 >
-                  <FileText size={12} /> Hoja de vida
+                  <FileText size={11} strokeWidth={1.75} /> Hoja de vida
                 </a>
               )}
             </div>
@@ -179,44 +192,56 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
 
           {/* Historial de postulaciones */}
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-navy-700 mb-2">
-              Historial · {postulaciones.length} postulación(es)
-            </h3>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                Historial ·{' '}
+                <span className="tabular-nums text-text-strong">{postulaciones.length}</span>{' '}
+                postulación(es)
+              </p>
+            </div>
             {postulaciones.length === 0 ? (
-              <p className="text-xs text-navy-500 italic">Sin historial.</p>
+              <p className="text-[12px] text-text-muted italic">Sin historial.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {postulaciones.map((p) => (
                   <div
                     key={p.id}
-                    className="rounded-lg border border-navy-100 bg-white p-3 text-xs"
+                    className="rounded-md border border-slate-200 bg-white p-3.5 hover:bg-slate-50/40 transition-colors"
                   >
                     <div className="flex items-baseline justify-between gap-2 flex-wrap">
                       <Link
                         to={`/vacantes/${p.vacante_id}`}
-                        className="font-semibold text-navy-900 hover:text-gold-700"
+                        className="text-[13px] font-semibold text-text-strong hover:text-brand-700 transition-colors"
                       >
                         {p.vacante_consecutivo} · {p.cargo_nombre}
                       </Link>
-                      <span className="text-[10px] text-navy-500">
+                      <span className="text-[10px] text-text-subtle tabular-nums">
                         {formatearFecha(p.fecha_postulacion?.toDate())}
                       </span>
                     </div>
-                    <p className="text-navy-600 mt-1">
-                      Estado: <span className="font-medium">{p.estado}</span>
-                    </p>
+                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                      <Pill tono="neutral" dot>
+                        {p.estado.replace(/_/g, ' ')}
+                      </Pill>
+                      {p.fuente === 'base_interna' && <Pill tono="info">🏢 Interno</Pill>}
+                    </div>
                     {p.motivo_descarte && (
-                      <p className="text-amber-700 mt-1">
+                      <p className="text-[11px] text-warning-700 mt-2">
                         Motivo de descarte:{' '}
-                        <span className="font-medium">{MOTIVO_DESCARTE_LABEL[p.motivo_descarte]}</span>
+                        <span className="font-medium">
+                          {MOTIVO_DESCARTE_LABEL[p.motivo_descarte]}
+                        </span>
                       </p>
                     )}
                     {p.razon_descarte && (
-                      <p className="text-navy-600 italic mt-1">"{p.razon_descarte}"</p>
+                      <p className="text-[11px] text-text-muted italic mt-1">
+                        "{p.razon_descarte}"
+                      </p>
                     )}
                     <Link
                       to={`/postulaciones/${p.id}`}
-                      className="text-gold-700 hover:underline text-[11px] mt-2 inline-block"
+                      className="text-[11px] text-brand-700 hover:text-brand-800 hover:underline font-medium mt-2 inline-block"
                     >
                       Ver postulación completa →
                     </Link>
@@ -226,29 +251,45 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
             )}
           </section>
 
-          {/* Historial de pruebas (denormalizado) */}
+          {/* Pruebas pasadas */}
           {(candidato.pruebas_historial?.length ?? 0) > 0 && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-navy-700 mb-2">
-                Pruebas pasadas · {candidato.pruebas_historial.length}
-              </h3>
-              <div className="rounded-lg border border-navy-100 overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-cream-100 text-navy-700 text-left">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                  Pruebas pasadas ·{' '}
+                  <span className="tabular-nums text-text-strong">
+                    {candidato.pruebas_historial.length}
+                  </span>
+                </p>
+              </div>
+              <div className="rounded-md border border-slate-200 overflow-hidden">
+                <table className="w-full text-[12px]">
+                  <thead className="bg-slate-50 text-text-muted">
                     <tr>
-                      <th className="px-3 py-1.5">Tipo</th>
-                      <th className="px-3 py-1.5">Resultado</th>
-                      <th className="px-3 py-1.5">Vacante</th>
-                      <th className="px-3 py-1.5">Fecha</th>
+                      <th className="px-3 py-2 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                        Tipo
+                      </th>
+                      <th className="px-3 py-2 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                        Resultado
+                      </th>
+                      <th className="px-3 py-2 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                        Vacante
+                      </th>
+                      <th className="px-3 py-2 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                        Fecha
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {candidato.pruebas_historial.map((pr, i) => (
-                      <tr key={i} className="border-t border-navy-50">
-                        <td className="px-3 py-1.5">{pr.tipo_prueba}</td>
-                        <td className="px-3 py-1.5 capitalize">{pr.resultado}</td>
-                        <td className="px-3 py-1.5 text-navy-500">{pr.vacante_consecutivo}</td>
-                        <td className="px-3 py-1.5 text-navy-500">
+                      <tr key={i} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-text-body">{pr.tipo_prueba}</td>
+                        <td className="px-3 py-2 capitalize text-text-body">{pr.resultado}</td>
+                        <td className="px-3 py-2 text-text-muted font-mono text-[11px]">
+                          {pr.vacante_consecutivo}
+                        </td>
+                        <td className="px-3 py-2 text-text-muted tabular-nums">
                           {formatearFecha(pr.registrada_en?.toDate?.())}
                         </td>
                       </tr>
@@ -262,11 +303,14 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
           {/* Sugerir a vacante activa */}
           {candidato.apto_para_pool_futuro !== false && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-navy-700 mb-2">
-                Sugerir a vacante activa
-              </h3>
+              <div className="flex items-center gap-2 mb-3">
+                <Send size={11} strokeWidth={1.75} className="text-brand-700" />
+                <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-brand-700">
+                  Sugerir a vacante activa
+                </p>
+              </div>
               {vacantesDisponibles.length === 0 ? (
-                <p className="text-xs text-navy-500 italic">
+                <p className="text-[12px] text-text-muted italic">
                   {vacantesActivas.length === 0
                     ? 'No hay vacantes activas (publicadas / en proceso) ahora mismo.'
                     : 'Ya está postulado a todas las vacantes activas.'}
@@ -274,11 +318,13 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
               ) : (
                 <div className="flex items-end gap-2 flex-wrap">
                   <label className="flex-1 min-w-[200px]">
-                    <span className="text-[11px] font-medium text-navy-700">Vacante</span>
+                    <span className="block text-[11px] font-medium text-text-strong mb-1.5">
+                      Vacante
+                    </span>
                     <select
                       value={vacanteSugerir}
                       onChange={(e) => setVacanteSugerir(e.target.value)}
-                      className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-xs"
+                      className={inputClass}
                     >
                       <option value="">Selecciona…</option>
                       {vacantesDisponibles.map((v) => (
@@ -288,19 +334,21 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
                       ))}
                     </select>
                   </label>
-                  <button
+                  <Button
                     onClick={sugerirAVacante}
                     disabled={!vacanteSugerir || sugiriendo}
-                    className="rounded-md bg-gold-700 text-white px-4 py-2 text-xs font-semibold hover:bg-gold-800 disabled:bg-gold-300"
+                    loading={sugiriendo}
+                    variant="brand-primary"
+                    icon={<Send size={13} strokeWidth={1.75} />}
                   >
-                    {sugiriendo ? '…' : 'Sugerir'}
-                  </button>
+                    Sugerir
+                  </Button>
                 </div>
               )}
               {resultadoSugerir && (
                 <p
-                  className={`mt-2 text-xs ${
-                    resultadoSugerir.ok ? 'text-emerald-700' : 'text-red-700'
+                  className={`mt-2.5 text-[12px] ${
+                    resultadoSugerir.ok ? 'text-success-700' : 'text-danger-700'
                   }`}
                 >
                   {resultadoSugerir.msg}
@@ -314,11 +362,21 @@ export function CandidatoPoolDetalle({ candidato, onClose }: Props) {
   );
 }
 
-function Dato({ label, valor, ancho }: { label: string; valor: string; ancho?: boolean }) {
+function Dato({
+  label,
+  valor,
+  ancho,
+}: {
+  label: string;
+  valor: string;
+  ancho?: boolean;
+}) {
   return (
     <div className={ancho ? 'col-span-2' : ''}>
-      <p className="text-[10px] uppercase tracking-wider text-navy-500">{label}</p>
-      <p className="text-navy-900 font-medium">{valor}</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+        {label}
+      </p>
+      <p className="text-[13px] text-text-strong font-medium mt-0.5">{valor}</p>
     </div>
   );
 }

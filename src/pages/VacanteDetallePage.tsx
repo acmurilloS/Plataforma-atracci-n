@@ -1,27 +1,47 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  CircleDollarSign,
+  FileText,
+  Layers,
+  ShieldCheck,
+  Sparkles,
+  User2,
+} from 'lucide-react';
 import { FlujogramaTimeline } from '../components/FlujogramaTimeline';
 import { PoliticaCriticidadBanner } from '../components/vacantes/PoliticaCriticidadBanner';
-import { Badge, Card, PageHeader, type BadgeVariant } from '../components/ui';
+import { Card, Pill, type PillTono } from '../components/brand';
 import { useVacantes } from '../hooks/useVacantes';
 import { formatearFecha } from '../utils/fechas';
 import { formatearCOP } from '../utils/moneda';
 import type { VacanteDoc } from '../schemas';
 
-// Monocromático rojo→negro alineado al brand book.
-const ESTADO_BADGE: Record<string, BadgeVariant> = {
-  borrador: 'fase-a',
-  aprobada: 'fase-a',
-  lista_para_publicar: 'fase-b',
-  publicada: 'fase-b',
-  en_proceso: 'fase-c',
-  terna_enviada: 'fase-d',
-  seleccionado: 'fase-d',
-  en_contratacion: 'fase-e',
-  cerrada: 'fase-f',
+/**
+ * VacanteDetallePage · sistema brand.
+ *
+ * Hero header con eyebrow consecutivo + h1 hairline + meta empresa/sede.
+ * Pill de estado con tono brand semántico. Cards flat con secciones bien
+ * espaciadas (space-y-10). Datos en formato dt/dd con tipografía Inter
+ * + tabular-nums donde aplica.
+ */
+
+const ESTADO_TONO: Record<string, PillTono> = {
+  borrador: 'neutral',
+  aprobada: 'brand',
+  lista_para_publicar: 'brand',
+  publicada: 'warning',
+  en_proceso: 'info',
+  terna_enviada: 'danger',
+  seleccionado: 'danger',
+  en_contratacion: 'success',
+  cerrada: 'success',
   desierta: 'neutral',
   cancelada: 'neutral',
-  pausada: 'neutral',
+  pausada: 'warning',
 };
 
 export default function VacanteDetallePage() {
@@ -41,148 +61,230 @@ export default function VacanteDetallePage() {
   }, [id, suscribirVacante]);
 
   if (err) {
-    return <div className="max-w-3xl mx-auto px-6 py-10 text-sm text-red-700">{err}</div>;
+    return (
+      <div className="max-w-3xl mx-auto px-6 py-12">
+        <div className="rounded-md border border-danger-500/20 bg-danger-50 px-4 py-3 text-sm text-danger-700">
+          {err}
+        </div>
+      </div>
+    );
   }
   if (!vac) {
     return (
-      <div className="max-w-3xl mx-auto px-6 py-10 text-sm text-navy-500">Cargando vacante…</div>
+      <div className="max-w-3xl mx-auto px-6 py-12 text-sm text-text-muted">Cargando vacante…</div>
     );
   }
 
   const fechaPropuesta = vac.fecha_entrevista_propuesta?.toDate?.() ?? null;
   const fechaPactada = vac.fecha_entrevista_pactada?.toDate?.() ?? null;
   const avalAprobadoEn = vac.aval_aprobado_en?.toDate?.() ?? null;
+  const tono = ESTADO_TONO[vac.estado] ?? 'neutral';
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10 space-y-6">
-      <PageHeader
-        eyebrow={vac.consecutivo || 'Generando consecutivo…'}
-        titulo={vac.cargo_nombre}
-        descripcion={`${vac.empresa_nombre} · ${vac.sede_nombre} · ${vac.unidad_nombre}`}
-        accion={<Badge variant={ESTADO_BADGE[vac.estado] ?? 'neutral'}>{vac.estado}</Badge>}
-      />
+    <div className="max-w-5xl mx-auto px-6 py-12 space-y-10">
+      {/* Volver */}
+      <Link
+        to="/seguimiento"
+        className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-text-strong transition-colors"
+      >
+        <ArrowLeft size={13} strokeWidth={1.75} />
+        Volver a seguimiento
+      </Link>
+
+      {/* ─── Hero header ────────────────────────────────────────── */}
+      <div className="flex items-start justify-between flex-wrap gap-6">
+        <div className="max-w-3xl">
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-text-subtle">
+            {vac.consecutivo || 'Generando consecutivo…'}
+          </p>
+          <h1
+            className="mt-2 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
+            style={{ textWrap: 'balance' }}
+          >
+            {vac.cargo_nombre}
+          </h1>
+          <p className="mt-3 flex items-center gap-1.5 text-[14px] text-text-muted">
+            <Building2 size={13} strokeWidth={1.5} className="text-text-subtle" />
+            {vac.empresa_nombre} · {vac.sede_nombre} · {vac.unidad_nombre}
+          </p>
+        </div>
+        <Pill tono={tono} dot className="self-start">
+          {vac.estado.replace(/_/g, ' ')}
+        </Pill>
+      </div>
 
       <PoliticaCriticidadBanner criticidad={vac.criticidad} />
 
-      <Card padding="lg">
-        <h2 className="font-display text-lg font-bold text-navy-900">Empresa y cargo</h2>
-        <dl className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <div>
-            <dt className="text-navy-500">Empresa</dt>
-            <dd className="font-medium">
-              {vac.empresa_nombre} ({vac.empresa_codigo})
-            </dd>
+      {/* ─── Empresa y cargo ─────────────────────────────────────── */}
+      <section>
+        <SectionEyebrow icon={<Layers size={12} strokeWidth={1.75} />}>
+          Identificación
+        </SectionEyebrow>
+        <Card padding="lg" className="mt-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+            <Dato label="Empresa" valor={`${vac.empresa_nombre} (${vac.empresa_codigo})`} />
+            <Dato label="Sede" valor={`${vac.sede_nombre} (${vac.sede_codigo})`} />
+            <Dato label="Unidad" valor={vac.unidad_nombre} />
+            <Dato label="Criticidad" valor={vac.criticidad} mono />
+            <Dato label="Tipo de solicitud" valor={vac.tipo_solicitud} capital />
+            <Dato label="Líder solicitante" valor={vac.lider_nombre} />
           </div>
-          <div>
-            <dt className="text-navy-500">Sede</dt>
-            <dd className="font-medium">
-              {vac.sede_nombre} ({vac.sede_codigo})
-            </dd>
-          </div>
-          <div>
-            <dt className="text-navy-500">Unidad</dt>
-            <dd className="font-medium">{vac.unidad_nombre}</dd>
-          </div>
-          <div>
-            <dt className="text-navy-500">Criticidad</dt>
-            <dd className="font-medium">{vac.criticidad}</dd>
-          </div>
-          <div>
-            <dt className="text-navy-500">Tipo</dt>
-            <dd className="font-medium capitalize">{vac.tipo_solicitud}</dd>
-          </div>
-          <div>
-            <dt className="text-navy-500">Líder solicitante</dt>
-            <dd className="font-medium">{vac.lider_nombre}</dd>
-          </div>
-        </dl>
-      </Card>
+        </Card>
+      </section>
 
-      <Card padding="lg">
-        <h2 className="font-display text-lg font-bold text-navy-900">Condiciones</h2>
-        <dl className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <div>
-            <dt className="text-navy-500">Salario base</dt>
-            <dd className="font-medium">{formatearCOP(vac.salario_base)}</dd>
+      {/* ─── Condiciones ─────────────────────────────────────────── */}
+      <section>
+        <SectionEyebrow icon={<CircleDollarSign size={12} strokeWidth={1.75} />}>
+          Condiciones
+        </SectionEyebrow>
+        <Card padding="lg" className="mt-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+            <Dato label="Salario base" valor={formatearCOP(vac.salario_base)} hero />
+            <Dato
+              label="En banda"
+              valor={
+                vac.en_banda === null
+                  ? 'Sin banda definida'
+                  : vac.en_banda
+                    ? 'Sí'
+                    : 'No · a validar por GH'
+              }
+            />
+            <Dato label="Rodamiento" valor={vac.rodamiento ? 'Sí' : 'No'} />
+            <Dato
+              label="Comisiones"
+              valor={vac.comisiones_texto || '—'}
+              ancho="md:col-span-2"
+            />
+            <Dato label="Garantizado" valor={vac.garantizado_texto || '—'} />
+            <Dato label="Justificación" valor={vac.justificacion} ancho="md:col-span-3" preserveBreaks />
           </div>
-          <div>
-            <dt className="text-navy-500">En banda</dt>
-            <dd className="font-medium">
-              {vac.en_banda === null
-                ? 'Sin banda definida'
-                : vac.en_banda
-                  ? 'Sí'
-                  : 'No (a validar por GH)'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-navy-500">Comisiones</dt>
-            <dd className="font-medium">{vac.comisiones_texto || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-navy-500">Rodamiento</dt>
-            <dd className="font-medium">{vac.rodamiento ? 'Sí' : 'No'}</dd>
-          </div>
-          <div className="md:col-span-2">
-            <dt className="text-navy-500">Garantizado</dt>
-            <dd className="font-medium whitespace-pre-line">{vac.garantizado_texto || '—'}</dd>
-          </div>
-          <div className="md:col-span-2">
-            <dt className="text-navy-500">Justificación</dt>
-            <dd className="font-medium whitespace-pre-line">{vac.justificacion}</dd>
-          </div>
-        </dl>
-      </Card>
+        </Card>
+      </section>
 
-      <Card padding="lg">
-        <h2 className="font-display text-lg font-bold text-navy-900">Aval y agendamiento</h2>
-        <dl className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <div>
-            <dt className="text-navy-500">Aval adjunto</dt>
-            <dd>
+      {/* ─── Aval y agendamiento ─────────────────────────────────── */}
+      <section>
+        <SectionEyebrow icon={<ShieldCheck size={12} strokeWidth={1.75} />}>
+          Aval y agendamiento
+        </SectionEyebrow>
+        <Card padding="lg" className="mt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+            <div>
+              <DatoLabel>Aval adjunto</DatoLabel>
               <a
                 href={vac.aval_url}
                 target="_blank"
                 rel="noreferrer"
-                className="text-gold-700 hover:underline"
+                className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-700 hover:text-brand-800 hover:underline underline-offset-2"
               >
-                Ver PDF
+                <FileText size={13} strokeWidth={1.5} />
+                Ver PDF firmado
               </a>
-            </dd>
+            </div>
+            <Dato
+              label="Aval aprobado por GH"
+              valor={avalAprobadoEn ? formatearFecha(avalAprobadoEn) : 'Pendiente'}
+              icon={<CheckCircle2 size={13} strokeWidth={1.5} />}
+            />
+            <Dato
+              label="Fecha propuesta por líder"
+              valor={formatearFecha(fechaPropuesta)}
+              icon={<Calendar size={13} strokeWidth={1.5} />}
+            />
+            <Dato
+              label="Fecha pactada (paso 3)"
+              valor={fechaPactada ? formatearFecha(fechaPactada) : 'Pendiente · perfilamiento'}
+              icon={<Calendar size={13} strokeWidth={1.5} />}
+            />
           </div>
-          <div>
-            <dt className="text-navy-500">Aval aprobado por Alejandro</dt>
-            <dd className="font-medium">
-              {avalAprobadoEn ? formatearFecha(avalAprobadoEn) : 'Pendiente'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-navy-500">Fecha propuesta de entrevista</dt>
-            <dd className="font-medium">{formatearFecha(fechaPropuesta)}</dd>
-          </div>
-          <div>
-            <dt className="text-navy-500">Fecha pactada con líder</dt>
-            <dd className="font-medium">
-              {fechaPactada ? formatearFecha(fechaPactada) : 'Pendiente (paso 3 · perfilamiento)'}
-            </dd>
-          </div>
-        </dl>
-      </Card>
+        </Card>
+      </section>
 
-      <Card padding="lg">
-        <h2 className="font-display text-lg font-semibold text-navy-900 mb-4">
+      {/* ─── Asignación ──────────────────────────────────────────── */}
+      {(vac.analista_nombre || vac.lider_nombre) && (
+        <section>
+          <SectionEyebrow icon={<User2 size={12} strokeWidth={1.75} />}>
+            Asignación
+          </SectionEyebrow>
+          <Card padding="lg" className="mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+              <Dato label="Analista responsable" valor={vac.analista_nombre ?? 'Sin asignar'} />
+              <Dato label="Líder solicitante" valor={vac.lider_nombre ?? '—'} />
+            </div>
+          </Card>
+        </section>
+      )}
+
+      {/* ─── Flujograma ──────────────────────────────────────────── */}
+      <section>
+        <SectionEyebrow icon={<Sparkles size={12} strokeWidth={1.75} />}>
           Flujograma · 20 pasos
-        </h2>
-        <p className="text-xs text-navy-500 mb-4">
-          El paso resaltado en dorado corresponde al estado actual. Los pasos en verde ya están
-          completados. Click en cualquiera para abrir la pantalla correspondiente.
-        </p>
-        <FlujogramaTimeline vacante={vac} />
-      </Card>
+        </SectionEyebrow>
+        <Card padding="lg" className="mt-3">
+          <p className="text-[12px] text-text-muted mb-5">
+            El paso resaltado en rojo brand es el estado actual. Los pasos en verde ya están
+            completados. Click en cualquiera para abrir su pantalla.
+          </p>
+          <FlujogramaTimeline vacante={vac} />
+        </Card>
+      </section>
+    </div>
+  );
+}
 
-      <Link to="/vacantes/nueva" className="text-sm text-navy-500 hover:text-navy-800">
-        ← Nueva solicitud
-      </Link>
+function SectionEyebrow({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-text-muted">{icon}</span>
+      <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+        {children}
+      </p>
+    </div>
+  );
+}
+
+function DatoLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-bold tracking-[0.08em] uppercase text-text-subtle">
+      {children}
+    </p>
+  );
+}
+
+interface DatoProps {
+  label: string;
+  valor: React.ReactNode;
+  hero?: boolean;
+  mono?: boolean;
+  capital?: boolean;
+  ancho?: string;
+  icon?: React.ReactNode;
+  preserveBreaks?: boolean;
+}
+function Dato({ label, valor, hero, mono, capital, ancho, icon, preserveBreaks }: DatoProps) {
+  return (
+    <div className={ancho ?? ''}>
+      <DatoLabel>{label}</DatoLabel>
+      <p
+        className={[
+          'mt-1.5 text-text-strong',
+          hero ? 'text-[22px] font-light tracking-[-0.02em] tabular-nums' : 'text-[14px] font-medium',
+          mono && 'font-mono tabular-nums',
+          capital && 'capitalize',
+          preserveBreaks && 'whitespace-pre-line',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {icon && <span className="text-text-subtle mr-1.5 inline-block align-[-2px]">{icon}</span>}
+        {valor}
+      </p>
     </div>
   );
 }

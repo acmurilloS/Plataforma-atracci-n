@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Badge, type BadgeVariant } from './ui';
+import { Check } from 'lucide-react';
+import { Pill, type PillTono } from './brand';
 import { cn } from '../utils/cn';
 import type { VacanteDoc } from '../schemas';
 
@@ -204,13 +205,13 @@ const FASE_LABEL: Record<PasoDef['fase'], string> = {
   F: 'Vinculación',
 };
 
-const FASE_BADGE: Record<PasoDef['fase'], BadgeVariant> = {
-  A: 'fase-a',
-  B: 'fase-b',
-  C: 'fase-c',
-  D: 'fase-d',
-  E: 'fase-e',
-  F: 'fase-f',
+const FASE_TONO: Record<PasoDef['fase'], PillTono> = {
+  A: 'neutral',
+  B: 'info',
+  C: 'brand',
+  D: 'warning',
+  E: 'success',
+  F: 'success',
 };
 
 interface Props {
@@ -264,13 +265,15 @@ export function FlujogramaTimeline({ vacante }: Props) {
   PASOS.forEach((p) => grupos[p.fase].push(p));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {(Object.keys(grupos) as PasoDef['fase'][]).map((fase) => (
         <div key={fase}>
-          <Badge variant={FASE_BADGE[fase]} size="md">
-            Fase {fase} · {FASE_LABEL[fase]}
-          </Badge>
-          <ol className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Pill tono={FASE_TONO[fase]} dot>
+              Fase {fase} · {FASE_LABEL[fase]}
+            </Pill>
+          </div>
+          <ol className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {grupos[fase].map((paso) => {
               const ruta = construirRuta(paso);
               const activo = esPasoActivo(paso);
@@ -278,37 +281,39 @@ export function FlujogramaTimeline({ vacante }: Props) {
               const contenido = (
                 <div
                   className={cn(
-                    'rounded-xl px-4 py-3 flex items-start gap-3 transition-all',
+                    'rounded-md px-4 py-3 flex items-start gap-3 transition-all duration-200 ease-cult border',
                     activo
-                      ? 'bg-gold-50 shadow-ambient ring-1 ring-equitel-rojo-500/30'
+                      ? 'bg-brand-50/60 border-brand-300 shadow-brand-card'
                       : completado
-                        ? 'bg-surface-lowest'
-                        : 'bg-white ghost-border',
-                    ruta && 'cursor-pointer hover:shadow-ambient hover:-translate-y-0.5',
+                        ? 'bg-slate-50/60 border-slate-200'
+                        : 'bg-white border-slate-200',
+                    ruta && 'cursor-pointer hover:shadow-brand-card hover:-translate-y-0.5 hover:border-brand-300',
                   )}
                 >
                   <div
                     className={cn(
-                      'h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0',
+                      'h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold tabular-nums flex-shrink-0',
                       completado
-                        ? 'bg-navy-900 text-white'
+                        ? 'bg-text-strong text-white'
                         : activo
-                          ? 'bg-equitel-rojo-600 text-white animate-pulse-ring'
-                          : 'bg-navy-100 text-navy-600',
+                          ? 'bg-brand-600 text-white animate-pulse'
+                          : 'bg-slate-100 text-text-muted',
                     )}
                   >
-                    {completado ? '✓' : paso.numero}
+                    {completado ? <Check size={12} strokeWidth={2.5} /> : paso.numero}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-navy-900">{paso.titulo}</p>
-                    <p className="text-xs text-navy-600 mt-0.5 leading-snug">
+                    <p className="text-[13px] font-semibold text-text-strong">{paso.titulo}</p>
+                    <p className="text-[12px] text-text-muted mt-0.5 leading-[1.45]">
                       {paso.descripcion}
                     </p>
-                    <p className="text-[10px] text-navy-500 mt-1 uppercase tracking-wide font-semibold">
+                    <p className="text-[10px] text-text-subtle mt-1 uppercase tracking-[0.06em] font-semibold">
                       {paso.rol}
                       {ruta && ' · '}
                       {ruta && (
-                        <span className="text-equitel-rojo-700 normal-case">abrir →</span>
+                        <span className="text-brand-700 normal-case tracking-normal">
+                          abrir →
+                        </span>
                       )}
                     </p>
                   </div>

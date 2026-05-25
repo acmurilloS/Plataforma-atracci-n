@@ -24,9 +24,10 @@ const SIZE_STYLES: Record<ModalSize, string> = {
 };
 
 /**
- * Editorial Precision · Modal.
- * - Backdrop con glassmorphism (blur 24px) sobre overlay oscuro.
- * - Card glass strong con radios generosos y shadow ambient XL.
+ * Modal · sistema brand.
+ *
+ * Backdrop con text-strong/50 + backdrop-blur. Card blanca con shadow brand-card,
+ * tipografía Inter, tokens text-strong / text-muted. Footer con bg slate sutil.
  */
 export function Modal({
   open,
@@ -56,7 +57,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-dark animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-text-strong/50 backdrop-blur-sm animate-fade-in"
       onClick={() => dismissable && onClose()}
     >
       <div
@@ -64,34 +65,36 @@ export function Modal({
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'w-full rounded-2xl glass-strong shadow-ambient-xl animate-slide-up overflow-hidden',
+          'w-full rounded-lg bg-white shadow-brand-card border border-slate-200 overflow-hidden animate-slide-up',
           SIZE_STYLES[size],
         )}
       >
         {(title || dismissable) && (
-          <div className="flex items-start justify-between gap-4 px-7 pt-6 pb-2">
+          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-2">
             <div className="min-w-0">
               {title && (
-                <h2 className="font-display text-2xl font-bold text-navy-900">{title}</h2>
+                <h2 className="text-[20px] font-semibold tracking-[-0.012em] text-text-strong">
+                  {title}
+                </h2>
               )}
               {description && (
-                <p className="text-sm text-navy-600 mt-1.5">{description}</p>
+                <p className="text-[13px] text-text-muted mt-1.5 leading-[1.5]">{description}</p>
               )}
             </div>
             {dismissable && (
               <button
                 onClick={onClose}
                 aria-label="Cerrar"
-                className="text-navy-400 hover:text-navy-900 shrink-0 rounded-full p-1 hover:bg-surface-mid/60 transition"
+                className="text-text-muted hover:text-text-strong shrink-0 rounded-md p-1.5 hover:bg-slate-100 transition-colors"
               >
-                <X size={18} />
+                <X size={16} strokeWidth={1.75} />
               </button>
             )}
           </div>
         )}
-        <div className="px-7 py-5">{children}</div>
+        <div className="px-6 py-4">{children}</div>
         {footer && (
-          <div className="px-7 py-4 bg-surface-low/60 flex items-center justify-end gap-2">
+          <div className="px-6 py-4 bg-slate-50/60 border-t border-slate-100 flex items-center justify-end gap-2">
             {footer}
           </div>
         )}

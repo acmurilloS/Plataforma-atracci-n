@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown } from 'lucide-react';
+import {
+  Building2,
+  Calendar,
+  ChevronDown,
+  CircleDollarSign,
+  FileCheck2,
+} from 'lucide-react';
 import {
   useEmpresas,
   useFestivosAnio,
@@ -19,37 +25,71 @@ import { AvalUploader } from './AvalUploader';
 import { SelectorCargo } from './SelectorCargo';
 import { ValidadorSalario } from './ValidadorSalario';
 import { VacanteCreadaModal } from './VacanteCreadaModal';
+import { Button } from '../brand';
 import {
   fechaInputValue,
   parsearFechaInput,
   sumarDiasHabiles,
 } from '../../utils/fechas';
+import { cn } from '../../utils/cn';
+
+/**
+ * VacanteForm · sistema brand.
+ *
+ * 4 secciones expandibles (Card brand con header click) con eyebrow uppercase
+ * y contenido en grid. Selects e inputs nativos estilizados con sunken
+ * brand (bg-slate-50, focus brand-400). Submit en brand-primary.
+ */
 
 function Seccion({
   titulo,
+  eyebrow,
+  icono,
   abierta,
   onToggle,
   children,
 }: {
   titulo: string;
+  eyebrow: string;
+  icono: ReactNode;
   abierta: boolean;
   onToggle: () => void;
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-navy-100 bg-white shadow-sm">
+    <div className="bg-white rounded-md border border-slate-200 shadow-brand-card overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between px-5 py-4 text-left"
+        className="flex w-full items-center justify-between px-6 py-5 text-left hover:bg-slate-50/50 transition-colors"
       >
-        <span className="font-display text-base font-semibold text-navy-900">{titulo}</span>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-md bg-slate-100 text-text-muted flex items-center justify-center">
+            {icono}
+          </div>
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-subtle">
+              {eyebrow}
+            </p>
+            <p className="text-[16px] font-semibold tracking-[-0.012em] text-text-strong mt-0.5">
+              {titulo}
+            </p>
+          </div>
+        </div>
         <ChevronDown
-          size={20}
-          className={`text-navy-600 transition ${abierta ? 'rotate-180' : ''}`}
+          size={18}
+          strokeWidth={1.5}
+          className={cn(
+            'text-text-muted transition-transform duration-200 ease-cult',
+            abierta && 'rotate-180',
+          )}
         />
       </button>
-      {abierta && <div className="border-t border-navy-100 px-5 py-4 space-y-4">{children}</div>}
+      {abierta && (
+        <div className="border-t border-slate-100 px-6 py-6 space-y-5 animate-fade-in-up">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -69,15 +109,20 @@ function Campo({
 }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-navy-800 mb-1">
-        {label} {requerido && <span className="text-red-500">*</span>}
+      <span className="block text-[13px] font-medium text-text-strong mb-1.5">
+        {label} {requerido && <span className="text-brand-600">*</span>}
       </span>
       {children}
-      {ayuda && <span className="mt-1 block text-xs text-navy-500">{ayuda}</span>}
-      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
+      {ayuda && <span className="mt-1.5 block text-[11px] text-text-subtle">{ayuda}</span>}
+      {error && <span className="mt-1.5 block text-[11px] text-danger-700">{error}</span>}
     </label>
   );
 }
+
+const selectClass =
+  'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 disabled:bg-slate-100 disabled:text-text-subtle disabled:cursor-not-allowed';
+
+const textareaClass = selectClass + ' resize-none leading-relaxed';
 
 export function VacanteForm() {
   const { user, perfil } = useAuth();
@@ -228,18 +273,18 @@ export function VacanteForm() {
 
   return (
     <>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* ─── Empresa y cargo ──────────────────────────────────── */}
         <Seccion
+          eyebrow="Identificación"
           titulo="Empresa y cargo"
+          icono={<Building2 size={18} strokeWidth={1.75} />}
           abierta={abiertas.empresa}
           onToggle={() => toggle('empresa')}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Campo label="Empresa" requerido error={errors.empresa_codigo?.message}>
-              <select
-                {...register('empresa_codigo')}
-                className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
-              >
+              <select {...register('empresa_codigo')} className={selectClass}>
                 <option value="">Selecciona…</option>
                 {empresas.map((e) => (
                   <option key={e.codigo} value={e.codigo}>
@@ -252,7 +297,7 @@ export function VacanteForm() {
               <select
                 {...register('sede_codigo')}
                 disabled={!empresaCodigo}
-                className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm disabled:bg-navy-50"
+                className={selectClass}
               >
                 <option value="">
                   {empresaCodigo ? 'Selecciona…' : 'Selecciona una empresa primero'}
@@ -268,7 +313,7 @@ export function VacanteForm() {
               <select
                 {...register('unidad_id')}
                 disabled={!sedeCodigo}
-                className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm disabled:bg-navy-50"
+                className={selectClass}
               >
                 <option value="">
                   {sedeCodigo ? 'Selecciona…' : 'Selecciona una sede primero'}
@@ -294,20 +339,14 @@ export function VacanteForm() {
               />
             </Campo>
             <Campo label="Criticidad" requerido error={errors.criticidad?.message}>
-              <select
-                {...register('criticidad')}
-                className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="Alta">Alta</option>
-                <option value="Media">Media</option>
-                <option value="Baja">Baja</option>
+              <select {...register('criticidad')} className={selectClass}>
+                <option value="Alta">Alta · crítico</option>
+                <option value="Media">Media · intermedio</option>
+                <option value="Baja">Baja · simplificado</option>
               </select>
             </Campo>
             <Campo label="Tipo de solicitud" requerido error={errors.tipo_solicitud?.message}>
-              <select
-                {...register('tipo_solicitud')}
-                className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
-              >
+              <select {...register('tipo_solicitud')} className={selectClass}>
                 <option value="reemplazo">Reemplazo</option>
                 <option value="aumento">Aumento de headcount</option>
               </select>
@@ -315,8 +354,11 @@ export function VacanteForm() {
           </div>
         </Seccion>
 
+        {/* ─── Condiciones ──────────────────────────────────────── */}
         <Seccion
+          eyebrow="Compensación"
           titulo="Condiciones"
+          icono={<CircleDollarSign size={18} strokeWidth={1.75} />}
           abierta={abiertas.condiciones}
           onToggle={() => toggle('condiciones')}
         >
@@ -339,37 +381,52 @@ export function VacanteForm() {
               )}
             />
           </Campo>
-          <Campo label="Comisiones (descripción)">
-            <textarea
-              {...register('comisiones_texto')}
-              rows={2}
-              placeholder="Describe el esquema si aplica"
-              className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Campo label="Comisiones (descripción)">
+              <textarea
+                {...register('comisiones_texto')}
+                rows={3}
+                placeholder="Describe el esquema si aplica"
+                className={textareaClass}
+              />
+            </Campo>
+            <Campo label="Garantizado (descripción)">
+              <textarea
+                {...register('garantizado_texto')}
+                rows={3}
+                placeholder="Monto, duración y condiciones"
+                className={textareaClass}
+              />
+            </Campo>
+          </div>
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              {...register('rodamiento')}
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300/40"
             />
-          </Campo>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" {...register('rodamiento')} className="h-4 w-4 rounded" />
-            <span className="text-sm text-navy-800">Incluye auxilio de rodamiento</span>
+            <span className="text-[13px] text-text-body">
+              Incluye auxilio de rodamiento
+            </span>
           </label>
-          <Campo label="Garantizado (descripción)">
-            <textarea
-              {...register('garantizado_texto')}
-              rows={2}
-              placeholder="Monto, duración y condiciones del garantizado"
-              className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
-            />
-          </Campo>
           <Campo label="Justificación" requerido error={errors.justificacion?.message}>
             <textarea
               {...register('justificacion')}
               rows={4}
-              placeholder="Explica la necesidad de esta vacante"
-              className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
+              placeholder="Explica la necesidad de esta vacante: contexto, urgencia, impacto."
+              className={textareaClass}
             />
           </Campo>
         </Seccion>
 
-        <Seccion titulo="Aval" abierta={abiertas.aval} onToggle={() => toggle('aval')}>
+        {/* ─── Aval ─────────────────────────────────────────────── */}
+        <Seccion
+          eyebrow="Aprobación"
+          titulo="Aval firmado"
+          icono={<FileCheck2 size={18} strokeWidth={1.75} />}
+          abierta={abiertas.aval}
+          onToggle={() => toggle('aval')}
+        >
           <Controller
             control={control}
             name="aval_url"
@@ -382,20 +439,23 @@ export function VacanteForm() {
             )}
           />
           {errors.aval_url && (
-            <p className="text-xs text-red-600">{errors.aval_url.message}</p>
+            <p className="text-[11px] text-danger-700">{errors.aval_url.message}</p>
           )}
         </Seccion>
 
+        {/* ─── Agendamiento ─────────────────────────────────────── */}
         <Seccion
+          eyebrow="Entrevista con líder"
           titulo="Agendamiento"
+          icono={<Calendar size={18} strokeWidth={1.75} />}
           abierta={abiertas.agendamiento}
           onToggle={() => toggle('agendamiento')}
         >
           <Campo
-            label="Fecha propuesta para entrevista con líder"
+            label="Fecha propuesta para entrevista con el líder"
             requerido
             error={errors.fecha_entrevista_propuesta?.message as string | undefined}
-            ayuda={`Mínimo ${fechaInputValue(minFecha)} · Máximo ${fechaInputValue(maxFecha)} (hoy + 3 hábiles a hoy + 30 días)`}
+            ayuda={`Mínimo ${fechaInputValue(minFecha)} · Máximo ${fechaInputValue(maxFecha)} (hoy + 3 hábiles hasta hoy + 30 días)`}
           >
             <Controller
               control={control}
@@ -407,7 +467,7 @@ export function VacanteForm() {
                   max={fechaInputValue(maxFecha)}
                   value={field.value instanceof Date ? fechaInputValue(field.value) : ''}
                   onChange={(e) => field.onChange(parsearFechaInput(e.target.value))}
-                  className="w-full rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
+                  className={selectClass}
                 />
               )}
             />
@@ -415,19 +475,21 @@ export function VacanteForm() {
         </Seccion>
 
         {errorSubmit && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-md border border-danger-500/20 bg-danger-50 px-4 py-3 text-[13px] text-danger-700">
             {errorSubmit}
           </div>
         )}
 
-        <div className="flex justify-end">
-          <button
+        <div className="flex justify-end pt-2">
+          <Button
             type="submit"
+            variant="brand-primary"
+            size="large"
             disabled={enviando || !avalUrl}
-            className="rounded-md bg-navy-700 px-6 py-2.5 text-sm font-semibold text-white shadow hover:bg-navy-800 disabled:bg-navy-300"
+            loading={enviando}
           >
             {enviando ? 'Enviando…' : 'Enviar solicitud'}
-          </button>
+          </Button>
         </div>
       </form>
 

@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
+import {
+  ArrowLeft,
+  Check,
+  Clock,
+  FileText,
+  Mail,
+  RotateCcw,
+  Send,
+  Users,
+  X,
+} from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
@@ -8,6 +19,7 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { useFestivosAnio } from '../../hooks/useCatalogos';
 import {
   MOTIVOS_RECICLABLES,
+  MOTIVO_DESCARTE_LABEL,
   politicaParaCriticidad,
   validarTransicion,
   type MotivoDescarte,
@@ -17,6 +29,17 @@ import { crearTicketsConexion } from '../../utils/crearTicketsConexion';
 import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
 import { DescarteModal } from '../../components/vacantes/DescarteModal';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
+import { Button, Card, Pill } from '../../components/brand';
+import { cn } from '../../utils/cn';
+
+/**
+ * TernaPage · sistema brand.
+ *
+ * Centraliza pasos 12-14 del flujograma:
+ *  · Paso 12: analista cierra terna → arranca reloj 48h del líder
+ *  · Paso 13: reloj activo · countdown visible para todos los roles
+ *  · Paso 14: líder aprueba / descarta con motivo tipificado · loop al pool
+ */
 
 export default function TernaPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +83,7 @@ export default function TernaPage() {
     : 0;
   const horasRestantes = Math.max(0, Math.floor(msRestantes / (60 * 60 * 1000)));
   const vencido = relojActivo && msRestantes <= 0;
+  const urgente = relojActivo && !vencido && horasRestantes <= 24;
 
   async function aprobar(p: PostulacionDoc) {
     if (!vacante || !user || !perfil) return;
@@ -85,10 +109,8 @@ export default function TernaPage() {
       });
       await actualizar('vacantes', vacante.id, {
         estado: 'seleccionado',
-        // Detiene el reloj de 48h del líder (paso 13).
         terna_respondida_en: ahora,
       });
-      // Auto-dispara solicitud de exámenes médicos (paso 15)
       await crear('examenes_medicos', {
         postulacion_id: p.id,
         candidato_id: p.candidato_id,
@@ -105,8 +127,6 @@ export default function TernaPage() {
         recomendaciones: null,
         estado: 'solicitada',
       });
-      // Auto-dispara tickets de conexión (paso 20 · Módulo 8) a IT, talentos
-      // y áreas según herramientas_requeridas del perfilamiento.
       await crearTicketsConexion({
         vacante,
         postulacion: p,
@@ -115,8 +135,6 @@ export default function TernaPage() {
         festivosIsoSet: festivos,
         disparadoPor: 'automatico_terna',
       });
-      // Denormaliza al candidato: lo deja como "contratado" en su resumen
-      // cross-vacante para que no aparezca en pool ni en queries futuras.
       await actualizarResultadoCandidato({
         candidato_id: p.candidato_id,
         resultado: 'contratado',
@@ -131,13 +149,6 @@ export default function TernaPage() {
     }
   }
 
-  /**
-   * Descarte tipificado del líder (paso 14).
-   *
-   * En vez de un `window.prompt` libre, abrimos un modal con motivos del enum
-   * `motivoDescarte`. Esto permite que el pool futuro (ATR-11) distinga
-   * reciclables (feedback blando) de duros (no apto, sin perfil).
-   */
   async function descartarConMotivo(p: PostulacionDoc, motivo: MotivoDescarte, notas: string) {
     if (!vacante || !user || !perfil) return;
     setProcesando(p.id);
@@ -164,9 +175,6 @@ export default function TernaPage() {
         descarte_etapa: 'entrevista_lider',
         'marcas.descartado_en': ahora,
       });
-      // Denormaliza al candidato (pool-ready): los reciclables quedan como
-      // 'apto_no_contratado' para que el pool los identifique como candidatos
-      // viables; los duros bajan el flag apto_para_pool_futuro.
       await actualizarResultadoCandidato({
         candidato_id: p.candidato_id,
         resultado: MOTIVOS_RECICLABLES.has(motivo) ? 'apto_no_contratado' : 'descartado_lider',
@@ -175,7 +183,6 @@ export default function TernaPage() {
         motivo_descarte: motivo,
         uid: user.uid,
       });
-      // Cualquier decisión del líder detiene el reloj de 48h (paso 13).
       if (vacante.terna_enviada_en && !vacante.terna_respondida_en) {
         await actualizar('vacantes', vacante.id, { terna_respondida_en: ahora });
       }
@@ -196,22 +203,19 @@ export default function TernaPage() {
     });
   }
 
-  /**
-   * Cierra la terna y arranca el reloj de 48h del líder (paso 12 → paso 13).
-   * Setea vacante.estado=terna_enviada + terna_enviada_en=now. La scheduled
-   * function `revisarRecordatoriosLider` cada hora chequea esta vacante y
-   * dispara recordatorios a las 24h y expiración a las 48h.
-   */
   async function cerrarTerna() {
     if (!vacante) return;
     if (enTerna.length === 0) {
       setErr('No hay candidatos en terna para enviar al líder.');
       return;
     }
-    if (!window.confirm(
-      `¿Cerrar la terna con ${enTerna.length} candidato(s) y enviar al líder ${vacante.lider_nombre}?\n\n` +
-        'Arranca un reloj de 48h. A las 24h le mandamos recordatorio; a las 48h sin respuesta, la vacante se pausa.',
-    )) return;
+    if (
+      !window.confirm(
+        `¿Cerrar la terna con ${enTerna.length} candidato(s) y enviar al líder ${vacante.lider_nombre}?\n\n` +
+          'Arranca un reloj de 48h. A las 24h le mandamos recordatorio; a las 48h sin respuesta, la vacante se pausa.',
+      )
+    )
+      return;
     setProcesando('cerrar-terna');
     setErr(null);
     try {
@@ -231,11 +235,6 @@ export default function TernaPage() {
     }
   }
 
-  /**
-   * Loop del paso 14: el líder no aprobó pero el candidato cumple el perfil.
-   * Regresa la postulación al pool (estado `postulado`) sin abrir proceso nuevo.
-   * Conserva razon_descarte previa en observaciones para auditoría.
-   */
   async function reabrirAlPool(p: PostulacionDoc) {
     if (!validarTransicion(p.estado, 'postulado')) {
       setErr(`No se puede pasar de ${p.estado} a postulado.`);
@@ -248,7 +247,6 @@ export default function TernaPage() {
       await actualizar('postulaciones', p.id, {
         estado: 'postulado',
         ultima_transicion_estado: ahora,
-        // Limpiamos descarte para que vuelva al flujo normal del paso 5
         razon_descarte: null,
         descarte_etapa: null,
         'marcas.reabierto_al_pool_en': ahora,
@@ -260,234 +258,377 @@ export default function TernaPage() {
     }
   }
 
-  if (!vacante) return <div className="px-6 py-10 text-sm text-navy-500">Cargando…</div>;
+  if (!vacante)
+    return (
+      <div className="max-w-5xl mx-auto px-6 py-12 text-text-muted text-sm">
+        Cargando vacante…
+      </div>
+    );
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10 space-y-6">
+    <div className="max-w-5xl mx-auto px-6 py-12 space-y-8">
+      {/* Volver */}
+      <Link
+        to={`/vacantes/${vacante.id}`}
+        className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-text-strong transition-colors"
+      >
+        <ArrowLeft size={13} strokeWidth={1.75} />
+        Volver al detalle
+      </Link>
+
+      {/* ─── Hero ─────────────────────────────────────────────── */}
       <div>
-        <Link to={`/vacantes/${vacante.id}`} className="text-xs text-navy-500 hover:text-navy-800">
-          ← Volver a detalle
-        </Link>
-        <p className="text-xs uppercase tracking-widest text-gold-700 mt-2">
-          Pasos 12-14 · Líder + Analista
-        </p>
-        <h1 className="font-display text-3xl font-semibold text-navy-900">
+        <Pill tono="brand" dot>
+          Pasos 12 – 14 · Líder + Analista
+        </Pill>
+        <h1
+          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
+          style={{ textWrap: 'balance' }}
+        >
           Terna y decisión
         </h1>
-        <p className="text-sm text-navy-600 mt-1">
-          {vacante.cargo_nombre} · {enTerna.length} candidatos finalistas
+        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
+          {vacante.cargo_nombre} · {vacante.empresa_nombre} · {vacante.sede_nombre}.{' '}
+          <span className="tabular-nums font-semibold text-text-body">
+            {enTerna.length} {enTerna.length === 1 ? 'candidato finalista' : 'candidatos finalistas'}
+          </span>
+          {minCandidatos > 0 && (
+            <>
+              {' '}
+              · mínimo política <strong>{vacante.criticidad}</strong>:{' '}
+              <span className="tabular-nums">{minCandidatos}</span>
+            </>
+          )}
         </p>
       </div>
 
-      {err && <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{err}</div>}
+      {err && (
+        <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
+          {err}
+        </div>
+      )}
 
       <PoliticaCriticidadBanner criticidad={vacante.criticidad} />
 
-      {/* Reloj 48h del líder (paso 13). Visible para todos los roles cuando la terna
-          ya fue enviada y aún no hay respuesta. */}
+      {/* ─── Reloj 48h del líder (paso 13) ───────────────────── */}
       {relojActivo && (
-        <div
-          className={`rounded-xl border p-4 ${
+        <Card
+          padding="lg"
+          className={cn(
+            'border-2',
             vencido
-              ? 'border-red-300 bg-red-50'
-              : horasRestantes <= 24
-                ? 'border-amber-300 bg-amber-50'
-                : 'border-navy-200 bg-cream-50'
-          }`}
+              ? 'border-danger-300 bg-danger-50/40'
+              : urgente
+                ? 'border-warning-300 bg-warning-50/40'
+                : 'border-brand-200 bg-gradient-to-br from-brand-50/40 to-white',
+          )}
         >
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <p className="text-xs uppercase tracking-widest font-semibold text-navy-700">
-                Reloj del líder · paso 13
-              </p>
-              <p className="text-sm text-navy-800 mt-1">
-                Terna enviada a <strong>{vacante.lider_nombre}</strong>{' '}
-                el {vacante.terna_enviada_en?.toDate().toLocaleString('es-CO')}.
-              </p>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  'w-10 h-10 rounded-md flex items-center justify-center',
+                  vencido
+                    ? 'bg-danger-100 text-danger-700'
+                    : urgente
+                      ? 'bg-warning-100 text-warning-700'
+                      : 'bg-brand-100 text-brand-700',
+                )}
+              >
+                <Clock size={18} strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                  Reloj del líder · paso 13
+                </p>
+                <p className="text-[14px] text-text-body mt-1">
+                  Terna enviada a{' '}
+                  <span className="font-semibold text-text-strong">{vacante.lider_nombre}</span>{' '}
+                  el{' '}
+                  <span className="tabular-nums">
+                    {vacante.terna_enviada_en?.toDate().toLocaleString('es-CO')}
+                  </span>
+                </p>
+              </div>
             </div>
             <div className="text-right">
               <p
-                className={`font-display text-2xl font-bold ${
-                  vencido ? 'text-red-700' : horasRestantes <= 24 ? 'text-amber-700' : 'text-navy-900'
-                }`}
+                className={cn(
+                  'text-[40px] font-extralight leading-[0.9] tracking-[-0.045em] tabular-nums',
+                  vencido
+                    ? 'text-danger-700'
+                    : urgente
+                      ? 'text-warning-700'
+                      : 'text-brand-700',
+                )}
               >
-                {vencido ? 'Vencido' : `${horasRestantes}h restantes`}
+                {vencido ? 'Vencido' : `${horasRestantes}h`}
               </p>
-              <p className="text-xs text-navy-500">
+              <p className="text-[11px] text-text-subtle mt-1">
                 {vencido
-                  ? 'La vacante se pausará en el próximo ciclo de revisión.'
-                  : horasRestantes <= 24
-                    ? 'Recordatorio de 24h enviado.'
-                    : 'Sin respuesta aún.'}
+                  ? 'La vacante se pausará en el próximo ciclo'
+                  : urgente
+                    ? 'Recordatorio de 24h enviado'
+                    : 'Sin respuesta aún'}
               </p>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* CTA para cerrar la terna y arrancar el reloj. Solo si aún no se envió.
-          Bloqueado si faltan candidatos según política de criticidad. */}
+      {/* ─── CTA cerrar terna ────────────────────────────────── */}
       {puedeCerrarTerna && enTerna.length > 0 && !ternaEnviada && (
-        <div
-          className={`rounded-xl border p-4 flex items-center justify-between flex-wrap gap-3 ${
-            faltanCandidatos ? 'border-amber-300 bg-amber-50' : 'border-gold-200 bg-cream-50'
-          }`}
+        <Card
+          padding="md"
+          className={cn(
+            faltanCandidatos
+              ? 'border-warning-300 bg-warning-50/40'
+              : 'border-brand-200 bg-gradient-to-br from-brand-50/40 to-white',
+          )}
         >
-          <div>
-            <p className="text-sm font-semibold text-navy-900">
-              Cerrar terna y enviar al líder
-            </p>
-            <p className="text-xs text-navy-700 mt-1">
-              Tienes {enTerna.length} candidato(s) listos.{' '}
-              {faltanCandidatos ? (
-                <span className="text-amber-800 font-medium">
-                  La política de criticidad {vacante.criticidad} exige mínimo {minCandidatos}.
-                  {rol === 'admin' && ' Puedes forzar el cierre como admin.'}
-                </span>
-              ) : (
-                <>
-                  Política {vacante.criticidad}: {minCandidatos} mínimo,{' '}
-                  {politica?.candidatos_terna_sugeridos} sugeridos. Al enviar arranca el reloj de
-                  48h.
-                </>
-              )}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+                <Send size={16} strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-text-strong">
+                  Cerrar terna y enviar al líder
+                </p>
+                <p className="text-[12px] text-text-muted mt-1 max-w-2xl">
+                  Tienes{' '}
+                  <span className="tabular-nums font-medium text-text-body">
+                    {enTerna.length}
+                  </span>{' '}
+                  candidato(s) listos.{' '}
+                  {faltanCandidatos ? (
+                    <span className="text-warning-700 font-medium">
+                      Política de criticidad {vacante.criticidad} exige mínimo {minCandidatos}.
+                      {rol === 'admin' && ' Puedes forzar el cierre como admin.'}
+                    </span>
+                  ) : (
+                    <>
+                      Política {vacante.criticidad}: {minCandidatos} mínimo,{' '}
+                      {politica?.candidatos_terna_sugeridos} sugeridos. Al enviar arranca el reloj
+                      de 48h.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="brand-primary"
+              onClick={cerrarTerna}
+              disabled={procesando === 'cerrar-terna' || (faltanCandidatos && rol !== 'admin')}
+              loading={procesando === 'cerrar-terna'}
+              icon={<Send size={13} strokeWidth={1.75} />}
+            >
+              {faltanCandidatos && rol !== 'admin'
+                ? `Faltan ${minCandidatos - enTerna.length}`
+                : 'Cerrar terna y notificar líder'}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* ─── Candidatos en terna ─────────────────────────────── */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <Users size={14} strokeWidth={1.75} className="text-text-muted" />
+          <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+            Candidatos en terna ·{' '}
+            <span className="tabular-nums text-text-strong">{enTerna.length}</span>
+          </p>
+        </div>
+        {enTerna.length === 0 ? (
+          <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
+            <p className="text-[14px] font-medium text-text-strong">Aún no hay candidatos en terna</p>
+            <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
+              En la pestaña "Informe" de cada postulación, presionar "Enviar al líder · paso 12"
+              mueve al candidato aquí.
             </p>
           </div>
-          <button
-            onClick={cerrarTerna}
-            disabled={
-              procesando === 'cerrar-terna' || (faltanCandidatos && rol !== 'admin')
-            }
-            className="rounded-md bg-gold-700 text-white px-4 py-2 text-sm font-semibold hover:bg-gold-800 disabled:bg-gold-300"
-          >
-            {procesando === 'cerrar-terna'
-              ? '…'
-              : faltanCandidatos && rol !== 'admin'
-                ? `Faltan ${minCandidatos - enTerna.length}`
-                : '📤 Cerrar terna y notificar líder'}
-          </button>
-        </div>
-      )}
-
-      <section>
-        <h2 className="font-display text-xl font-semibold text-navy-900 mb-3">
-          Candidatos en terna ({enTerna.length})
-        </h2>
-        {enTerna.length === 0 && (
-          <p className="text-sm text-navy-500">
-            Aún no hay candidatos en terna. En la pestaña "Informe" de cada postulación, enviar informe al líder los mueve aquí.
-          </p>
-        )}
-        <div className="space-y-3">
-          {enTerna.map((p) => (
-            <div key={p.id} className="rounded-xl border border-navy-100 bg-white p-5 flex items-start justify-between">
-              <div>
-                <h3 className="font-display text-lg font-semibold text-navy-900">{p.candidato_nombre}</h3>
-                <p className="text-xs text-navy-600">{p.candidato_email}</p>
-                <Link
-                  to={`/postulaciones/${p.id}`}
-                  className="mt-2 inline-block text-xs text-gold-700 hover:underline"
-                >
-                  Ver informe completo →
-                </Link>
-              </div>
-              {esLider && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setDescarteAbierto(p)}
-                    disabled={procesando === p.id}
-                    className="rounded-md border border-red-200 text-red-700 px-3 py-1.5 text-sm font-medium hover:bg-red-50 disabled:opacity-50"
-                  >
-                    Descartar
-                  </button>
-                  <button
-                    onClick={() => aprobar(p)}
-                    disabled={procesando === p.id}
-                    className="rounded-md bg-navy-700 text-white px-3 py-1.5 text-sm font-semibold hover:bg-navy-800 disabled:bg-navy-300"
-                  >
-                    {procesando === p.id ? '…' : 'Aprobar'}
-                  </button>
+        ) : (
+          <div className="space-y-3">
+            {enTerna.map((p) => (
+              <Card key={p.id} padding="md">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-[16px] font-semibold tracking-[-0.012em] text-text-strong">
+                      {p.candidato_nombre}
+                    </h3>
+                    {p.candidato_email && (
+                      <p className="mt-1 inline-flex items-center gap-1.5 text-[12px] text-text-muted">
+                        <Mail size={11} strokeWidth={1.5} className="text-text-subtle" />
+                        {p.candidato_email}
+                      </p>
+                    )}
+                    <Link
+                      to={`/postulaciones/${p.id}`}
+                      className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline underline-offset-2"
+                    >
+                      <FileText size={11} strokeWidth={1.5} />
+                      Ver informe completo →
+                    </Link>
+                  </div>
+                  {esLider && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="destructive-secondary"
+                        size="medium"
+                        onClick={() => setDescarteAbierto(p)}
+                        disabled={procesando === p.id}
+                        icon={<X size={13} strokeWidth={1.75} />}
+                      >
+                        Descartar
+                      </Button>
+                      <Button
+                        variant="brand-primary"
+                        size="medium"
+                        onClick={() => aprobar(p)}
+                        disabled={procesando === p.id}
+                        loading={procesando === p.id}
+                        icon={<Check size={13} strokeWidth={1.75} />}
+                      >
+                        Aprobar
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </section>
 
+      {/* ─── Descartados por el líder ────────────────────────── */}
       {descartadosLider.length > 0 && (
         <section>
           <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-            <h2 className="font-display text-xl font-semibold text-navy-900">
-              Descartados por el líder ({descartadosLider.length})
-            </h2>
+            <div className="flex items-center gap-2">
+              <X size={14} strokeWidth={1.75} className="text-danger-700" />
+              <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-danger-700">
+                Descartados por el líder ·{' '}
+                <span className="tabular-nums">{descartadosLider.length}</span>
+              </p>
+            </div>
             {puedeReabrir && (
-              <p className="text-xs text-navy-500">
-                Si la terna queda desierta, puedes reabrir un candidato al pool para considerarlo en
-                la próxima vuelta sin abrir proceso nuevo.
+              <p className="text-[11px] text-text-subtle italic max-w-md text-right">
+                Si la terna queda desierta, puedes reabrir un candidato al pool y considerarlo en la
+                próxima vuelta sin abrir proceso nuevo.
               </p>
             )}
           </div>
-          <div className="rounded-xl border border-red-100 bg-red-50/30 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-red-50 text-red-900 text-left">
+          <Card padding="none" className="overflow-hidden border-danger-500/20">
+            <table className="w-full text-[13px]">
+              <thead className="bg-danger-50/40 text-danger-700">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Candidato</th>
-                  <th className="px-4 py-2 font-medium">Motivo del descarte</th>
-                  {puedeReabrir && <th className="px-4 py-2"></th>}
+                  <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                    Candidato
+                  </th>
+                  <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                    Motivo
+                  </th>
+                  <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                    Notas
+                  </th>
+                  {puedeReabrir && <th className="px-4 py-3"></th>}
                 </tr>
               </thead>
               <tbody>
                 {descartadosLider.map((p) => (
-                  <tr key={p.id} className="border-t border-red-100">
-                    <td className="px-4 py-2">
-                      <p className="font-medium text-navy-900">{p.candidato_nombre}</p>
-                      <p className="text-[11px] text-navy-500">{p.candidato_email}</p>
+                  <tr
+                    key={p.id}
+                    className="border-t border-danger-500/10 hover:bg-danger-50/20 transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-text-strong">{p.candidato_nombre}</p>
+                      <p className="text-[11px] text-text-subtle">{p.candidato_email}</p>
                     </td>
-                    <td className="px-4 py-2 text-xs text-navy-700 italic">
+                    <td className="px-4 py-3">
+                      {p.motivo_descarte ? (
+                        <Pill
+                          tono={
+                            MOTIVOS_RECICLABLES.has(p.motivo_descarte) ? 'success' : 'danger'
+                          }
+                          dot
+                        >
+                          {MOTIVOS_RECICLABLES.has(p.motivo_descarte) ? 'Reciclable' : 'Duro'}
+                        </Pill>
+                      ) : (
+                        <span className="text-text-subtle">—</span>
+                      )}
+                      {p.motivo_descarte && (
+                        <p className="text-[11px] text-text-muted mt-1">
+                          {MOTIVO_DESCARTE_LABEL[p.motivo_descarte]}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-[12px] text-text-muted italic">
                       {p.razon_descarte ?? '—'}
                     </td>
                     {puedeReabrir && (
-                      <td className="px-4 py-2 text-right">
-                        <button
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="neutral-secondary"
+                          size="small"
                           onClick={() => reabrirAlPool(p)}
                           disabled={procesando === p.id}
-                          className="rounded-md border border-navy-200 bg-white text-navy-700 px-3 py-1.5 text-xs font-semibold hover:bg-cream-100 disabled:opacity-50"
+                          icon={<RotateCcw size={11} strokeWidth={1.75} />}
                         >
-                          ↺ Reabrir al pool
-                        </button>
+                          Reabrir al pool
+                        </Button>
                       </td>
                     )}
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </section>
       )}
 
+      {/* ─── Otros candidatos activos ────────────────────────── */}
       {otras.length > 0 && (
         <section>
-          <h2 className="font-display text-xl font-semibold text-navy-900 mb-3">
-            Otros candidatos activos ({otras.length})
-          </h2>
-          <div className="rounded-xl border border-navy-100 bg-white overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-cream-100 text-navy-700 text-left">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+              Otros candidatos activos ·{' '}
+              <span className="tabular-nums text-text-strong">{otras.length}</span>
+            </p>
+          </div>
+          <Card padding="none" className="overflow-hidden">
+            <table className="w-full text-[13px]">
+              <thead className="bg-slate-50 text-text-muted">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Candidato</th>
-                  <th className="px-4 py-2 font-medium">Estado</th>
-                  <th className="px-4 py-2"></th>
+                  <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                    Candidato
+                  </th>
+                  <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                    Estado
+                  </th>
+                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {otras.map((p) => (
-                  <tr key={p.id} className="border-t border-navy-50">
-                    <td className="px-4 py-2">{p.candidato_nombre}</td>
-                    <td className="px-4 py-2 text-xs">{p.estado}</td>
-                    <td className="px-4 py-2 text-right">
+                  <tr
+                    key={p.id}
+                    className="border-t border-slate-100 hover:bg-slate-50/30 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-medium text-text-strong">
+                      {p.candidato_nombre}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Pill tono="neutral" dot>
+                        {p.estado.replace(/_/g, ' ')}
+                      </Pill>
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => agregarATerna(p)}
-                        className="text-xs text-gold-700 hover:underline"
+                        className="text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
                       >
                         Incluir en terna
                       </button>
@@ -496,14 +637,18 @@ export default function TernaPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </section>
       )}
 
-      <p className="text-xs text-navy-500">
-        Al aprobar a un candidato, la plataforma automáticamente crea la solicitud de exámenes
-        médicos (paso 15), dispara los <Link to="/tickets" className="text-gold-700 hover:underline">tickets de conexión</Link> a IT
-        / compras / bodega / contabilidad / talentos (paso 20) y mueve la vacante a estado <code>seleccionado</code>.
+      <p className="text-[11px] text-text-subtle italic">
+        Al aprobar un candidato, la plataforma crea automáticamente la solicitud de exámenes
+        médicos (paso 15), dispara los{' '}
+        <Link to="/tickets" className="text-brand-700 hover:text-brand-800 hover:underline">
+          tickets de conexión
+        </Link>{' '}
+        a IT / compras / bodega / contabilidad / talentos (paso 20), y mueve la vacante a estado{' '}
+        <code className="font-mono text-text-body">seleccionado</code>.
       </p>
 
       {descarteAbierto && (

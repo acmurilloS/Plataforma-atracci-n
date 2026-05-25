@@ -1,15 +1,28 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, ShieldCheck, X, Check } from 'lucide-react';
+import { Check, ExternalLink, FileText, ShieldCheck, X } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearCOP } from '../../utils/moneda';
 import { formatearFecha } from '../../utils/fechas';
+import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { cn } from '../../utils/cn';
 import type { VacanteDoc } from '../../schemas';
 
+/**
+ * AprobacionAvalPage · sistema brand.
+ *
+ * GH revisa el aval firmado por Alejandro (paso 2 del flujograma).
+ * Tabs: Pendientes / Aprobadas / Rechazadas. Card de vacante con datos
+ * clave + PDF + acciones Aprobar / Rechazar con motivo obligatorio.
+ */
+
 type Filtro = 'pendientes' | 'aprobadas' | 'rechazadas';
+
+const inputClass =
+  'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong placeholder:text-text-subtle transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 resize-none leading-relaxed';
 
 export default function AprobacionAvalPage() {
   const { user, perfil } = useAuth();
@@ -18,7 +31,6 @@ export default function AprobacionAvalPage() {
   const [err, setErr] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('pendientes');
 
-  // Cargamos las 3 cohortes para que el contador funcione sin re-query
   const { docs: borradores, cargando: cargB } = useColeccion<VacanteDoc>('vacantes', {
     filtros: [['estado', '==', 'borrador']],
     orden: ['creado_en', 'desc'],
@@ -34,15 +46,18 @@ export default function AprobacionAvalPage() {
     limit: 50,
   });
 
-  // Solo mostramos en "pendientes" las que tengan aval_url subido.
   const pendientes = useMemo(() => borradores.filter((v) => !!v.aval_url), [borradores]);
-  // Rechazadas filtradas a las que tienen razón "GH rechazó" (las otras pueden venir de cancelaciones del líder).
   const rechazadas = useMemo(
     () => canceladas.filter((v) => (v.razon_cierre ?? '').toLowerCase().includes('gh rechazó')),
     [canceladas],
   );
 
-  const visibles = filtro === 'pendientes' ? pendientes : filtro === 'aprobadas' ? aprobadas : rechazadas;
+  const visibles =
+    filtro === 'pendientes'
+      ? pendientes
+      : filtro === 'aprobadas'
+        ? aprobadas
+        : rechazadas;
 
   async function aprobar(v: VacanteDoc, nota: string) {
     if (!user) return;
@@ -50,14 +65,11 @@ export default function AprobacionAvalPage() {
     setErr(null);
     try {
       const ahora = Timestamp.now();
-      // 1) Vacante a estado aprobada con auditoría del aval
       await actualizar('vacantes', v.id, {
         estado: 'aprobada',
         aval_aprobado_por: user.uid,
         aval_aprobado_en: ahora,
       });
-
-      // 2) Notificación al líder solicitante
       await crear('notificaciones', {
         destinatario_uid: v.lider_uid,
         tipo: 'aval_aprobado',
@@ -89,7 +101,6 @@ export default function AprobacionAvalPage() {
         razon_cierre: `GH rechazó: ${motivo}`,
         cerrada_en: ahora,
       });
-
       await crear('notificaciones', {
         destinatario_uid: v.lider_uid,
         tipo: 'aval_rechazado',
@@ -107,40 +118,67 @@ export default function AprobacionAvalPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10 space-y-6">
-      <header>
-        <p className="text-xs uppercase tracking-widest text-equitel-rojo-700 font-bold flex items-center gap-1.5">
-          <ShieldCheck size={14} /> Paso 2 · GH / Coordinación
-        </p>
-        <h1 className="font-display text-3xl font-semibold text-navy-900 mt-1">
+    <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
+      {/* Hero */}
+      <div>
+        <Pill tono="brand" dot>
+          Paso 2 · GH / Coordinación
+        </Pill>
+        <h1
+          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
+          style={{ textWrap: 'balance' }}
+        >
           Aprobación de aval y condiciones
         </h1>
-        <p className="text-sm text-navy-600 mt-1">
+        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
           Revisa el aval firmado por Alejandro, valida la banda salarial y aprueba o rechaza cada
           vacante en borrador. Solo después de aprobar pasa a perfilamiento.
         </p>
-      </header>
+      </div>
 
       {err && (
-        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+        <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
           {err}
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-navy-100">
-        <TabBtn label="Pendientes" count={pendientes.length} activo={filtro === 'pendientes'} onClick={() => setFiltro('pendientes')} />
-        <TabBtn label="Aprobadas" count={aprobadas.length} activo={filtro === 'aprobadas'} onClick={() => setFiltro('aprobadas')} />
-        <TabBtn label="Rechazadas" count={rechazadas.length} activo={filtro === 'rechazadas'} onClick={() => setFiltro('rechazadas')} />
+      <div className="border-b border-slate-200">
+        <nav className="flex gap-6 -mb-px">
+          <TabBtn
+            label="Pendientes"
+            count={pendientes.length}
+            tono="warning"
+            activo={filtro === 'pendientes'}
+            onClick={() => setFiltro('pendientes')}
+          />
+          <TabBtn
+            label="Aprobadas"
+            count={aprobadas.length}
+            tono="success"
+            activo={filtro === 'aprobadas'}
+            onClick={() => setFiltro('aprobadas')}
+          />
+          <TabBtn
+            label="Rechazadas"
+            count={rechazadas.length}
+            tono="danger"
+            activo={filtro === 'rechazadas'}
+            onClick={() => setFiltro('rechazadas')}
+          />
+        </nav>
       </div>
 
       {cargB && filtro === 'pendientes' && (
-        <p className="text-sm text-navy-500">Cargando vacantes…</p>
+        <p className="text-[13px] text-text-muted">Cargando vacantes…</p>
       )}
 
       {!cargB && visibles.length === 0 && (
-        <div className="rounded-xl border border-dashed border-navy-200 bg-cream-50 p-10 text-center">
-          <p className="font-display text-base font-semibold text-navy-900">
+        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-12 text-center">
+          <div className="w-12 h-12 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center mx-auto mb-3">
+            <ShieldCheck size={20} strokeWidth={1.5} />
+          </div>
+          <p className="text-[15px] font-medium text-text-strong">
             {filtro === 'pendientes'
               ? 'No hay vacantes pendientes de aprobación'
               : filtro === 'aprobadas'
@@ -148,7 +186,7 @@ export default function AprobacionAvalPage() {
                 : 'Aún no hay vacantes rechazadas'}
           </p>
           {filtro === 'pendientes' && (
-            <p className="text-sm text-navy-500 mt-1">
+            <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
               Cuando un líder cree una vacante con aval adjunto, aparecerá aquí para revisión.
             </p>
           )}
@@ -156,7 +194,7 @@ export default function AprobacionAvalPage() {
       )}
 
       {filtro === 'pendientes' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {visibles.map((v) => (
             <VacanteCardAprobacion
               key={v.id}
@@ -180,29 +218,36 @@ export default function AprobacionAvalPage() {
   );
 }
 
-// ─── Tabs ──────────────────────────────────────────────────────────────
-
-function TabBtn({ label, count, activo, onClick }: { label: string; count: number; activo: boolean; onClick: () => void }) {
+function TabBtn({
+  label,
+  count,
+  activo,
+  tono,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  activo: boolean;
+  tono: PillTono;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`pb-3 px-1 text-sm font-medium border-b-2 transition ${
+      className={cn(
+        'relative pb-3 text-[13px] font-medium transition-colors duration-150 ease-out border-b-2 inline-flex items-center gap-2',
         activo
-          ? 'text-navy-900 border-equitel-rojo-600'
-          : 'text-navy-500 border-transparent hover:text-navy-800'
-      }`}
+          ? 'text-text-strong border-brand-600'
+          : 'text-text-muted border-transparent hover:text-text-strong',
+      )}
     >
       {label}
-      <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-        activo ? 'bg-equitel-rojo-100 text-equitel-rojo-700' : 'bg-navy-100 text-navy-600'
-      }`}>
-        {count}
-      </span>
+      <Pill tono={activo ? tono : 'neutral'}>
+        <span className="tabular-nums">{count}</span>
+      </Pill>
     </button>
   );
 }
-
-// ─── Card de vacante pendiente ─────────────────────────────────────────
 
 function VacanteCardAprobacion({
   vacante,
@@ -218,33 +263,34 @@ function VacanteCardAprobacion({
   const [nota, setNota] = useState('');
   const [mostrarRechazo, setMostrarRechazo] = useState(false);
 
-  const enBandaTexto =
+  const bandaTono: PillTono =
+    vacante.en_banda === null ? 'warning' : vacante.en_banda ? 'success' : 'danger';
+  const bandaLabel =
     vacante.en_banda === null
       ? 'Sin banda definida'
       : vacante.en_banda
         ? 'En banda'
         : 'Fuera de banda';
-  const enBandaColor =
-    vacante.en_banda === null
-      ? 'bg-amber-50 text-amber-800 border-amber-200'
-      : vacante.en_banda
-        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-        : 'bg-red-50 text-red-700 border-red-200';
 
   return (
-    <article className="rounded-xl border border-navy-100 bg-white p-5 space-y-4">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
+    <Card padding="lg">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="font-mono text-xs text-navy-500">{vacante.consecutivo || 'pendiente'}</p>
-          <h3 className="font-display text-xl font-semibold text-navy-900 mt-0.5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-subtle">
+            {vacante.consecutivo || 'pendiente'}
+          </p>
+          <h3 className="mt-1 text-[20px] font-semibold tracking-[-0.018em] text-text-strong">
             {vacante.cargo_nombre}
           </h3>
-          <p className="text-sm text-navy-600">
+          <p className="text-[13px] text-text-muted mt-1">
             {vacante.empresa_nombre} · {vacante.sede_nombre} · {vacante.unidad_nombre}
           </p>
-          <p className="text-xs text-navy-500 mt-1">
-            Solicitado por <span className="font-medium">{vacante.lider_nombre}</span> · Criticidad{' '}
-            <span className="font-medium">{vacante.criticidad}</span> · {vacante.tipo_solicitud}
+          <p className="text-[11px] text-text-subtle mt-2">
+            Solicitado por{' '}
+            <span className="font-medium text-text-body">{vacante.lider_nombre}</span> ·{' '}
+            Criticidad <span className="font-medium text-text-body">{vacante.criticidad}</span> ·{' '}
+            {vacante.tipo_solicitud}
             {vacante.creado_en && (
               <> · creada {formatearFecha(vacante.creado_en.toDate())}</>
             )}
@@ -252,79 +298,92 @@ function VacanteCardAprobacion({
         </div>
         <Link
           to={`/vacantes/${vacante.id}`}
-          className="text-xs text-equitel-rojo-700 hover:underline whitespace-nowrap"
+          className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline whitespace-nowrap"
         >
-          Ver detalle completo →
+          Ver detalle completo
+          <ExternalLink size={11} strokeWidth={1.75} />
         </Link>
-      </header>
+      </div>
 
-      <section className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-        <Dato label="Salario base" valor={formatearCOP(vacante.salario_base)} />
-        <Dato
-          label="Banda salarial"
-          valor={enBandaTexto}
-          className={`rounded-md border px-3 py-2 ${enBandaColor}`}
-        />
+      {/* Datos clave */}
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <Dato label="Salario base" valor={formatearCOP(vacante.salario_base)} hero />
+        <DatoPill label="Banda salarial" valor={bandaLabel} tono={bandaTono} />
         <Dato
           label="Tipo solicitud"
           valor={vacante.tipo_solicitud === 'reemplazo' ? 'Reemplazo' : 'Aumento de planta'}
         />
         <Dato label="Comisiones" valor={vacante.comisiones_texto || 'No aplica'} />
-      </section>
+      </div>
 
+      {/* Justificación */}
       {vacante.justificacion && (
-        <section className="rounded-md bg-cream-50 border-l-2 border-equitel-rojo-300 p-3">
-          <p className="text-[11px] uppercase tracking-wide text-navy-500 font-bold">Justificación del líder</p>
-          <p className="text-sm text-navy-700 mt-1 whitespace-pre-line">{vacante.justificacion}</p>
-        </section>
+        <div className="mt-5 rounded-md bg-slate-50 border-l-2 border-brand-400 p-4">
+          <p className="text-[10px] uppercase tracking-[0.10em] text-text-muted font-bold">
+            Justificación del líder
+          </p>
+          <p className="text-[13px] text-text-body mt-1.5 whitespace-pre-line leading-relaxed">
+            {vacante.justificacion}
+          </p>
+        </div>
       )}
 
-      <section className="flex items-center justify-between gap-3 rounded-md border border-navy-100 p-3">
-        <div className="flex items-center gap-2">
-          <FileText size={16} className="text-equitel-rojo-700" />
+      {/* Aval PDF */}
+      <div className="mt-5 flex items-center justify-between gap-3 rounded-md border border-slate-200 p-4">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
+            <FileText size={18} strokeWidth={1.75} />
+          </div>
           <div>
-            <p className="text-sm font-semibold text-navy-900">Aval firmado por Alejandro</p>
-            <p className="text-[11px] text-navy-500">PDF adjunto · revisa antes de aprobar</p>
+            <p className="text-[13px] font-semibold text-text-strong">
+              Aval firmado por Alejandro
+            </p>
+            <p className="text-[11px] text-text-subtle">PDF adjunto · revisa antes de aprobar</p>
           </div>
         </div>
         <a
           href={vacante.aval_url}
           target="_blank"
           rel="noreferrer"
-          className="rounded-md border border-navy-200 bg-white px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-cream-100"
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white text-text-strong px-3 py-2 text-[12px] font-medium hover:bg-slate-50 transition-colors duration-150"
         >
-          Abrir PDF ↗
+          <ExternalLink size={11} strokeWidth={1.75} />
+          Abrir PDF
         </a>
-      </section>
+      </div>
 
+      {/* Acciones */}
       {!mostrarRechazo && (
-        <>
+        <div className="mt-5 space-y-3">
           <textarea
             value={nota}
             onChange={(e) => setNota(e.target.value)}
-            placeholder="Nota interna de GH (opcional, ej. observaciones sobre el salario o la justificación)"
+            placeholder="Nota interna de GH (opcional, ej. observaciones sobre salario o justificación)"
             rows={2}
-            className="w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
+            className={inputClass}
           />
-          <footer className="flex gap-2 justify-end">
-            <button
+          <div className="flex gap-2 justify-end">
+            <Button
               type="button"
+              variant="destructive-secondary"
               onClick={() => setMostrarRechazo(true)}
               disabled={procesando}
-              className="inline-flex items-center gap-1 rounded-md border border-red-200 text-red-700 px-4 py-2 text-sm font-medium hover:bg-red-50 disabled:opacity-50"
+              icon={<X size={13} strokeWidth={1.75} />}
             >
-              <X size={14} /> Rechazar
-            </button>
-            <button
+              Rechazar
+            </Button>
+            <Button
               type="button"
+              variant="brand-primary"
               onClick={() => onAprobar(nota)}
               disabled={procesando}
-              className="inline-flex items-center gap-1 rounded-md bg-emerald-600 text-white px-4 py-2 text-sm font-semibold hover:bg-emerald-700 disabled:bg-emerald-300"
+              loading={procesando}
+              icon={<Check size={13} strokeWidth={1.75} />}
             >
-              <Check size={14} /> {procesando ? 'Aprobando…' : 'Aprobar'}
-            </button>
-          </footer>
-        </>
+              {procesando ? 'Aprobando…' : 'Aprobar'}
+            </Button>
+          </div>
+        </div>
       )}
 
       {mostrarRechazo && (
@@ -334,7 +393,7 @@ function VacanteCardAprobacion({
           procesando={procesando}
         />
       )}
-    </article>
+    </Card>
   );
 }
 
@@ -349,70 +408,130 @@ function FormularioRechazo({
 }) {
   const [motivo, setMotivo] = useState('');
   return (
-    <div className="rounded-md border border-red-200 bg-red-50/50 p-4 space-y-3">
-      <p className="text-sm font-semibold text-red-800">Motivo del rechazo (obligatorio)</p>
+    <div className="mt-5 rounded-md border border-danger-500/30 bg-danger-50/40 p-4 space-y-3">
+      <p className="text-[13px] font-semibold text-danger-700">
+        Motivo del rechazo <span className="text-text-subtle font-normal">(obligatorio)</span>
+      </p>
       <textarea
         value={motivo}
         onChange={(e) => setMotivo(e.target.value)}
         placeholder="Ej. Salario fuera de banda y sin justificación financiera. Reabrir cuando se ajuste."
         rows={3}
-        className="w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm"
+        className={inputClass}
         autoFocus
       />
       <div className="flex gap-2 justify-end">
-        <button
+        <Button
           type="button"
+          variant="neutral-secondary"
           onClick={onCancelar}
           disabled={procesando}
-          className="rounded-md border border-navy-200 px-4 py-2 text-sm text-navy-700 hover:bg-cream-100"
         >
           Cancelar
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="destructive-primary"
           onClick={() => motivo.trim() && onConfirmar(motivo.trim())}
           disabled={procesando || !motivo.trim()}
-          className="rounded-md bg-red-600 text-white px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:bg-red-300"
+          loading={procesando}
         >
           {procesando ? 'Rechazando…' : 'Confirmar rechazo'}
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
 
-// ─── Fila histórica ───────────────────────────────────────────────────
-
-function VacanteRowHistorica({ vacante, rechazada }: { vacante: VacanteDoc; rechazada: boolean }) {
+function VacanteRowHistorica({
+  vacante,
+  rechazada,
+}: {
+  vacante: VacanteDoc;
+  rechazada: boolean;
+}) {
   return (
-    <div className="rounded-md border border-navy-100 bg-white p-3 flex items-center justify-between gap-3 flex-wrap">
-      <div className="min-w-0 flex-1">
-        <p className="font-mono text-[11px] text-navy-500">{vacante.consecutivo}</p>
-        <p className="font-medium text-sm text-navy-900 truncate">
-          {vacante.cargo_nombre} · {vacante.empresa_nombre}
-        </p>
-        <p className="text-xs text-navy-500">
-          {rechazada ? vacante.razon_cierre : `Salario ${formatearCOP(vacante.salario_base)}`}
-          {vacante.aval_aprobado_en && !rechazada && (
-            <> · aprobada {formatearFecha(vacante.aval_aprobado_en.toDate())}</>
-          )}
-        </p>
+    <Card padding="sm" className="!p-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-subtle">
+            {vacante.consecutivo}
+          </p>
+          <p className="text-[14px] font-medium text-text-strong truncate mt-0.5">
+            {vacante.cargo_nombre} · {vacante.empresa_nombre}
+          </p>
+          <p className="text-[12px] text-text-muted mt-0.5">
+            {rechazada ? (
+              <span className="italic">{vacante.razon_cierre}</span>
+            ) : (
+              <span className="tabular-nums">Salario {formatearCOP(vacante.salario_base)}</span>
+            )}
+            {vacante.aval_aprobado_en && !rechazada && (
+              <>
+                {' '}
+                · aprobada{' '}
+                <span className="tabular-nums">
+                  {formatearFecha(vacante.aval_aprobado_en.toDate())}
+                </span>
+              </>
+            )}
+          </p>
+        </div>
+        <Link
+          to={`/vacantes/${vacante.id}`}
+          className="text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+        >
+          Ver →
+        </Link>
       </div>
-      <Link
-        to={`/vacantes/${vacante.id}`}
-        className="text-xs text-equitel-rojo-700 hover:underline"
+    </Card>
+  );
+}
+
+function Dato({
+  label,
+  valor,
+  hero,
+}: {
+  label: string;
+  valor: string;
+  hero?: boolean;
+}) {
+  return (
+    <div className="rounded-md bg-slate-50 border border-slate-200 px-3 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-subtle">{label}</p>
+      <p
+        className={cn(
+          'mt-1 text-text-strong',
+          hero
+            ? 'text-[18px] font-light tracking-[-0.02em] tabular-nums'
+            : 'text-[13px] font-medium',
+        )}
       >
-        Ver →
-      </Link>
+        {valor}
+      </p>
     </div>
   );
 }
 
-function Dato({ label, valor, className }: { label: string; valor: string; className?: string }) {
+function DatoPill({
+  label,
+  valor,
+  tono,
+}: {
+  label: string;
+  valor: string;
+  tono: PillTono;
+}) {
   return (
-    <div className={className ?? 'rounded-md bg-cream-50 px-3 py-2'}>
-      <p className="text-[11px] text-navy-500 uppercase tracking-wide font-semibold">{label}</p>
-      <p className="font-semibold text-navy-900 mt-0.5">{valor}</p>
+    <div className="rounded-md bg-slate-50 border border-slate-200 px-3 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-subtle">{label}</p>
+      <div className="mt-1.5">
+        <Pill tono={tono} dot>
+          {valor}
+        </Pill>
+      </div>
     </div>
   );
 }
+

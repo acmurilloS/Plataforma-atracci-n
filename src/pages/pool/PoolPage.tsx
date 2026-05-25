@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Users, Sparkles } from 'lucide-react';
+import { Search, Sparkles, Users } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
 import { formatearFecha } from '../../utils/fechas';
 import {
@@ -10,7 +10,17 @@ import {
   type DominioCandidato,
   type ResultadoUltimaPostulacion,
 } from '../../schemas';
+import { Card, Pill, type PillTono } from '../../components/brand';
+import { cn } from '../../utils/cn';
 import { CandidatoPoolDetalle } from './CandidatoPoolDetalle';
+
+/**
+ * PoolPage · sistema brand.
+ *
+ * Módulo 11 · base cross-vacante. Empty state honesto cuando hay <10
+ * candidatos. Filtros sunken brand + tabla brand con tono semántico por
+ * resultado y panel lateral para el detalle del candidato.
+ */
 
 const DOMINIO_LABEL: Record<DominioCandidato, string> = {
   ti_desarrollo: 'TI · Desarrollo',
@@ -39,22 +49,18 @@ const RESULTADO_LABEL: Record<ResultadoUltimaPostulacion, string> = {
   contratado: 'Contratado',
 };
 
-function badgeResultado(r: ResultadoUltimaPostulacion): string {
-  switch (r) {
-    case 'apto_no_contratado':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'contratado':
-      return 'bg-navy-100 text-navy-700 border-navy-200';
-    case 'descartado_lider':
-    case 'filtrado_no_cumple':
-      return 'bg-amber-50 text-amber-700 border-amber-200';
-    case 'no_apto_medico':
-    case 'desistio':
-      return 'bg-red-50 text-red-700 border-red-200';
-    default:
-      return 'bg-cream-100 text-navy-600 border-navy-200';
-  }
-}
+const RESULTADO_TONO: Record<ResultadoUltimaPostulacion, PillTono> = {
+  sin_resultado_aun: 'neutral',
+  apto_no_contratado: 'success',
+  descartado_lider: 'warning',
+  filtrado_no_cumple: 'warning',
+  no_apto_medico: 'danger',
+  desistio: 'danger',
+  contratado: 'info',
+};
+
+const inputClass =
+  'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong placeholder:text-text-subtle transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40';
 
 export default function PoolPage() {
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
@@ -74,7 +80,10 @@ export default function PoolPage() {
       if (c.duplicado_de) return false;
       if (soloAptos && c.apto_para_pool_futuro === false) return false;
       if (filtroDominio && c.dominio_principal !== filtroDominio) return false;
-      if (filtroCiudad && !(c.ciudad_residencia ?? '').toLowerCase().includes(filtroCiudad.toLowerCase())) {
+      if (
+        filtroCiudad &&
+        !(c.ciudad_residencia ?? '').toLowerCase().includes(filtroCiudad.toLowerCase())
+      ) {
         return false;
       }
       if (filtroResultado && c.resultado_ultima_postulacion !== filtroResultado) return false;
@@ -103,71 +112,91 @@ export default function PoolPage() {
     };
   }, [candidatos]);
 
-  const candidatoSeleccionado = detalleId ? candidatos.find((c) => c.id === detalleId) ?? null : null;
+  const candidatoSeleccionado = detalleId
+    ? (candidatos.find((c) => c.id === detalleId) ?? null)
+    : null;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-10 space-y-6">
+    <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">
+      {/* Hero */}
       <div>
-        <p className="text-xs uppercase tracking-widest text-gold-700">
+        <Pill tono="brand" dot>
           Módulo 11 · Base cross-vacante
-        </p>
-        <h1 className="font-display text-3xl font-semibold text-navy-900">
+        </Pill>
+        <h1
+          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
+          style={{ textWrap: 'balance' }}
+        >
           Pool propio de candidatos
         </h1>
-        <p className="text-sm text-navy-600 mt-1 max-w-3xl">
-          Búsqueda cross-vacante de candidatos que ya pasaron por procesos. Útil cuando se abre
-          una vacante nueva similar a una anterior — en vez de empezar desde cero, sugiere
-          candidatos reciclables del pool.
+        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-3xl">
+          Búsqueda cross-vacante de candidatos que ya pasaron por procesos. Cuando se abre una
+          vacante similar a una anterior, en vez de empezar desde cero, sugiere candidatos
+          reciclables del pool.
         </p>
       </div>
 
-      {/* Empty state honesto — el pool madura con uso, no es mágico el día 1 */}
+      {/* Empty state honesto · el pool madura con uso */}
       {!cargando && stats.total < 10 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
-          <Sparkles size={18} className="text-amber-700 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-amber-900">
-              El pool arranca en ceros y madura con uso
-            </p>
-            <p className="text-xs text-amber-800 mt-1 max-w-2xl">
-              Hoy hay {stats.total} candidato(s). En 2-3 meses de operación, esta vista será útil
-              para reciclar candidatos descartados blando, aptos no contratados, o aceptados que
-              desistieron. Por ahora la prioridad es que cada candidato quede bien etiquetado
-              (ciudad, dominio, motivo de descarte) — eso ya pasa automático.
-            </p>
+        <Card padding="lg" className="border-warning-500/30 bg-warning-50/40">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-md bg-warning-100 text-warning-700 flex items-center justify-center shrink-0">
+              <Sparkles size={18} strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-warning-700">
+                El pool arranca en ceros y madura con uso
+              </p>
+              <p className="text-[12px] text-warning-700/80 mt-1.5 max-w-2xl leading-relaxed">
+                Hoy hay{' '}
+                <span className="tabular-nums font-bold">{stats.total}</span> candidato(s). En 2-3
+                meses de operación, esta vista será útil para reciclar candidatos descartados
+                blando, aptos no contratados, o aceptados que desistieron. Por ahora la prioridad
+                es que cada candidato quede bien etiquetado (ciudad, dominio, motivo de descarte) —
+                eso ya pasa automático.
+              </p>
+            </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Candidatos totales" valor={stats.total} icono={<Users size={16} />} />
-        <Stat label="Aptos para pool" valor={stats.aptos} tono="emerald" />
-        <Stat label="Reciclables (apto · no contratado)" valor={stats.reciclables} tono="emerald" />
-        <Stat label="Ya contratados" valor={stats.contratados} tono="navy" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MiniStat
+          label="Candidatos totales"
+          valor={stats.total}
+          icono={<Users size={14} strokeWidth={1.75} />}
+        />
+        <MiniStat label="Aptos para pool" valor={stats.aptos} tono="success" />
+        <MiniStat label="Reciclables · apto no contratado" valor={stats.reciclables} tono="success" />
+        <MiniStat label="Ya contratados" valor={stats.contratados} tono="info" />
       </div>
 
       {/* Filtros */}
-      <div className="rounded-xl border border-navy-100 bg-white p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+      <Card padding="md">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <label className="md:col-span-2 block">
-            <span className="text-xs font-medium text-navy-700">Buscar</span>
-            <div className="mt-1 flex items-center gap-2 rounded-md border border-navy-200 px-3 py-2">
-              <Search size={14} className="text-navy-400" />
+            <span className="block text-[11px] font-medium text-text-strong mb-1.5">Buscar</span>
+            <div className="relative">
+              <Search
+                size={14}
+                strokeWidth={1.75}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle pointer-events-none"
+              />
               <input
                 value={filtroBusqueda}
                 onChange={(e) => setFiltroBusqueda(e.target.value)}
                 placeholder="Nombre, email, cédula, especialidad…"
-                className="w-full text-sm outline-none"
+                className={cn(inputClass, 'pl-9')}
               />
             </div>
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-navy-700">Dominio</span>
+            <span className="block text-[11px] font-medium text-text-strong mb-1.5">Dominio</span>
             <select
               value={filtroDominio}
               onChange={(e) => setFiltroDominio(e.target.value)}
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
+              className={inputClass}
             >
               <option value="">Todos</option>
               {dominioCandidato.options.map((d) => (
@@ -178,20 +207,20 @@ export default function PoolPage() {
             </select>
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-navy-700">Ciudad</span>
+            <span className="block text-[11px] font-medium text-text-strong mb-1.5">Ciudad</span>
             <input
               value={filtroCiudad}
               onChange={(e) => setFiltroCiudad(e.target.value)}
               placeholder="Bogotá, Medellín…"
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
+              className={inputClass}
             />
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-navy-700">Resultado</span>
+            <span className="block text-[11px] font-medium text-text-strong mb-1.5">Resultado</span>
             <select
               value={filtroResultado}
               onChange={(e) => setFiltroResultado(e.target.value)}
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
+              className={inputClass}
             >
               <option value="">Todos</option>
               {resultadoUltimaPostulacion.options.map((r) => (
@@ -202,95 +231,124 @@ export default function PoolPage() {
             </select>
           </label>
         </div>
-        <label className="flex items-center gap-2 text-xs text-navy-700">
+        <label className="mt-4 flex items-center gap-2.5 text-[12px] text-text-body cursor-pointer">
           <input
             type="checkbox"
             checked={soloAptos}
             onChange={(e) => setSoloAptos(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300/40"
           />
-          Solo aptos para pool (excluye no apto médico, pase judicial rojo, desistió 2+ veces)
+          <span>
+            Solo aptos para pool{' '}
+            <span className="text-text-subtle italic">
+              (excluye no apto médico, pase judicial rojo, desistió 2+ veces)
+            </span>
+          </span>
         </label>
-      </div>
+      </Card>
 
-      {cargando && <p className="text-sm text-navy-500">Cargando…</p>}
+      {cargando && <p className="text-[13px] text-text-muted">Cargando…</p>}
 
       {!cargando && filtrados.length === 0 && (
-        <div className="rounded-xl border border-navy-100 bg-white p-8 text-center text-sm text-navy-500">
-          {stats.total === 0
-            ? 'Aún no hay candidatos en la base. Crea o recibe la primera postulación para empezar a llenar el pool.'
-            : 'Ningún candidato cumple los filtros actuales.'}
+        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
+          <p className="text-[13px] text-text-muted">
+            {stats.total === 0
+              ? 'Aún no hay candidatos en la base. Crea o recibe la primera postulación para empezar a llenar el pool.'
+              : 'Ningún candidato cumple los filtros actuales.'}
+          </p>
         </div>
       )}
 
       {filtrados.length > 0 && (
-        <div className="rounded-xl border border-navy-100 bg-white overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-cream-100 text-navy-700 text-left">
+        <Card padding="none" className="overflow-hidden">
+          <table className="w-full text-[13px]">
+            <thead className="bg-slate-50 text-text-muted">
               <tr>
-                <th className="px-4 py-2 font-medium">Candidato</th>
-                <th className="px-4 py-2 font-medium">Ciudad</th>
-                <th className="px-4 py-2 font-medium">Dominio · Especialidad</th>
-                <th className="px-4 py-2 font-medium">Exp.</th>
-                <th className="px-4 py-2 font-medium">Postulaciones</th>
-                <th className="px-4 py-2 font-medium">Última vacante</th>
-                <th className="px-4 py-2 font-medium">Resultado</th>
-                <th className="px-4 py-2"></th>
+                <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                  Candidato
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                  Ciudad
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                  Dominio · Especialidad
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                  Exp.
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                  Postul.
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                  Última vacante
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                  Resultado
+                </th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filtrados.slice(0, 200).map((c) => (
                 <tr
                   key={c.id}
-                  className="border-t border-navy-50 hover:bg-cream-50/40 cursor-pointer"
+                  className="border-t border-slate-100 hover:bg-slate-50/30 cursor-pointer transition-colors"
                   onClick={() => setDetalleId(c.id)}
                 >
                   <td className="px-4 py-3">
-                    <p className="font-medium text-navy-900">
+                    <p className="font-medium text-text-strong">
                       {c.nombres} {c.apellidos}
                     </p>
-                    <p className="text-[11px] text-navy-500">{c.email || '—'}</p>
+                    <p className="text-[11px] text-text-subtle">{c.email || '—'}</p>
                   </td>
-                  <td className="px-4 py-3 text-xs text-navy-600">{c.ciudad_residencia || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-navy-700">
-                    <p>{DOMINIO_LABEL[c.dominio_principal ?? 'sin_clasificar']}</p>
+                  <td className="px-4 py-3 text-[12px] text-text-body">
+                    {c.ciudad_residencia || <span className="text-text-subtle">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-[12px]">
+                    <p className="text-text-strong font-medium">
+                      {DOMINIO_LABEL[c.dominio_principal ?? 'sin_clasificar']}
+                    </p>
                     {c.especialidad_tecnica && (
-                      <p className="text-[11px] text-navy-500 italic">{c.especialidad_tecnica}</p>
+                      <p className="text-[11px] text-text-subtle italic mt-0.5">
+                        {c.especialidad_tecnica}
+                      </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-navy-600">
+                  <td className="px-4 py-3 text-[12px] text-text-body tabular-nums">
                     {c.anios_experiencia_aproximados != null
-                      ? `${c.anios_experiencia_aproximados} años`
+                      ? `${c.anios_experiencia_aproximados}a`
                       : '—'}
                   </td>
-                  <td className="px-4 py-3 text-xs text-navy-700">{c.total_postulaciones ?? 1}</td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-4 py-3 text-[12px] text-text-body tabular-nums">
+                    {c.total_postulaciones ?? 1}
+                  </td>
+                  <td className="px-4 py-3 text-[12px]">
                     {c.ultima_vacante_id ? (
                       <Link
                         to={`/vacantes/${c.ultima_vacante_id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-gold-700 hover:underline"
+                        className="text-brand-700 hover:text-brand-800 hover:underline font-medium"
                       >
                         {c.ultima_vacante_consecutivo || c.ultima_vacante_id.slice(0, 6)}
                       </Link>
                     ) : (
-                      '—'
+                      <span className="text-text-subtle">—</span>
                     )}
-                    <p className="text-[10px] text-navy-400">
+                    <p className="text-[10px] text-text-subtle tabular-nums">
                       {c.fecha_ultima_postulacion
                         ? formatearFecha(c.fecha_ultima_postulacion.toDate())
                         : '—'}
                     </p>
                   </td>
-                  <td className="px-4 py-3 text-xs">
-                    <span
-                      className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${badgeResultado(
-                        c.resultado_ultima_postulacion ?? 'sin_resultado_aun',
-                      )}`}
+                  <td className="px-4 py-3">
+                    <Pill
+                      tono={RESULTADO_TONO[c.resultado_ultima_postulacion ?? 'sin_resultado_aun']}
+                      dot
                     >
                       {RESULTADO_LABEL[c.resultado_ultima_postulacion ?? 'sin_resultado_aun']}
-                    </span>
+                    </Pill>
                     {c.apto_para_pool_futuro === false && (
-                      <p className="text-[10px] text-red-700 mt-1">⛔ No apto</p>
+                      <p className="text-[10px] text-danger-700 mt-1 font-medium">⛔ No apto</p>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -299,9 +357,9 @@ export default function PoolPage() {
                         e.stopPropagation();
                         setDetalleId(c.id);
                       }}
-                      className="text-xs text-gold-700 hover:underline"
+                      className="text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
                     >
-                      Ver historial
+                      Ver historial →
                     </button>
                   </td>
                 </tr>
@@ -309,11 +367,11 @@ export default function PoolPage() {
             </tbody>
           </table>
           {filtrados.length > 200 && (
-            <p className="px-4 py-2 text-[11px] text-navy-500 border-t border-navy-50">
+            <p className="px-4 py-2.5 text-[11px] text-text-subtle border-t border-slate-100 bg-slate-50/50">
               Mostrando 200 de {filtrados.length}. Refina los filtros para ver el resto.
             </p>
           )}
-        </div>
+        </Card>
       )}
 
       {candidatoSeleccionado && (
@@ -326,26 +384,40 @@ export default function PoolPage() {
   );
 }
 
-function Stat({
+function MiniStat({
   label,
   valor,
-  tono = 'navy',
+  tono = 'neutral',
   icono,
 }: {
   label: string;
   valor: number;
-  tono?: 'navy' | 'emerald' | 'red';
+  tono?: 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
   icono?: React.ReactNode;
 }) {
   const claseValor =
-    tono === 'emerald' ? 'text-emerald-700' : tono === 'red' ? 'text-red-700' : 'text-navy-900';
+    tono === 'brand'
+      ? 'text-brand-700'
+      : tono === 'info'
+        ? 'text-info-700'
+        : tono === 'success'
+          ? 'text-success-700'
+          : tono === 'warning'
+            ? 'text-warning-700'
+            : tono === 'danger'
+              ? 'text-danger-700'
+              : 'text-text-strong';
   return (
-    <div className="rounded-lg border border-navy-100 bg-white px-4 py-3">
-      <p className="text-[10px] uppercase tracking-wider text-navy-500 flex items-center gap-1">
+    <div className="bg-white rounded-md border border-slate-200 p-4 shadow-brand-card">
+      <div className="flex items-center gap-1.5 text-text-muted">
         {icono}
-        {label}
+        <p className="text-[10px] font-bold tracking-[0.10em] uppercase">{label}</p>
+      </div>
+      <p
+        className={`mt-2 text-[36px] font-extralight leading-[0.95] tracking-[-0.045em] tabular-nums ${claseValor}`}
+      >
+        {valor}
       </p>
-      <p className={`text-2xl font-semibold mt-1 ${claseValor}`}>{valor}</p>
     </div>
   );
 }

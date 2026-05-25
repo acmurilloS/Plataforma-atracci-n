@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
+import {
+  CheckCircle2,
+  Clock,
+  Inbox,
+  PauseCircle,
+  PlayCircle,
+  XCircle,
+} from 'lucide-react';
 import { useColeccion, type FiltroTupla } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
@@ -11,8 +19,25 @@ import {
   type EstadoTicketConexion,
   type TicketConexionDoc,
 } from '../../schemas';
+import { Card, Pill, type PillTono } from '../../components/brand';
+import { cn } from '../../utils/cn';
 
-const AREAS: AreaApoyo[] = ['it', 'compras', 'bodega', 'contabilidad', 'administrativo', 'talentos'];
+/**
+ * TicketsPage · sistema brand.
+ *
+ * Cola por área (paso 20). Apoyo solo ve los tickets de su área. Stats con
+ * hero numbers + filtros sunken + tabla brand. Soporta pre-avisos (paso 3)
+ * con badge dedicado.
+ */
+
+const AREAS: AreaApoyo[] = [
+  'it',
+  'compras',
+  'bodega',
+  'contabilidad',
+  'administrativo',
+  'talentos',
+];
 
 const AREA_LABEL: Record<AreaApoyo, string> = {
   it: 'IT',
@@ -32,41 +57,48 @@ const ESTADOS: { valor: EstadoTicketConexion; label: string }[] = [
   { valor: 'cancelado', label: 'Cancelado' },
 ];
 
-function badgeEstado(estado: EstadoTicketConexion): string {
-  switch (estado) {
-    case 'resuelto':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'bloqueado':
-      return 'bg-red-50 text-red-700 border-red-200';
-    case 'en_progreso':
-      return 'bg-amber-50 text-amber-700 border-amber-200';
-    case 'no_aplica':
-      return 'bg-navy-50 text-navy-500 border-navy-200';
-    case 'cancelado':
-      return 'bg-navy-50 text-navy-400 border-navy-200';
-    default:
-      return 'bg-cream-100 text-navy-700 border-navy-200';
-  }
-}
+const ESTADO_TONO: Record<EstadoTicketConexion, PillTono> = {
+  abierto: 'neutral',
+  en_progreso: 'info',
+  bloqueado: 'danger',
+  resuelto: 'success',
+  no_aplica: 'neutral',
+  cancelado: 'neutral',
+};
 
-function semaforoANS(t: TicketConexionDoc): {
-  cls: string;
-  texto: string;
-} {
+const CRITICIDAD_TONO: Record<'Alta' | 'Media' | 'Baja', PillTono> = {
+  Alta: 'danger',
+  Media: 'warning',
+  Baja: 'success',
+};
+
+const inputClass =
+  'rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong placeholder:text-text-subtle transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 disabled:bg-slate-100 disabled:text-text-subtle disabled:cursor-not-allowed';
+
+function semaforoANS(t: TicketConexionDoc): { cls: string; texto: string } {
   if (t.estado === 'resuelto' || t.estado === 'no_aplica' || t.estado === 'cancelado') {
-    return { cls: 'text-navy-500', texto: formatearFecha(t.ans_expira_en?.toDate?.()) };
+    return {
+      cls: 'text-text-muted',
+      texto: formatearFecha(t.ans_expira_en?.toDate?.()),
+    };
   }
   const expiraMs = t.ans_expira_en?.toMillis?.() ?? 0;
   const ahora = Date.now();
   const diffMs = expiraMs - ahora;
   if (diffMs < 0) {
-    return { cls: 'text-red-700 font-semibold', texto: `Vencido · ${formatearFecha(t.ans_expira_en?.toDate?.())}` };
+    return {
+      cls: 'text-danger-700 font-semibold',
+      texto: `Vencido · ${formatearFecha(t.ans_expira_en?.toDate?.())}`,
+    };
   }
   const diffDias = diffMs / (1000 * 60 * 60 * 24);
   if (diffDias < 1) {
-    return { cls: 'text-amber-700 font-medium', texto: `Hoy · ${formatearFecha(t.ans_expira_en?.toDate?.())}` };
+    return {
+      cls: 'text-warning-700 font-medium',
+      texto: `Hoy · ${formatearFecha(t.ans_expira_en?.toDate?.())}`,
+    };
   }
-  return { cls: 'text-navy-600', texto: formatearFecha(t.ans_expira_en?.toDate?.()) };
+  return { cls: 'text-text-body', texto: formatearFecha(t.ans_expira_en?.toDate?.()) };
 }
 
 export default function TicketsPage() {
@@ -188,7 +220,8 @@ export default function TicketsPage() {
 
   async function marcarNoAplica(t: TicketConexionDoc) {
     if (!user || !perfil) return;
-    if (!window.confirm('¿Marcar este ticket como "no aplica"? Quedará cerrado sin acción.')) return;
+    if (!window.confirm('¿Marcar este ticket como "no aplica"? Quedará cerrado sin acción.'))
+      return;
     setProcesando(t.id);
     setErr(null);
     try {
@@ -206,39 +239,51 @@ export default function TicketsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-6">
+    <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">
+      {/* Hero */}
       <div>
-        <p className="text-xs uppercase tracking-widest text-gold-700">Paso 20 · Módulo 8</p>
-        <h1 className="font-display text-3xl font-semibold text-navy-900">Tickets de conexión</h1>
-        <p className="text-sm text-navy-600 mt-1">
+        <Pill tono="brand" dot>
+          Paso 20 · Módulo 8 · Apoyo
+        </Pill>
+        <h1
+          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
+          style={{ textWrap: 'balance' }}
+        >
+          Tickets de conexión
+        </h1>
+        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
           {esApoyo
             ? `Cola de tu área (${AREA_LABEL[areaForzada as AreaApoyo] ?? '—'}): accesos, dotación, puesto físico, usuarios contables, inducción.`
-            : 'Cola por área: IT, compras, bodega, contabilidad, talentos, administrativo CJ.'}
+            : 'Cola por área: IT, compras, bodega, contabilidad, talentos y administrativo CJ.'}
         </p>
       </div>
 
       {err && (
-        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{err}</div>
+        <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
+          {err}
+        </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
-        <Stat label="Total" valor={stats.total} />
-        <Stat label="Pre-aviso" valor={stats.preavisos} tono="amber" />
-        <Stat label="Abiertos" valor={stats.abiertos} tono="navy" />
-        <Stat label="En progreso" valor={stats.enProgreso} tono="amber" />
-        <Stat label="Bloqueados" valor={stats.bloqueados} tono="red" />
-        <Stat label="Resueltos" valor={stats.resueltos} tono="emerald" />
-        <Stat label="Vencidos" valor={stats.vencidos} tono={stats.vencidos > 0 ? 'red' : 'navy'} />
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <MiniStat label="Total" valor={stats.total} icono={<Inbox size={14} strokeWidth={1.75} />} />
+        <MiniStat label="Pre-aviso" valor={stats.preavisos} tono="warning" />
+        <MiniStat label="Abiertos" valor={stats.abiertos} />
+        <MiniStat label="En progreso" valor={stats.enProgreso} tono="info" />
+        <MiniStat label="Bloqueados" valor={stats.bloqueados} tono="danger" />
+        <MiniStat label="Resueltos" valor={stats.resueltos} tono="success" />
+        <MiniStat label="Vencidos" valor={stats.vencidos} tono={stats.vencidos > 0 ? 'danger' : 'neutral'} />
       </div>
 
+      {/* Filtros */}
       <div className="flex gap-3 flex-wrap items-end">
         <label className="block">
-          <span className="text-xs font-medium text-navy-700">Área</span>
+          <span className="block text-[11px] font-medium text-text-strong mb-1.5">Área</span>
           <select
             value={areaForzada ?? filtroArea}
             onChange={(e) => setFiltroArea(e.target.value)}
             disabled={esApoyo}
-            className="mt-1 rounded-md border border-navy-200 bg-white px-3 py-2 text-sm disabled:bg-navy-50 disabled:cursor-not-allowed"
+            className={cn(inputClass, 'md:w-auto')}
           >
             <option value="">Todas</option>
             {AREAS.map((a) => (
@@ -249,11 +294,11 @@ export default function TicketsPage() {
           </select>
         </label>
         <label className="block">
-          <span className="text-xs font-medium text-navy-700">Estado</span>
+          <span className="block text-[11px] font-medium text-text-strong mb-1.5">Estado</span>
           <select
             value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
-            className="mt-1 rounded-md border border-navy-200 bg-white px-3 py-2 text-sm"
+            className={cn(inputClass, 'md:w-auto')}
           >
             <option value="">Todos</option>
             {ESTADOS.map((e) => (
@@ -264,32 +309,50 @@ export default function TicketsPage() {
           </select>
         </label>
         {esApoyo && (
-          <p className="text-xs text-navy-500 max-w-xs">
-            Solo ves los tickets de tu área ({AREA_LABEL[areaForzada as AreaApoyo] ?? '—'}). El filtro
-            de área está bloqueado por seguridad.
+          <p className="text-[11px] text-text-subtle italic max-w-xs self-center">
+            Solo ves los tickets de tu área ({AREA_LABEL[areaForzada as AreaApoyo] ?? '—'}). El
+            filtro de área queda bloqueado por seguridad.
           </p>
         )}
       </div>
 
-      {cargando && <p className="text-sm text-navy-500">Cargando…</p>}
+      {cargando && <p className="text-[13px] text-text-muted">Cargando…</p>}
 
-      <div className="rounded-xl border border-navy-100 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-cream-100 text-navy-700 text-left">
+      {/* Tabla */}
+      <Card padding="none" className="overflow-hidden">
+        <table className="w-full text-[13px]">
+          <thead className="bg-slate-50 text-text-muted">
             <tr>
-              <th className="px-4 py-2 font-medium">Ticket</th>
-              {!esApoyo && <th className="px-4 py-2 font-medium">Área</th>}
-              <th className="px-4 py-2 font-medium">Candidato / vacante</th>
-              <th className="px-4 py-2 font-medium">Criticidad</th>
-              <th className="px-4 py-2 font-medium">ANS</th>
-              <th className="px-4 py-2 font-medium">Estado</th>
-              <th className="px-4 py-2"></th>
+              <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                Ticket
+              </th>
+              {!esApoyo && (
+                <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                  Área
+                </th>
+              )}
+              <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                Candidato / vacante
+              </th>
+              <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                Criticidad
+              </th>
+              <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                ANS
+              </th>
+              <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
+                Estado
+              </th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {!cargando && tickets.length === 0 && (
               <tr>
-                <td colSpan={esApoyo ? 6 : 7} className="px-4 py-8 text-center text-navy-500">
+                <td
+                  colSpan={esApoyo ? 6 : 7}
+                  className="px-4 py-10 text-center text-text-muted text-[13px]"
+                >
                   Sin tickets con esos filtros.
                 </td>
               </tr>
@@ -297,122 +360,138 @@ export default function TicketsPage() {
             {tickets.map((t) => {
               const ans = semaforoANS(t);
               const acusado = !!t.acuse_recibo_en;
-              const esPreaviso = t.disparado_por === 'automatico_perfilamiento' && !t.candidato_id;
+              const esPreaviso =
+                t.disparado_por === 'automatico_perfilamiento' && !t.candidato_id;
               return (
-                <tr key={t.id} className="border-t border-navy-50 align-top">
+                <tr
+                  key={t.id}
+                  className="border-t border-slate-100 hover:bg-slate-50/30 transition-colors align-top"
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-navy-900">{t.titulo}</p>
-                      {esPreaviso && (
-                        <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
-                          Pre-aviso
-                        </span>
-                      )}
+                      <p className="font-medium text-text-strong">{t.titulo}</p>
+                      {esPreaviso && <Pill tono="warning">Pre-aviso</Pill>}
                     </div>
-                    <p className="text-xs text-navy-500">{TIPO_LABEL[t.tipo]}</p>
+                    <p className="text-[11px] text-text-muted mt-1">{TIPO_LABEL[t.tipo]}</p>
                     {esPreaviso && t.fecha_requerida_ingreso && (
-                      <p className="text-[11px] text-amber-700 mt-1">
-                        🎯 Ingreso estimado: {formatearFecha(t.fecha_requerida_ingreso.toDate())}
+                      <p className="text-[11px] text-warning-700 mt-1 inline-flex items-center gap-1.5">
+                        <Clock size={11} strokeWidth={1.75} />
+                        Ingreso estimado:{' '}
+                        <span className="tabular-nums font-medium">
+                          {formatearFecha(t.fecha_requerida_ingreso.toDate())}
+                        </span>
                       </p>
                     )}
                     {t.estado === 'bloqueado' && t.bloqueo_razon && (
-                      <p className="text-xs text-red-700 mt-1 italic">⛔ {t.bloqueo_razon}</p>
+                      <p className="text-[11px] text-danger-700 mt-1.5 italic inline-flex items-center gap-1">
+                        <PauseCircle size={11} strokeWidth={1.75} />
+                        {t.bloqueo_razon}
+                      </p>
                     )}
                     {t.estado === 'resuelto' && t.notas_resolucion && (
-                      <p className="text-xs text-emerald-700 mt-1 italic">✓ {t.notas_resolucion}</p>
+                      <p className="text-[11px] text-success-700 mt-1.5 italic inline-flex items-center gap-1">
+                        <CheckCircle2 size={11} strokeWidth={1.75} />
+                        {t.notas_resolucion}
+                      </p>
                     )}
                   </td>
                   {!esApoyo && (
-                    <td className="px-4 py-3 text-xs text-navy-600">{AREA_LABEL[t.area]}</td>
+                    <td className="px-4 py-3 text-[12px] text-text-body">{AREA_LABEL[t.area]}</td>
                   )}
-                  <td className="px-4 py-3 text-xs text-navy-600">
+                  <td className="px-4 py-3 text-[12px]">
                     {esPreaviso ? (
-                      <span className="italic text-amber-700">Sin candidato aún</span>
+                      <span className="italic text-warning-700">Sin candidato aún</span>
                     ) : (
-                      t.candidato_nombre || '—'
+                      <span className="text-text-strong font-medium">
+                        {t.candidato_nombre || '—'}
+                      </span>
                     )}
                     <br />
                     <Link
                       to={`/vacantes/${t.vacante_id}`}
-                      className="text-gold-700 hover:underline"
+                      className="text-brand-700 hover:text-brand-800 hover:underline font-medium"
                     >
                       {t.vacante_consecutivo || t.vacante_id.slice(0, 8)}
                     </Link>
                     <br />
-                    <span className="text-navy-500">{t.empresa_codigo}-{t.sede_codigo}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    <span
-                      className={`rounded-full px-2 py-0.5 ${
-                        t.criticidad === 'Alta'
-                          ? 'bg-red-50 text-red-700'
-                          : t.criticidad === 'Media'
-                            ? 'bg-amber-50 text-amber-700'
-                            : 'bg-navy-50 text-navy-600'
-                      }`}
-                    >
-                      {t.criticidad}
+                    <span className="text-text-subtle">
+                      {t.empresa_codigo}-{t.sede_codigo}
                     </span>
-                    <p className="text-[10px] text-navy-500 mt-1">{t.ans_dias_habiles} días hábiles</p>
                   </td>
-                  <td className={`px-4 py-3 text-xs ${ans.cls}`}>{ans.texto}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-block rounded-full border px-2 py-0.5 text-xs ${badgeEstado(t.estado)}`}
-                    >
+                    <Pill tono={CRITICIDAD_TONO[t.criticidad]}>{t.criticidad}</Pill>
+                    <p className="text-[10px] text-text-subtle mt-1 tabular-nums">
+                      {t.ans_dias_habiles} días hábiles
+                    </p>
+                  </td>
+                  <td className={cn('px-4 py-3 text-[12px] tabular-nums', ans.cls)}>
+                    {ans.texto}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Pill tono={ESTADO_TONO[t.estado]} dot>
                       {t.estado.replace('_', ' ')}
-                    </span>
+                    </Pill>
                     {acusado && (
-                      <p className="text-[10px] text-emerald-700 mt-1">
+                      <p className="text-[10px] text-success-700 mt-1.5 inline-flex items-center gap-1">
+                        <CheckCircle2 size={10} strokeWidth={1.75} />
                         Acuse: {t.acuse_recibo_por_nombre}
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                  <td className="px-4 py-3 text-right space-y-1 whitespace-nowrap">
                     {t.estado === 'abierto' && (
-                      <>
+                      <div className="flex flex-col items-end gap-1">
                         <button
                           onClick={() => acusarRecibo(t)}
                           disabled={procesando === t.id}
-                          className="text-xs text-gold-700 hover:underline disabled:opacity-50"
+                          className="text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium disabled:opacity-50"
                         >
                           Acusar recibo
                         </button>
                         <button
                           onClick={() => marcarNoAplica(t)}
                           disabled={procesando === t.id}
-                          className="text-xs text-navy-500 hover:underline disabled:opacity-50"
+                          className="text-[11px] text-text-muted hover:text-text-strong hover:underline disabled:opacity-50"
                         >
                           No aplica
                         </button>
-                      </>
+                      </div>
                     )}
                     {t.estado === 'en_progreso' && (
-                      <>
+                      <div className="flex flex-col items-end gap-1">
                         <button
                           onClick={() => resolver(t)}
                           disabled={procesando === t.id}
-                          className="text-xs text-emerald-700 hover:underline disabled:opacity-50"
+                          className="inline-flex items-center gap-1 text-[12px] text-success-700 hover:text-success-700 hover:underline font-medium disabled:opacity-50"
                         >
+                          <CheckCircle2 size={11} strokeWidth={1.75} />
                           Resolver
                         </button>
                         <button
                           onClick={() => bloquear(t)}
                           disabled={procesando === t.id}
-                          className="text-xs text-red-700 hover:underline disabled:opacity-50"
+                          className="inline-flex items-center gap-1 text-[12px] text-danger-700 hover:text-danger-800 hover:underline disabled:opacity-50"
                         >
+                          <PauseCircle size={11} strokeWidth={1.75} />
                           Bloquear
                         </button>
-                      </>
+                      </div>
                     )}
                     {t.estado === 'bloqueado' && (
                       <button
                         onClick={() => reanudar(t)}
                         disabled={procesando === t.id}
-                        className="text-xs text-gold-700 hover:underline disabled:opacity-50"
+                        className="inline-flex items-center gap-1 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium disabled:opacity-50"
                       >
+                        <PlayCircle size={11} strokeWidth={1.75} />
                         Reanudar
                       </button>
+                    )}
+                    {(t.estado === 'no_aplica' || t.estado === 'cancelado') && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-text-subtle italic">
+                        <XCircle size={10} strokeWidth={1.75} />
+                        Cerrado
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -420,32 +499,45 @@ export default function TicketsPage() {
             })}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }
 
-function Stat({
+function MiniStat({
   label,
   valor,
-  tono = 'navy',
+  tono = 'neutral',
+  icono,
 }: {
   label: string;
   valor: number;
-  tono?: 'navy' | 'amber' | 'red' | 'emerald';
+  tono?: 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
+  icono?: React.ReactNode;
 }) {
   const claseValor =
-    tono === 'amber'
-      ? 'text-amber-700'
-      : tono === 'red'
-        ? 'text-red-700'
-        : tono === 'emerald'
-          ? 'text-emerald-700'
-          : 'text-navy-900';
+    tono === 'brand'
+      ? 'text-brand-700'
+      : tono === 'info'
+        ? 'text-info-700'
+        : tono === 'success'
+          ? 'text-success-700'
+          : tono === 'warning'
+            ? 'text-warning-700'
+            : tono === 'danger'
+              ? 'text-danger-700'
+              : 'text-text-strong';
   return (
-    <div className="rounded-lg border border-navy-100 bg-white px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-navy-500">{label}</p>
-      <p className={`text-2xl font-semibold ${claseValor}`}>{valor}</p>
+    <div className="bg-white rounded-md border border-slate-200 p-3.5 shadow-brand-card">
+      <div className="flex items-center gap-1.5 text-text-muted">
+        {icono}
+        <p className="text-[10px] font-bold tracking-[0.10em] uppercase">{label}</p>
+      </div>
+      <p
+        className={`mt-2 text-[28px] font-extralight leading-[0.95] tracking-[-0.045em] tabular-nums ${claseValor}`}
+      >
+        {valor}
+      </p>
     </div>
   );
 }
