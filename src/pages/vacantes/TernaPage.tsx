@@ -131,6 +131,13 @@ export default function TernaPage() {
         candidato_id: p.candidato_id,
         vacante_id: vacante.id,
         proceso_id: vacante.proceso_activo_id,
+        // Denormalizado para que ExamenesMedicosPage muestre nombre del
+        // candidato + cargo sin tener que joinear con postulaciones.
+        candidato_nombre: p.candidato_nombre,
+        cargo_nombre: vacante.cargo_nombre,
+        vacante_consecutivo: vacante.consecutivo,
+        empresa_codigo: vacante.empresa_codigo,
+        sede_codigo: vacante.sede_codigo,
         solicitada_en: Timestamp.now(),
         solicitada_por_uid: user.uid,
         orden_url: null,

@@ -2,16 +2,19 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import {
+  Building2,
   ExternalLink,
   HeartPulse,
   Send,
   Stethoscope,
+  User,
   XCircle,
 } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import type { PostulacionDoc } from '../../schemas';
 
 /**
  * ExamenesMedicosPage · sistema brand.
@@ -27,6 +30,14 @@ interface ExamenDoc {
   postulacion_id: string;
   candidato_id: string;
   vacante_id: string;
+  // Campos denormalizados al crear (a partir de la migración del 2026-05).
+  // Opcionales para tolerar exámenes viejos que no los tengan: en ese caso
+  // resolvemos por lookup en postulaciones.
+  candidato_nombre?: string;
+  cargo_nombre?: string;
+  vacante_consecutivo?: string;
+  empresa_codigo?: string;
+  sede_codigo?: string;
   solicitada_en: Timestamp;
   enviada_al_candidato_en: Timestamp | null;
   centro_medico: string | null;
@@ -49,8 +60,27 @@ export default function ExamenesMedicosPage() {
   const { docs, cargando } = useColeccion<ExamenDoc>('examenes_medicos', {
     orden: ['solicitada_en', 'desc'],
   });
+  // Fallback para exámenes viejos sin campos denormalizados.
+  // Cargamos postulaciones y resolvemos nombre/cargo en runtime.
+  const { docs: postulaciones } = useColeccion<PostulacionDoc>('postulaciones');
+  const postulacionPorId = useMemo(() => {
+    const m = new Map<string, PostulacionDoc>();
+    for (const p of postulaciones) m.set(p.id, p);
+    return m;
+  }, [postulaciones]);
   const { actualizar } = useMutacion();
   const [procesando, setProcesando] = useState<string | null>(null);
+
+  function resolverInfo(ex: ExamenDoc) {
+    const post = postulacionPorId.get(ex.postulacion_id);
+    return {
+      candidato: ex.candidato_nombre ?? post?.candidato_nombre ?? 'Candidato sin nombre',
+      cargo: ex.cargo_nombre ?? post?.cargo_nombre ?? null,
+      consecutivo: ex.vacante_consecutivo ?? post?.vacante_consecutivo ?? null,
+      empresa: ex.empresa_codigo ?? null,
+      sede: ex.sede_codigo ?? null,
+    };
+  }
 
   async function enviar(ex: ExamenDoc) {
     const centro = window.prompt('Centro médico:', 'Colsanitas') ?? 'Colsanitas';
@@ -140,21 +170,40 @@ export default function ExamenesMedicosPage() {
       <div className="space-y-3">
         {docs.map((ex) => {
           const tono = ESTADO_TONO[ex.estado] ?? 'neutral';
+          const info = resolverInfo(ex);
           return (
             <Card key={ex.id} padding="md">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] uppercase tracking-[0.06em] text-text-subtle font-mono">
-                    examen {ex.id.slice(0, 8)}
-                  </p>
-                  <h3 className="mt-1 text-[16px] font-semibold tracking-[-0.012em] text-text-strong">
+                  {info.consecutivo && (
+                    <p className="text-[10px] uppercase tracking-[0.06em] text-text-subtle font-mono">
+                      {info.consecutivo}
+                      {info.cargo && (
+                        <span className="text-text-subtle normal-case tracking-normal font-sans">
+                          {' · '}
+                          {info.cargo}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  <h3 className="mt-1 text-[16px] font-semibold tracking-[-0.012em] text-text-strong inline-flex items-center gap-2">
+                    <User size={14} strokeWidth={1.5} className="text-text-subtle shrink-0" />
                     <Link
                       to={`/postulaciones/${ex.postulacion_id}`}
                       className="hover:text-brand-700 transition-colors"
                     >
-                      Candidato de postulación {ex.postulacion_id.slice(0, 8)}
+                      {info.candidato}
                     </Link>
                   </h3>
+                  {(info.empresa || info.sede) && (
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-text-muted">
+                      <Building2 size={11} strokeWidth={1.5} className="text-text-subtle" />
+                      <span className="font-mono">
+                        {info.empresa}
+                        {info.sede && ` / ${info.sede}`}
+                      </span>
+                    </p>
+                  )}
                   <p className="text-[12px] text-text-muted mt-1.5 inline-flex items-center gap-2 flex-wrap">
                     <span className="tabular-nums">
                       Solicitada {formatearFecha(ex.solicitada_en.toDate())}
