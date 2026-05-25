@@ -75,22 +75,44 @@ const SEDES = [
   { codigo: 'LMO', nombre: 'Mosquera', ciudad: 'Mosquera', empresa_codigo: 'LAP', direccion: 'Av. Troncal de Occidente Km 2.5' },
 ];
 
-// ─── Unidades (algunas representativas; GH ajustará luego) ──────────────
+// ─── Unidades · todas las sedes con unidades realistas alineadas a la
+// actividad de cada empresa. GH ajustará nombres y agregará/quitará luego.
 const UNIDADES = [
-  // Equitel — administración del holding
+  // Equitel · administración del holding (operación corporativa)
   { id: 'eqt-mos-admin-holding', empresa_codigo: 'EQT', sede_codigo: 'MOS', nombre: 'Administración Holding' },
+  { id: 'eqt-mos-talento-humano', empresa_codigo: 'EQT', sede_codigo: 'MOS', nombre: 'Talento Humano' },
+  { id: 'eqt-mos-sistemas', empresa_codigo: 'EQT', sede_codigo: 'MOS', nombre: 'Sistemas y Tecnología' },
   { id: 'eqt-bog-admin', empresa_codigo: 'EQT', sede_codigo: 'BOG', nombre: 'Administración Bogotá' },
+  { id: 'eqt-bog-talento', empresa_codigo: 'EQT', sede_codigo: 'BOG', nombre: 'Talento Humano' },
 
-  // Cumandes — servicio técnico Cummins (núcleo del negocio)
+  // Cumandes · Cummins de los Andes — servicio técnico + comercial + repuestos
   { id: 'cum-mos-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CMO', nombre: 'Servicio Técnico Cummins' },
-  { id: 'cum-bog-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CBO', nombre: 'Servicio Técnico Cummins' },
   { id: 'cum-mos-comercial', empresa_codigo: 'CUM', sede_codigo: 'CMO', nombre: 'Comercial' },
+  { id: 'cum-mos-repuestos', empresa_codigo: 'CUM', sede_codigo: 'CMO', nombre: 'Repuestos y Logística' },
+  { id: 'cum-mos-administrativo', empresa_codigo: 'CUM', sede_codigo: 'CMO', nombre: 'Administrativo' },
+  { id: 'cum-bog-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CBO', nombre: 'Servicio Técnico Cummins' },
+  { id: 'cum-bog-comercial', empresa_codigo: 'CUM', sede_codigo: 'CBO', nombre: 'Comercial' },
+  { id: 'cum-med-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CME', nombre: 'Servicio Técnico Cummins' },
+  { id: 'cum-med-comercial', empresa_codigo: 'CUM', sede_codigo: 'CME', nombre: 'Comercial Regional Antioquia' },
+  { id: 'cum-cli-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CCL', nombre: 'Servicio Técnico Cummins' },
+  { id: 'cum-cli-comercial', empresa_codigo: 'CUM', sede_codigo: 'CCL', nombre: 'Comercial Regional Suroccidente' },
+  { id: 'cum-iba-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CIB', nombre: 'Servicio Técnico Cummins' },
+  { id: 'cum-bar-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CBA', nombre: 'Servicio Técnico Cummins' },
+  { id: 'cum-bar-power-gen', empresa_codigo: 'CUM', sede_codigo: 'CBA', nombre: 'Cummins Power Generation' },
+  { id: 'cum-dui-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CDU', nombre: 'Servicio Técnico Cummins' },
+  { id: 'cum-vil-servicio-tecnico', empresa_codigo: 'CUM', sede_codigo: 'CVI', nombre: 'Servicio Técnico Cummins' },
+  { id: 'cum-vil-comercial', empresa_codigo: 'CUM', sede_codigo: 'CVI', nombre: 'Comercial Regional Llanos' },
 
-  // Ingenergía — comercial energía
+  // Ingenergía · ingeniería energética + comercial (ESB Cummins Power Gen)
+  { id: 'ing-mos-ingenieria', empresa_codigo: 'ING', sede_codigo: 'IMO', nombre: 'Ingeniería de Proyectos' },
+  { id: 'ing-mos-comercial', empresa_codigo: 'ING', sede_codigo: 'IMO', nombre: 'Comercial Energía Distribuida' },
   { id: 'ing-bog-comercial-energia', empresa_codigo: 'ING', sede_codigo: 'IBO', nombre: 'Comercial Soluciones de Energía' },
+  { id: 'ing-bog-ingenieria', empresa_codigo: 'ING', sede_codigo: 'IBO', nombre: 'Ingeniería de Proyectos' },
 
-  // LAP — desarrollo de software / telemática
+  // LAP Technologies · desarrollo de software + telemática vehicular
   { id: 'lap-mos-desarrollo', empresa_codigo: 'LAP', sede_codigo: 'LMO', nombre: 'Desarrollo Software' },
+  { id: 'lap-mos-telematica', empresa_codigo: 'LAP', sede_codigo: 'LMO', nombre: 'Operaciones Telemática Vehicular' },
+  { id: 'lap-mos-soporte', empresa_codigo: 'LAP', sede_codigo: 'LMO', nombre: 'Soporte y Mesa de Ayuda' },
 ];
 
 // ─── Cargos representativos (1 técnico crítico, 1 comercial crítico, 1 admin no crítico) ─
@@ -255,6 +277,34 @@ export const seedInicial = onCall(
       );
     }
 
+    // ─── Limpieza de docs viejos ───────────────────────────────────
+    // Reseeds previos dejaron docs (empresas/sedes/cargos/unidades) que
+    // ya no están en la lista actual. Sin esto, NuevaVacante mostraría
+    // selects con sedes/cargos huérfanos sin unidades. Borramos sólo los
+    // catálogos (no postulaciones/candidatos/vacantes reales).
+    const idsEmpresas = new Set(EMPRESAS.map((e) => e.codigo));
+    const idsSedes = new Set(SEDES.map((s) => s.codigo));
+    const idsUnidades = new Set(UNIDADES.map((u) => u.id));
+    const idsCargos = new Set(CARGOS.map((c) => c.id));
+    let borrados = 0;
+    for (const col of [
+      { name: 'empresas', keep: idsEmpresas },
+      { name: 'sedes', keep: idsSedes },
+      { name: 'unidades', keep: idsUnidades },
+      { name: 'cargos_catalogo', keep: idsCargos },
+    ]) {
+      const snap = await db.collection(col.name).get();
+      for (const d of snap.docs) {
+        if (!col.keep.has(d.id)) {
+          await d.ref.delete();
+          borrados += 1;
+        }
+      }
+    }
+    if (borrados > 0) {
+      logger.info('Seed cleanup · docs huérfanos borrados', { borrados });
+    }
+
     for (const e of EMPRESAS) {
       await db.collection('empresas').doc(e.codigo).set(
         { id: e.codigo, ...e, activo: true, ...auditoriaSeed() },
@@ -309,6 +359,7 @@ export const seedInicial = onCall(
       cargos: CARGOS.length,
       usuarios: USUARIOS.length,
       festivos: f2026 + f2027,
+      borrados_huerfanos: borrados,
     };
   },
 );
