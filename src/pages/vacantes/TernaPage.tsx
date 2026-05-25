@@ -3,12 +3,15 @@ import { Link, useParams } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
+  CheckCircle2,
   Clock,
   FileText,
   Mail,
   RotateCcw,
   Send,
+  Stethoscope,
   Users,
   X,
 } from 'lucide-react';
@@ -58,15 +61,27 @@ export default function TernaPage() {
   const [err, setErr] = useState<string | null>(null);
   const [descarteAbierto, setDescarteAbierto] = useState<PostulacionDoc | null>(null);
 
+  // Estados que mostramos como candidatos del flujo aún en proceso (pasos 5-9).
+  // Tiene sentido "Incluir en terna" desde ahí. Excluimos: terminales
+  // (descartado, filtrado, desistió, no interesado), los ya en terna, los ya
+  // seleccionados/aprobados y los que están en pasos posteriores (exámenes,
+  // contratación, contratado) — esos no se reabren a la terna.
+  const ESTADOS_AUN_EN_FLUJO: PostulacionDoc['estado'][] = [
+    'sourceado_por_ia',
+    'postulado',
+    'pre_entrevistado_pendiente',
+    'pre_entrevistado_ok',
+    'pruebas_enviadas',
+    'pruebas_completadas',
+    'entrevistado_analista',
+    'referencias_validadas',
+  ];
+
   const enTerna = postulaciones.filter((p) => p.estado === 'en_terna');
+  const seleccionado = postulaciones.find((p) => p.estado === 'seleccionado_por_lider') ?? null;
   const descartadosLider = postulaciones.filter((p) => p.estado === 'descartado_por_lider');
-  const otras = postulaciones.filter(
-    (p) =>
-      p.estado !== 'en_terna' &&
-      p.estado !== 'descartado_por_lider' &&
-      p.estado !== 'filtrado_no_cumple' &&
-      p.estado !== 'desistio_candidato',
-  );
+  const otras = postulaciones.filter((p) => ESTADOS_AUN_EN_FLUJO.includes(p.estado));
+  const decisionTomada = !!seleccionado || vacante?.estado === 'seleccionado';
 
   const esLider = rol === 'lider' || rol === 'admin';
   const puedeReabrir = rol === 'analista' || rol === 'coordinador' || rol === 'admin';
@@ -310,6 +325,59 @@ export default function TernaPage() {
 
       <PoliticaCriticidadBanner criticidad={vacante.criticidad} />
 
+      {/* ─── Decisión tomada · candidato seleccionado ────────── */}
+      {seleccionado && (
+        <Card
+          padding="lg"
+          className="border-2 border-success-300 bg-gradient-to-br from-success-50/60 to-white"
+        >
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-md bg-success-100 text-success-700 flex items-center justify-center shrink-0">
+                <CheckCircle2 size={18} strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-success-700">
+                  Decisión tomada · paso 14
+                </p>
+                <h3 className="mt-1 text-[20px] font-semibold tracking-[-0.012em] text-text-strong">
+                  {seleccionado.candidato_nombre}
+                </h3>
+                <p className="text-[12px] text-text-muted mt-1">
+                  Aprobado por el líder. Ya se disparó la solicitud de exámenes
+                  médicos (paso 15) y los tickets de conexión (paso 20).
+                </p>
+                {seleccionado.candidato_email && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-text-muted">
+                    <Mail size={11} strokeWidth={1.5} className="text-text-subtle" />
+                    {seleccionado.candidato_email}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 shrink-0">
+              <Link to="/examenes-medicos">
+                <Button
+                  variant="brand-primary"
+                  size="medium"
+                  icon={<Stethoscope size={13} strokeWidth={1.75} />}
+                  iconPosition="left"
+                >
+                  Ir a exámenes médicos
+                </Button>
+              </Link>
+              <Link
+                to={`/postulaciones/${seleccionado.id}`}
+                className="inline-flex items-center justify-end gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+              >
+                Ver ficha del candidato
+                <ArrowRight size={11} strokeWidth={1.75} />
+              </Link>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* ─── Reloj 48h del líder (paso 13) ───────────────────── */}
       {relojActivo && (
         <Card
@@ -432,6 +500,8 @@ export default function TernaPage() {
       )}
 
       {/* ─── Candidatos en terna ─────────────────────────────── */}
+      {/* Tras decisión la sección se oculta — ya no se reciben más finalistas. */}
+      {!decisionTomada && (
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Users size={14} strokeWidth={1.75} className="text-text-muted" />
@@ -500,6 +570,7 @@ export default function TernaPage() {
           </div>
         )}
       </section>
+      )}
 
       {/* ─── Descartados por el líder ────────────────────────── */}
       {descartadosLider.length > 0 && (
