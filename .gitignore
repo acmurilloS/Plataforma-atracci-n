@@ -4,6 +4,7 @@ dist-ssr
 .DS_Store
 .env
 .env.local
+.env.production
 .env.*.local
 .vscode
 .idea
@@ -23,3 +24,8 @@ functions/node_modules
 .jdk21.zip
 functions/.jdk21/
 functions/.jdk21.zip
+
+# Artefactos de build de TypeScript (tsc -b)
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
