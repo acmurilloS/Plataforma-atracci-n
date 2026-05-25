@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import {
   AlertTriangle,
+  Building2,
   CheckCircle2,
   ClipboardCheck,
   FolderOpen,
   Send,
   Sparkles,
+  User,
 } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -15,6 +17,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { cn } from '../../utils/cn';
+import type { PostulacionDoc } from '../../schemas';
 
 /**
  * CarpetasPage · sistema brand.
@@ -31,6 +34,12 @@ interface CarpetaDoc {
   candidato_id: string;
   vacante_id: string;
   estado: string;
+  // Denormalizado al crear para mostrar nombre + cargo sin lookups extra.
+  candidato_nombre?: string;
+  cargo_nombre?: string;
+  vacante_consecutivo?: string;
+  empresa_codigo?: string;
+  sede_codigo?: string;
   checklist: {
     hoja_vida: boolean;
     cedula: boolean;
@@ -43,14 +52,6 @@ interface CarpetaDoc {
   entregada_en: Timestamp | null;
   aprobada_en: Timestamp | null;
   observaciones_gh: string | null;
-  [k: string]: unknown;
-}
-
-interface PostApta {
-  id: string;
-  candidato_nombre: string;
-  vacante_id: string;
-  estado: string;
   [k: string]: unknown;
 }
 
@@ -75,19 +76,45 @@ export default function CarpetasPage() {
   const { docs: carpetas, cargando } = useColeccion<CarpetaDoc>('carpetas_digitales', {
     orden: ['creado_en', 'desc'],
   });
-  const { docs: postulacionesAptas } = useColeccion<PostApta>('postulaciones', {
-    filtros: [['estado', '==', 'apto_medico']],
-  });
+  // El estado `apto_medico` que se filtraba antes NO existe en el enum.
+  // Cuando el examen es apto, ExámenesMédicos mueve a 'en_contratacion' —
+  // que es lo que GH ve aquí como "apto médico, sin carpeta aún".
+  const { docs: postulacionesEnContratacion } = useColeccion<PostulacionDoc>(
+    'postulaciones',
+    {
+      filtros: [['estado', '==', 'en_contratacion']],
+    },
+  );
+  // Fallback para carpetas viejas sin campos denormalizados.
+  const { docs: todasPostulaciones } = useColeccion<PostulacionDoc>('postulaciones');
+  const postPorId = new Map(todasPostulaciones.map((p) => [p.id, p]));
+
   const { crear, actualizar } = useMutacion();
   const { user } = useAuth();
   const [procesando, setProcesando] = useState<string | null>(null);
 
-  async function crearCarpeta(p: PostApta) {
+  function resolverInfo(c: CarpetaDoc) {
+    const post = postPorId.get(c.postulacion_id);
+    return {
+      candidato: c.candidato_nombre ?? post?.candidato_nombre ?? 'Candidato sin nombre',
+      cargo: c.cargo_nombre ?? post?.cargo_nombre ?? null,
+      consecutivo: c.vacante_consecutivo ?? post?.vacante_consecutivo ?? null,
+      empresa: c.empresa_codigo ?? null,
+      sede: c.sede_codigo ?? null,
+    };
+  }
+
+  async function crearCarpeta(p: PostulacionDoc) {
     setProcesando(p.id);
     await crear('carpetas_digitales', {
       postulacion_id: p.id,
-      candidato_id: '',
+      candidato_id: p.candidato_id,
       vacante_id: p.vacante_id,
+      // Denormalizado para que la carpeta y los tickets que se disparan
+      // al cerrar puedan mostrar nombre + cargo sin lookups extra.
+      candidato_nombre: p.candidato_nombre,
+      cargo_nombre: p.cargo_nombre,
+      vacante_consecutivo: p.vacante_consecutivo,
       estado: 'armando',
       checklist: {
         hoja_vida: false,
@@ -115,44 +142,49 @@ export default function CarpetasPage() {
   }
 
   async function entregar(c: CarpetaDoc) {
+    // El estado interno de la carpeta cambia a 'entregada_gh'. La postulación
+    // sigue en 'en_contratacion' (no existe 'carpeta_entregada' en el enum).
     await actualizar('carpetas_digitales', c.id, {
       estado: 'entregada_gh',
       entregada_en: Timestamp.now(),
       entregada_a_uid: user?.uid ?? null,
     });
     await actualizar('postulaciones', c.postulacion_id, {
-      estado: 'carpeta_entregada',
       'marcas.carpeta_entregada_en': Timestamp.now(),
     });
   }
 
   async function aprobar(c: CarpetaDoc) {
+    const info = resolverInfo(c);
     await actualizar('carpetas_digitales', c.id, {
       estado: 'aprobada',
       aprobada_en: Timestamp.now(),
     });
+    // Estado final del enum: 'contratado' (no 'ingresado').
     await actualizar('postulaciones', c.postulacion_id, {
-      estado: 'ingresado',
-      'marcas.ingresado_en': Timestamp.now(),
+      estado: 'contratado',
+      ultima_transicion_estado: Timestamp.now(),
+      'marcas.contratado_en': Timestamp.now(),
     });
     await actualizar('vacantes', c.vacante_id, {
       estado: 'cerrada',
       cerrada_en: Timestamp.now(),
     });
-    // dispara tickets de conexión básicos para el paso 20
+    // Dispara tickets de conexión finales del paso 20 con info denormalizada
+    // para que TicketsPage los muestre con nombre + cargo legibles.
     const areas = ['it', 'compras', 'bodega', 'contabilidad', 'talentos'];
     for (const area of areas) {
       await crear('tickets_conexion', {
         postulacion_id: c.postulacion_id,
         candidato_id: c.candidato_id,
-        candidato_nombre: '',
+        candidato_nombre: info.candidato,
         vacante_id: c.vacante_id,
-        vacante_consecutivo: '',
-        cargo_nombre: '',
+        vacante_consecutivo: info.consecutivo ?? '',
+        cargo_nombre: info.cargo ?? '',
         area,
         sub_area_detalle: null,
         tipo_disparo: 'final',
-        titulo: `Ingreso - ${area}`,
+        titulo: `Ingreso ${info.candidato} - ${area}`,
         descripcion: `Ticket automático al cierre de carpeta para el área ${area}.`,
         requisitos: {},
         estado: 'abierto',
@@ -177,7 +209,7 @@ export default function CarpetasPage() {
     });
   }
 
-  const postSinCarpeta = postulacionesAptas.filter(
+  const postSinCarpeta = postulacionesEnContratacion.filter(
     (p) => !carpetas.some((c) => c.postulacion_id === p.id),
   );
 
@@ -224,11 +256,23 @@ export default function CarpetasPage() {
                 {postSinCarpeta.map((p) => (
                   <li
                     key={p.id}
-                    className="flex items-center justify-between gap-2 py-2.5"
+                    className="flex items-center justify-between gap-3 py-2.5"
                   >
-                    <span className="text-[13px] font-medium text-text-strong">
-                      {p.candidato_nombre}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-text-strong inline-flex items-center gap-1.5">
+                        <User size={12} strokeWidth={1.5} className="text-text-subtle" />
+                        {p.candidato_nombre}
+                      </p>
+                      {(p.cargo_nombre || p.vacante_consecutivo) && (
+                        <p className="text-[11px] text-text-muted mt-0.5 ml-[18px]">
+                          {p.vacante_consecutivo && (
+                            <span className="font-mono">{p.vacante_consecutivo}</span>
+                          )}
+                          {p.vacante_consecutivo && p.cargo_nombre && ' · '}
+                          {p.cargo_nombre}
+                        </p>
+                      )}
+                    </div>
                     <Button
                       onClick={() => crearCarpeta(p)}
                       disabled={procesando === p.id}
@@ -265,20 +309,42 @@ export default function CarpetasPage() {
           const porcentaje = Math.round((completos / total) * 100);
           const tono = ESTADO_TONO[c.estado] ?? 'neutral';
           const bloqueado = c.estado === 'aprobada' || c.estado === 'entregada_gh';
+          const info = resolverInfo(c);
 
           return (
             <Card key={c.id} padding="lg">
               <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
                 <div className="min-w-0 flex-1">
+                  {info.consecutivo && (
+                    <p className="text-[10px] uppercase tracking-[0.06em] text-text-subtle font-mono">
+                      {info.consecutivo}
+                      {info.cargo && (
+                        <span className="text-text-subtle normal-case tracking-normal font-sans">
+                          {' · '}
+                          {info.cargo}
+                        </span>
+                      )}
+                    </p>
+                  )}
                   <Link
                     to={`/postulaciones/${c.postulacion_id}`}
-                    className="group inline-block"
+                    className="group inline-block mt-1"
                   >
-                    <h3 className="text-[16px] font-semibold tracking-[-0.012em] text-text-strong group-hover:text-brand-700 transition-colors">
-                      Postulación {c.postulacion_id.slice(0, 8)}
+                    <h3 className="text-[16px] font-semibold tracking-[-0.012em] text-text-strong group-hover:text-brand-700 transition-colors inline-flex items-center gap-2">
+                      <User size={14} strokeWidth={1.5} className="text-text-subtle" />
+                      {info.candidato}
                     </h3>
                   </Link>
-                  <p className="text-[12px] text-text-muted mt-1 inline-flex items-center gap-2 flex-wrap">
+                  {(info.empresa || info.sede) && (
+                    <p className="text-[11px] text-text-muted mt-1 inline-flex items-center gap-1.5">
+                      <Building2 size={11} strokeWidth={1.5} className="text-text-subtle" />
+                      <span className="font-mono">
+                        {info.empresa}
+                        {info.sede && ` / ${info.sede}`}
+                      </span>
+                    </p>
+                  )}
+                  <p className="text-[12px] text-text-muted mt-2 inline-flex items-center gap-2 flex-wrap">
                     <span className="tabular-nums font-medium text-text-body">
                       {completos}/{total}
                     </span>
