@@ -70,31 +70,31 @@ export function Modal({
         )}
       >
         {(title || dismissable) && (
-          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-2">
+          <div className="flex items-start justify-between gap-4 px-6 pt-4 pb-1">
             <div className="min-w-0">
               {title && (
-                <h2 className="text-[20px] font-semibold tracking-[-0.012em] text-text-strong">
+                <h2 className="text-[18px] font-semibold tracking-[-0.012em] text-text-strong leading-tight">
                   {title}
                 </h2>
               )}
               {description && (
-                <p className="text-[13px] text-text-muted mt-1.5 leading-[1.5]">{description}</p>
+                <p className="text-[12px] text-text-muted mt-1 leading-[1.45]">{description}</p>
               )}
             </div>
             {dismissable && (
               <button
                 onClick={onClose}
                 aria-label="Cerrar"
-                className="text-text-muted hover:text-text-strong shrink-0 rounded-md p-1.5 hover:bg-slate-100 transition-colors"
+                className="text-text-muted hover:text-text-strong shrink-0 rounded-md p-1 hover:bg-slate-100 transition-colors"
               >
                 <X size={16} strokeWidth={1.75} />
               </button>
             )}
           </div>
         )}
-        <div className="px-6 py-4">{children}</div>
+        <div className="px-6 py-3">{children}</div>
         {footer && (
-          <div className="px-6 py-4 bg-slate-50/60 border-t border-slate-100 flex items-center justify-end gap-2">
+          <div className="px-6 py-3 bg-slate-50/60 border-t border-slate-100 flex items-center justify-end gap-2">
             {footer}
           </div>
         )}
