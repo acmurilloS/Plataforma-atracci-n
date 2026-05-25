@@ -1,7 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   type User,
 } from 'firebase/auth';
@@ -15,6 +18,8 @@ interface AuthContextValue {
   rol: RolUsuario | null;
   cargando: boolean;
   iniciarSesion: (email: string, pwd: string) => Promise<void>;
+  iniciarSesionGoogle: () => Promise<void>;
+  enviarResetPassword: (email: string) => Promise<void>;
   cerrarSesion: () => Promise<void>;
 }
 
@@ -59,13 +64,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, pwd);
   }
 
+  async function iniciarSesionGoogle() {
+    // El emulador soporta un popup simulado; en prod usa el OAuth real
+    // configurado en Firebase Console.
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ hd: 'equitel.com.co' }); // sugiere dominio corporativo
+    await signInWithPopup(auth, provider);
+  }
+
+  async function enviarResetPassword(email: string) {
+    await sendPasswordResetEmail(auth, email);
+  }
+
   async function cerrarSesion() {
     await signOut(auth);
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, perfil, rol: perfil?.rol ?? null, cargando, iniciarSesion, cerrarSesion }}
+      value={{
+        user,
+        perfil,
+        rol: perfil?.rol ?? null,
+        cargando,
+        iniciarSesion,
+        iniciarSesionGoogle,
+        enviarResetPassword,
+        cerrarSesion,
+      }}
     >
       {children}
     </AuthContext.Provider>

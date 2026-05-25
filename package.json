@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "emulators": "node scripts/start-emulators.mjs",
-    "emulators:fresh": "firebase emulators:start --export-on-exit=./emulator-data"
+    "emulators:fresh": "node scripts/start-emulators.mjs --fresh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
