@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import {
-  addDoc,
   collection,
   doc,
   serverTimestamp,
@@ -19,14 +18,19 @@ export function useMutacion() {
   const crear = useCallback(
     async <T extends Record<string, unknown>>(coleccion: string, data: T): Promise<string> => {
       const uid = uidActual();
-      const ref = await addDoc(collection(db, coleccion), {
+      // Generamos el id en cliente para escribir con setDoc en UNA sola
+      // operación. addDoc + updateDoc(id) rompía en colecciones inmutables
+      // como `decisiones` (allow update: if false) que rechazan el segundo
+      // updateDoc del id.
+      const ref = doc(collection(db, coleccion));
+      await setDoc(ref, {
+        id: ref.id,
         ...data,
         creado_en: serverTimestamp(),
         creado_por: uid,
         actualizado_en: serverTimestamp(),
         actualizado_por: uid,
       });
-      await updateDoc(ref, { id: ref.id });
       return ref.id;
     },
     [],
