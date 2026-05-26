@@ -14,7 +14,13 @@
       "ignore": [
         "node_modules",
         ".git",
-        "**/.*.log"
+        "**/.*.log",
+        ".jdk21",
+        ".jdk21.zip",
+        ".env",
+        ".env.*",
+        "*.test.ts",
+        "**/__tests__/**"
       ]
     }
   ],
