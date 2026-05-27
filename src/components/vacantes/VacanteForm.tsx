@@ -57,7 +57,7 @@ function Seccion({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-md border border-slate-200 shadow-brand-card overflow-hidden">
+    <div className="bg-white rounded-md border border-slate-200 shadow-brand-card">
       <button
         type="button"
         onClick={onToggle}
@@ -122,6 +122,7 @@ function Campo({
 const selectClass =
   'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 disabled:bg-slate-100 disabled:text-text-subtle disabled:cursor-not-allowed';
 
+const inputClass = selectClass; // mismas clases base que select
 const textareaClass = selectClass + ' resize-none leading-relaxed';
 
 export function VacanteForm() {
@@ -171,7 +172,10 @@ export function VacanteForm() {
       cargo_nombre: '',
       cargo_criticidad_al_crear: 'Media',
       criticidad: 'Media',
-      tipo_solicitud: 'reemplazo',
+      tipo_solicitud: 'reemplazo_indefinido',
+      reemplaza_a_nombre: '',
+      temporalidad_meses: null,
+      temporalidad_descripcion: '',
       justificacion: '',
       salario_base: undefined as unknown as number,
       comisiones_texto: '',
@@ -181,6 +185,8 @@ export function VacanteForm() {
       sin_banda_validada: false,
       requiere_validacion_gh: false,
       aval_url: '',
+      aval_drive_file_id: '',
+      aval_pendiente: false,
       lider_uid: '',
       lider_nombre: '',
     },
@@ -191,6 +197,7 @@ export function VacanteForm() {
   const unidadId = watch('unidad_id');
   const salario = watch('salario_base');
   const avalUrl = watch('aval_url');
+  const tipoSolicitudActual = watch('tipo_solicitud');
 
   const { sedes } = useSedesDeEmpresa(empresaCodigo || null);
   const { unidades } = useUnidadesDeSede(sedeCodigo || null);
@@ -255,8 +262,41 @@ export function VacanteForm() {
   async function onSubmit(data: VacanteInput) {
     setEnviando(true);
     setErrorSubmit(null);
+
+    // Validación cruzada según tipo de solicitud.
+    if (
+      data.tipo_solicitud === 'reemplazo_indefinido' &&
+      !data.reemplaza_a_nombre.trim()
+    ) {
+      setEnviando(false);
+      setErrorSubmit('Indica el nombre de la persona que se reemplaza.');
+      return;
+    }
+    if (
+      data.tipo_solicitud === 'necesidad_temporal' &&
+      (data.temporalidad_meses == null || data.temporalidad_meses < 1)
+    ) {
+      setEnviando(false);
+      setErrorSubmit('Indica la duración estimada en meses (1–36).');
+      return;
+    }
+
     try {
-      const res = await crearVacante(data);
+      const payload: VacanteInput = {
+        ...data,
+        // Aval pendiente si no se adjuntó PDF en Drive.
+        aval_pendiente: !data.aval_url || data.aval_url.length === 0,
+        // Limpia campos que no aplican al tipo elegido (evita "basura" en Firestore).
+        reemplaza_a_nombre:
+          data.tipo_solicitud === 'reemplazo_indefinido' ? data.reemplaza_a_nombre.trim() : '',
+        temporalidad_meses:
+          data.tipo_solicitud === 'necesidad_temporal' ? data.temporalidad_meses : null,
+        temporalidad_descripcion:
+          data.tipo_solicitud === 'necesidad_temporal'
+            ? data.temporalidad_descripcion.trim()
+            : '',
+      };
+      const res = await crearVacante(payload);
       setCreadaId(res.id);
     } catch (e) {
       setErrorSubmit(e instanceof Error ? e.message : 'No pudimos enviar la solicitud.');
@@ -347,11 +387,69 @@ export function VacanteForm() {
             </Campo>
             <Campo label="Tipo de solicitud" requerido error={errors.tipo_solicitud?.message}>
               <select {...register('tipo_solicitud')} className={selectClass}>
-                <option value="reemplazo">Reemplazo</option>
-                <option value="aumento">Aumento de headcount</option>
+                <option value="reemplazo_indefinido">Reemplazo indefinido</option>
+                <option value="aumento_planta">Aumento de planta</option>
+                <option value="necesidad_temporal">Necesidad temporal</option>
               </select>
             </Campo>
           </div>
+
+          {/* ─── Campos condicionales por tipo de solicitud ──────── */}
+          {tipoSolicitudActual === 'reemplazo_indefinido' && (
+            <div className="mt-4 rounded-md border border-info-500/30 bg-info-50/40 p-4">
+              <Campo
+                label="¿A quién reemplaza?"
+                requerido
+                error={errors.reemplaza_a_nombre?.message}
+              >
+                <input
+                  {...register('reemplaza_a_nombre')}
+                  className={inputClass}
+                  placeholder="Nombre completo de la persona que sale"
+                />
+              </Campo>
+              <p className="mt-2 text-[11px] text-text-muted leading-[1.5]">
+                Este dato permite a GH cruzar contra el control de planta y validar la baja.
+              </p>
+            </div>
+          )}
+
+          {tipoSolicitudActual === 'necesidad_temporal' && (
+            <div className="mt-4 rounded-md border border-warning-500/30 bg-warning-50/40 p-4 space-y-3">
+              <Campo
+                label="Duración estimada (meses)"
+                requerido
+                error={errors.temporalidad_meses?.message}
+              >
+                <input
+                  type="number"
+                  min={1}
+                  max={36}
+                  {...register('temporalidad_meses', {
+                    setValueAs: (v) =>
+                      v === '' || v == null ? null : Number(v),
+                  })}
+                  className={cn(inputClass, 'tabular-nums max-w-[180px]')}
+                  placeholder="Ej. 6"
+                />
+              </Campo>
+              <Campo
+                label="Contexto de la temporalidad (opcional)"
+                error={errors.temporalidad_descripcion?.message}
+              >
+                <textarea
+                  {...register('temporalidad_descripcion')}
+                  rows={2}
+                  className={textareaClass}
+                  placeholder="Ej. cobertura por proyecto X, pico de fin de año, reemplazo por licencia de maternidad…"
+                />
+              </Campo>
+              <p className="text-[11px] text-text-muted leading-[1.5]">
+                Después de la fecha estimada GH/coordinación revisa si la posición se vuelve
+                permanente o se cierra.
+              </p>
+            </div>
+          )}
         </Seccion>
 
         {/* ─── Condiciones ──────────────────────────────────────── */}
@@ -434,12 +532,29 @@ export function VacanteForm() {
               <AvalUploader
                 empresaCodigo={empresaCodigo}
                 value={field.value || undefined}
-                onChange={(url) => field.onChange(url ?? '')}
+                driveFileId={watch('aval_drive_file_id') || undefined}
+                onChange={(info) => {
+                  field.onChange(info?.url ?? '');
+                  setValue('aval_drive_file_id', info?.driveFileId ?? '');
+                }}
               />
             )}
           />
           {errors.aval_url && (
             <p className="text-[11px] text-danger-700">{errors.aval_url.message}</p>
+          )}
+          {/* Aviso opcional: si el líder no tiene aval listo, igual puede enviar */}
+          {!avalUrl && (
+            <div className="mt-3 rounded-md border border-warning-500/30 bg-warning-50/40 px-3.5 py-2.5">
+              <p className="text-[12px] text-warning-700 leading-[1.55]">
+                <span className="font-semibold">Aval pendiente.</span> Si todavía no
+                lo tienes firmado, puedes enviar la solicitud igual — quedará
+                marcada como{' '}
+                <span className="font-mono text-[11px]">aval_pendiente</span> y
+                GH/coordinación la gestionará en el paso 2. Tu vacante no se
+                bloquea por esto.
+              </p>
+            </div>
           )}
         </Seccion>
 

@@ -16,8 +16,44 @@ export type AreaApoyo = z.infer<typeof areaApoyo>;
 export const criticidad = z.enum(['Alta', 'Media', 'Baja']);
 export type Criticidad = z.infer<typeof criticidad>;
 
-export const tipoSolicitud = z.enum(['reemplazo', 'aumento']);
+/**
+ * Tipo de solicitud de vacante.
+ *
+ * Nuevos (2026-05-27, petición Karen):
+ *  - reemplazo_indefinido: la persona que sale se reemplaza por tiempo
+ *    indefinido (lo más común). Pide nombre de quién sale.
+ *  - aumento_planta: crecimiento de planta — headcount nuevo permanente.
+ *  - necesidad_temporal: proyecto / cobertura / pico de demanda con
+ *    horizonte finito. Pide duración estimada.
+ *
+ * Legacy: 'reemplazo' y 'aumento'. Quedan en el enum para que vacantes
+ * creadas antes no rompan. NO se ofrecen como opciones nuevas en el form.
+ */
+export const tipoSolicitud = z.enum([
+  'reemplazo_indefinido',
+  'aumento_planta',
+  'necesidad_temporal',
+  // Legacy (solo lectura):
+  'reemplazo',
+  'aumento',
+]);
 export type TipoSolicitud = z.infer<typeof tipoSolicitud>;
+
+/** Tipos ofrecidos como opción al líder al crear una vacante nueva. */
+export const TIPOS_SOLICITUD_VIGENTES: TipoSolicitud[] = [
+  'reemplazo_indefinido',
+  'aumento_planta',
+  'necesidad_temporal',
+];
+
+/** Label legible. Mapea también valores legacy a su equivalente nuevo. */
+export const TIPO_SOLICITUD_LABEL: Record<TipoSolicitud, string> = {
+  reemplazo_indefinido: 'Reemplazo indefinido',
+  aumento_planta: 'Aumento de planta',
+  necesidad_temporal: 'Necesidad temporal',
+  reemplazo: 'Reemplazo indefinido',
+  aumento: 'Aumento de planta',
+};
 
 export const estadoVacante = z.enum([
   'borrador',

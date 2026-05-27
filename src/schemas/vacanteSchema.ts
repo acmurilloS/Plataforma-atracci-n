@@ -16,6 +16,24 @@ export const vacanteInputSchema = z.object({
 
   criticidad,
   tipo_solicitud: tipoSolicitud,
+  /**
+   * Si tipo_solicitud == 'reemplazo_indefinido', nombre de la persona que
+   * sale. Permite a GH cruzar contra el control de planta y validar bajas.
+   * Vacío si la vacante es aumento o temporal.
+   */
+  reemplaza_a_nombre: z.string().max(120).default(''),
+  /**
+   * Si tipo_solicitud == 'necesidad_temporal', meses estimados de la
+   * cobertura (1–36). null en los otros tipos.
+   */
+  temporalidad_meses: z
+    .union([z.number().int().min(1).max(36), z.null()])
+    .default(null),
+  /**
+   * Detalle libre de la necesidad temporal (proyecto, pico, cobertura).
+   * Vacío si la vacante no es temporal.
+   */
+  temporalidad_descripcion: z.string().max(500).default(''),
   justificacion: z
     .string()
     .min(20, 'La justificación debe tener al menos 20 caracteres')
@@ -35,7 +53,25 @@ export const vacanteInputSchema = z.object({
   sin_banda_validada: z.boolean().default(false),
   requiere_validacion_gh: z.boolean().default(false),
 
-  aval_url: z.string().url('Adjunta el PDF del aval antes de enviar'),
+  /**
+   * URL del aval en Drive (webViewLink). NO obligatorio al crear la vacante —
+   * si el líder no lo tiene firmado al momento, la solicitud queda con flag
+   * `aval_pendiente=true` y Karen/Maribel la gestionan. Decisión de producto:
+   * desbloquear al líder es prioridad sobre forzar aval previo.
+   */
+  aval_url: z
+    .union([z.string().url(), z.literal('')])
+    .default(''),
+  /**
+   * ID del archivo en Google Drive — habilita preview embebido vía iframe.
+   * Opcional para tolerar avales viejos que aún están en Firebase Storage.
+   */
+  aval_drive_file_id: z.string().default(''),
+  /**
+   * True cuando el líder envía sin haber adjuntado el aval. GH/Coord lo ve
+   * desde Aprobaciones y puede pedirlo después o adjuntarlo en nombre del líder.
+   */
+  aval_pendiente: z.boolean().default(false),
 
   fecha_entrevista_propuesta: z.date({
     required_error: 'Propón una fecha de entrevista',

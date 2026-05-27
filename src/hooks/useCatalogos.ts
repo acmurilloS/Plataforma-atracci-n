@@ -7,13 +7,16 @@ export function useEmpresas() {
   const [empresas, setEmpresas] = useState<EmpresaDoc[]>([]);
   const [cargando, setCargando] = useState(true);
   useEffect(() => {
-    const q = query(collection(db, 'empresas'), where('activo', '==', true), orderBy('nombre'));
+    // Ordenar por nombre sin filtrar activo en server: empresas son pocas (~10
+    // máx por holding), filtrar en cliente evita necesidad de índice compuesto.
+    const q = query(collection(db, 'empresas'), orderBy('nombre'));
     return onSnapshot(
       q,
       (snap) => {
-        setEmpresas(
-          snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<EmpresaDoc, 'id'>) })),
+        const todas = snap.docs.map(
+          (d) => ({ id: d.id, ...(d.data() as Omit<EmpresaDoc, 'id'>) }),
         );
+        setEmpresas(todas.filter((e) => e.activo !== false));
         setCargando(false);
       },
       () => setCargando(false),

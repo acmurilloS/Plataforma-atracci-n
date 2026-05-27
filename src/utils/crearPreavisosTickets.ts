@@ -81,6 +81,12 @@ function planPreavisos(procesoActivo: ProcesoDoc | null, cargoNombre: string): P
       descripcion: `Pre-aviso: reservar licencia Office / M365 para el cargo ${cargoNombre}.`,
     });
   }
+  if (h?.celular_plan_datos) {
+    items.push({
+      tipo: 'celular_plan_datos',
+      descripcion: `Pre-aviso: gestionar línea celular corporativa + plan de datos para el cargo ${cargoNombre}.`,
+    });
+  }
   if (h?.labroides) {
     items.push({
       tipo: 'labroides',

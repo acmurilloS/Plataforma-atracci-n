@@ -45,7 +45,10 @@ service cloud.firestore {
     }
     match /cargos_catalogo/{id} {
       allow read: if signedIn();
-      allow create: if (isAdmin() || isGH()) && nuevoConAuditoria();
+      // Líder/analista/coord pueden crear cargos al vuelo desde el form
+      // "Nueva vacante" cuando el suyo no está en el catálogo. Maribel (GH)
+      // refina banda/criticidad después desde /admin/catalogos.
+      allow create: if signedIn() && nuevoConAuditoria();
       allow update: if (isAdmin() || isGH()) && preservaCreador();
       allow delete: if false;
     }
@@ -93,14 +96,16 @@ service cloud.firestore {
       // el cliente debe filtrar (ej. lider por lider_uid).
       // Cada doc individual sigue pasando por allow get.
       allow list: if signedIn();
+      // El aval ya no es obligatorio al crear — el líder puede mandar la
+      // solicitud sin él y queda marcada con aval_pendiente=true para que
+      // GH/Coord la gestione después. Política tomada 2026-05-26.
       allow create: if (
         (isLider() && request.resource.data.lider_uid == request.auth.uid)
         || isCoord()
         || isAdmin()
       ) && nuevoConAuditoria()
         && request.resource.data.estado == 'borrador'
-        && request.resource.data.aval_url is string
-        && request.resource.data.aval_url.size() > 0;
+        && request.resource.data.aval_url is string;
       allow update: if signedIn() && (
         staff()
         || (isAnalista() && (

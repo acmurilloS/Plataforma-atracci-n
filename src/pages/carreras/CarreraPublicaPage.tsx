@@ -13,6 +13,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { Check, Upload } from 'lucide-react';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Card, Pill } from '../../components/brand';
+import { TIPO_SOLICITUD_LABEL } from '../../schemas';
 import { auth, db, storage } from '../../lib/firebase';
 import { formatearCOP } from '../../utils/moneda';
 import { cn } from '../../utils/cn';
@@ -279,7 +280,7 @@ export default function CarreraPublicaPage() {
               Criticidad {vacante.criticidad}
             </span>
             <span className="inline-flex items-center rounded-full bg-white/10 border border-white/20 text-white px-3 py-1 text-[11px] font-medium">
-              {vacante.tipo_solicitud === 'aumento' ? 'Aumento de headcount' : 'Reemplazo'}
+              {TIPO_SOLICITUD_LABEL[vacante.tipo_solicitud] ?? 'Reemplazo indefinido'}
             </span>
             <span className="inline-flex items-center rounded-full bg-white/10 border border-white/20 text-white px-3 py-1 text-[11px] font-mono tabular-nums">
               {vacante.consecutivo}

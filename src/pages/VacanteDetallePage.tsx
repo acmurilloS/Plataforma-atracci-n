@@ -18,7 +18,7 @@ import { Card, Pill, type PillTono } from '../components/brand';
 import { useVacantes } from '../hooks/useVacantes';
 import { formatearFecha } from '../utils/fechas';
 import { formatearCOP } from '../utils/moneda';
-import type { VacanteDoc } from '../schemas';
+import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../schemas';
 
 /**
  * VacanteDetallePage · sistema brand.
@@ -126,7 +126,19 @@ export default function VacanteDetallePage() {
             <Dato label="Sede" valor={`${vac.sede_nombre} (${vac.sede_codigo})`} />
             <Dato label="Unidad" valor={vac.unidad_nombre} />
             <Dato label="Criticidad" valor={vac.criticidad} mono />
-            <Dato label="Tipo de solicitud" valor={vac.tipo_solicitud} capital />
+            <Dato
+              label="Tipo de solicitud"
+              valor={TIPO_SOLICITUD_LABEL[vac.tipo_solicitud] ?? vac.tipo_solicitud}
+            />
+            {vac.tipo_solicitud === 'reemplazo_indefinido' && vac.reemplaza_a_nombre && (
+              <Dato label="Reemplaza a" valor={vac.reemplaza_a_nombre} />
+            )}
+            {vac.tipo_solicitud === 'necesidad_temporal' && vac.temporalidad_meses != null && (
+              <Dato
+                label="Duración estimada"
+                valor={`${vac.temporalidad_meses} mes${vac.temporalidad_meses === 1 ? '' : 'es'}`}
+              />
+            )}
             <Dato label="Líder solicitante" valor={vac.lider_nombre} />
           </div>
         </Card>

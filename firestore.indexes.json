@@ -32,8 +32,24 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "creado_en", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vacantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
         { "fieldPath": "cargo_criticidad_al_crear", "order": "ASCENDING" },
         { "fieldPath": "creado_en", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "empresas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "activo", "order": "ASCENDING" },
+        { "fieldPath": "nombre", "order": "ASCENDING" }
       ]
     },
     {

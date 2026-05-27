@@ -16,7 +16,21 @@ const inputClass = cn(
   'focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40',
 );
 
-const HERRAMIENTAS = ['computador', 'office', 'labroides', 'dotacion'] as const;
+const HERRAMIENTAS = [
+  'computador',
+  'office',
+  'celular_plan_datos',
+  'labroides',
+  'dotacion',
+] as const;
+
+const HERRAMIENTA_LABEL: Record<(typeof HERRAMIENTAS)[number], string> = {
+  computador: 'Computador',
+  office: 'Office / M365',
+  celular_plan_datos: 'Celular + plan de datos',
+  labroides: 'Labroides',
+  dotacion: 'Dotación',
+};
 
 const CRITICIDAD_TONO: Record<string, PillTono> = {
   Alta: 'danger',
@@ -50,6 +64,7 @@ export function CargosTab() {
       herramientas_sugeridas: {
         computador: false,
         office: false,
+        celular_plan_datos: false,
         labroides: false,
         dotacion: false,
       },
@@ -203,7 +218,7 @@ export function CargosTab() {
                       {...register(`herramientas_sugeridas.${k}` as const)}
                       className="w-3.5 h-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-300/40"
                     />
-                    <span className="capitalize text-text-body">{k}</span>
+                    <span className="text-text-body">{HERRAMIENTA_LABEL[k]}</span>
                   </label>
                 ))}
               </div>

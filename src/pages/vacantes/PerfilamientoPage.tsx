@@ -10,6 +10,7 @@ import {
   HardHat,
   Lightbulb,
   Monitor,
+  Smartphone,
   Sparkles,
   Target,
 } from 'lucide-react';
@@ -66,6 +67,12 @@ const HERRAMIENTAS_META = [
     icon: Cpu,
   },
   {
+    key: 'celular_plan_datos' as const,
+    label: 'Celular + datos',
+    detalle: 'Línea corporativa',
+    icon: Smartphone,
+  },
+  {
     key: 'labroides' as const,
     label: 'Labroides',
     detalle: 'Usuario contable',
@@ -108,6 +115,7 @@ export default function PerfilamientoPage() {
     office: false,
     labroides: false,
     dotacion: false,
+    celular_plan_datos: false,
   });
   const [enviando, setEnviando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -172,6 +180,7 @@ export default function PerfilamientoPage() {
         office: !!p.herramientas_requeridas.office,
         labroides: !!p.herramientas_requeridas.labroides,
         dotacion: !!p.herramientas_requeridas.dotacion,
+        celular_plan_datos: !!p.herramientas_requeridas.celular_plan_datos,
       });
       if (p.fecha_entrevista_lider_pactada) {
         setFechaEntrevista(fechaInputValue(p.fecha_entrevista_lider_pactada.toDate()));

@@ -32,6 +32,7 @@ export const tipoTicketConexion = z.enum([
   'accesos_sistemas',     // IT — correo + cuentas básicas
   'computador',           // IT — equipo + setup
   'office',               // IT — licencia Office/M365
+  'celular_plan_datos',   // IT — línea celular corporativa + plan de datos
   'dotacion_compras',     // compras — uniforme/EPP
   'dotacion_bodega',      // bodega — entrega física
   'labroides',            // contabilidad — usuarios Labroides
@@ -45,6 +46,7 @@ export const TIPO_LABEL: Record<TipoTicketConexion, string> = {
   accesos_sistemas: 'Accesos y cuentas',
   computador: 'Computador / equipo',
   office: 'Licencia Office / M365',
+  celular_plan_datos: 'Celular + plan de datos',
   dotacion_compras: 'Dotación · compras',
   dotacion_bodega: 'Dotación · bodega',
   labroides: 'Usuario Labroides',
@@ -60,6 +62,7 @@ export const AREA_POR_TIPO: Record<TipoTicketConexion, AreaApoyo> = {
   accesos_sistemas: 'it',
   computador: 'it',
   office: 'it',
+  celular_plan_datos: 'it',
   dotacion_compras: 'compras',
   dotacion_bodega: 'bodega',
   labroides: 'contabilidad',

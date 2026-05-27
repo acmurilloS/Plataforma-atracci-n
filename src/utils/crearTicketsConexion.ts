@@ -80,6 +80,12 @@ function planTickets(procesoActivo: ProcesoDoc | null, cargoNombre: string): Tic
       descripcion: `Asignar licencia Office / M365 para el ingreso del cargo ${cargoNombre}.`,
     });
   }
+  if (h?.celular_plan_datos) {
+    tickets.push({
+      tipo: 'celular_plan_datos',
+      descripcion: `Gestionar línea celular corporativa + plan de datos para el cargo ${cargoNombre}.`,
+    });
+  }
   if (h?.labroides) {
     tickets.push({
       tipo: 'labroides',

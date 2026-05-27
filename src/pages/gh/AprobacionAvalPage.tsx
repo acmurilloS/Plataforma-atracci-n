@@ -9,7 +9,7 @@ import { formatearCOP } from '../../utils/moneda';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { cn } from '../../utils/cn';
-import type { VacanteDoc } from '../../schemas';
+import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../../schemas';
 
 /**
  * AprobacionAvalPage · sistema brand.
@@ -31,6 +31,8 @@ export default function AprobacionAvalPage() {
   const [err, setErr] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('pendientes');
 
+  // useColeccion ya hace fallback automático a orden en cliente si el
+  // índice compuesto no existe — no quedan listas vacías por queries 400.
   const { docs: borradores, cargando: cargB } = useColeccion<VacanteDoc>('vacantes', {
     filtros: [['estado', '==', 'borrador']],
     orden: ['creado_en', 'desc'],
@@ -46,7 +48,10 @@ export default function AprobacionAvalPage() {
     limit: 50,
   });
 
-  const pendientes = useMemo(() => borradores.filter((v) => !!v.aval_url), [borradores]);
+  // Todos los borradores aparecen, incluso los que vienen sin aval. Las
+  // que tienen `aval_pendiente=true` se marcan con chip warning para que
+  // GH sepa que debe pedirlo al líder o adjuntarlo en su nombre.
+  const pendientes = borradores;
   const rechazadas = useMemo(
     () => canceladas.filter((v) => (v.razon_cierre ?? '').toLowerCase().includes('gh rechazó')),
     [canceladas],
@@ -187,7 +192,7 @@ export default function AprobacionAvalPage() {
           </p>
           {filtro === 'pendientes' && (
             <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
-              Cuando un líder cree una vacante con aval adjunto, aparecerá aquí para revisión.
+              Cuando un líder cree una vacante (con o sin aval), aparecerá aquí para revisión.
             </p>
           )}
         </div>
@@ -311,7 +316,7 @@ function VacanteCardAprobacion({
         <DatoPill label="Banda salarial" valor={bandaLabel} tono={bandaTono} />
         <Dato
           label="Tipo solicitud"
-          valor={vacante.tipo_solicitud === 'reemplazo' ? 'Reemplazo' : 'Aumento de planta'}
+          valor={TIPO_SOLICITUD_LABEL[vacante.tipo_solicitud] ?? '—'}
         />
         <Dato label="Comisiones" valor={vacante.comisiones_texto || 'No aplica'} />
       </div>
@@ -328,29 +333,49 @@ function VacanteCardAprobacion({
         </div>
       )}
 
-      {/* Aval PDF */}
-      <div className="mt-5 flex items-center justify-between gap-3 rounded-md border border-slate-200 p-4">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="w-10 h-10 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
+      {/* Aval PDF · estado distinto si está pendiente */}
+      {vacante.aval_url ? (
+        <div className="mt-5 flex items-center justify-between gap-3 rounded-md border border-slate-200 p-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
+              <FileText size={18} strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-text-strong">
+                Aval firmado por Alejandro
+              </p>
+              <p className="text-[11px] text-text-subtle">
+                PDF adjunto · revisa antes de aprobar
+              </p>
+            </div>
+          </div>
+          <a
+            href={vacante.aval_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white text-text-strong px-3 py-2 text-[12px] font-medium hover:bg-slate-50 transition-colors duration-150"
+          >
+            <ExternalLink size={11} strokeWidth={1.75} />
+            Abrir PDF
+          </a>
+        </div>
+      ) : (
+        <div className="mt-5 flex items-start gap-3 rounded-md border-2 border-warning-300 bg-warning-50/50 p-4">
+          <div className="w-10 h-10 rounded-md bg-warning-100 text-warning-700 flex items-center justify-center shrink-0">
             <FileText size={18} strokeWidth={1.75} />
           </div>
-          <div>
-            <p className="text-[13px] font-semibold text-text-strong">
-              Aval firmado por Alejandro
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-semibold text-warning-700">
+              Aval pendiente · el líder envió sin adjuntar PDF
             </p>
-            <p className="text-[11px] text-text-subtle">PDF adjunto · revisa antes de aprobar</p>
+            <p className="text-[12px] text-warning-700 mt-0.5 leading-[1.5]">
+              Pídele a <span className="font-semibold">{vacante.lider_nombre}</span> que
+              suba el aval firmado por Alejandro, o adjúntalo tú mismo desde el detalle
+              de la vacante antes de aprobar.
+            </p>
           </div>
         </div>
-        <a
-          href={vacante.aval_url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white text-text-strong px-3 py-2 text-[12px] font-medium hover:bg-slate-50 transition-colors duration-150"
-        >
-          <ExternalLink size={11} strokeWidth={1.75} />
-          Abrir PDF
-        </a>
-      </div>
+      )}
 
       {/* Acciones */}
       {!mostrarRechazo && (

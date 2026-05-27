@@ -127,13 +127,19 @@ export default function PanelAdminPage() {
               </h2>
               <p className="text-[13px] text-text-muted mt-0.5">
                 Click en <span className="font-semibold text-text-body">Entrar como</span> cambia
-                la sesión sin formulario. Solo funciona en emulador.
+                la sesión sin formulario.{' '}
+                {!esEmulador && (
+                  <span className="text-warning-700 font-medium">
+                    Usa estos usuarios de prueba para validar el comportamiento por rol — para
+                    volver a tu cuenta admin haz logout y vuelve a entrar con Google.
+                  </span>
+                )}
               </p>
             </div>
           </div>
           {!esEmulador && (
             <Pill tono="warning" dot>
-              Deshabilitado en producción
+              Modo QA
             </Pill>
           )}
         </div>
@@ -186,7 +192,7 @@ export default function PanelAdminPage() {
                           variant="neutral-secondary"
                           size="small"
                           onClick={() => entrarComo(u.email, u.password, u.rol)}
-                          disabled={!esEmulador || cambiando != null}
+                          disabled={cambiando != null}
                           loading={cambiando === u.email}
                         >
                           {cambiando === u.email ? 'Entrando…' : 'Entrar como'}

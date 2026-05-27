@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search } from 'lucide-react';
 import { useCargos } from '../../hooks/useCatalogos';
 import type { CargoDoc } from '../../schemas';
 import { cn } from '../../utils/cn';
+import { CrearCargoModal } from './CrearCargoModal';
 
 interface Props {
   value?: string;
@@ -21,6 +22,7 @@ export function SelectorCargo({ value, onChange, error, disabled }: Props) {
   const { cargos, cargando } = useCargos();
   const [busqueda, setBusqueda] = useState('');
   const [abierto, setAbierto] = useState(false);
+  const [modalCrearAbierto, setModalCrearAbierto] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const seleccionado = useMemo(
@@ -103,7 +105,7 @@ export function SelectorCargo({ value, onChange, error, disabled }: Props) {
           <ul className="max-h-72 overflow-auto py-1">
             {filtrados.length === 0 && (
               <li className="px-3.5 py-3 text-[12px] text-text-muted italic">
-                Sin resultados.
+                Sin resultados. ¿El cargo que necesitas no existe?
               </li>
             )}
             {filtrados.map((c) => {
@@ -150,8 +152,45 @@ export function SelectorCargo({ value, onChange, error, disabled }: Props) {
               );
             })}
           </ul>
+          {/* CTA crear nuevo cargo · accesible desde cualquier estado del dropdown */}
+          <div className="border-t border-slate-100 bg-slate-50/40">
+            <button
+              type="button"
+              onClick={() => {
+                setAbierto(false);
+                setModalCrearAbierto(true);
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 px-3.5 py-3 text-left text-[13px] font-medium',
+                'text-brand-700 hover:bg-brand-50 transition-colors',
+              )}
+            >
+              <span className="w-5 h-5 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center">
+                <Plus size={12} strokeWidth={2} />
+              </span>
+              <span className="flex-1">
+                Crear cargo nuevo
+                {busqueda.trim() && (
+                  <span className="text-text-muted font-normal">
+                    {' '}
+                    · "<span className="text-text-strong">{busqueda.trim()}</span>"
+                  </span>
+                )}
+              </span>
+            </button>
+          </div>
         </div>
       )}
+      <CrearCargoModal
+        open={modalCrearAbierto}
+        onClose={() => setModalCrearAbierto(false)}
+        nombreSugerido={busqueda.trim()}
+        onCreado={(cargo) => {
+          onChange(cargo);
+          setBusqueda('');
+          setModalCrearAbierto(false);
+        }}
+      />
     </div>
   );
 }

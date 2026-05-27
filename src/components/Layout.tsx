@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { cn } from '../utils/cn';
 import type { RolUsuario } from '../schemas';
 import { Campanita } from './Campanita';
+import { BannerActualizacion } from './BannerActualizacion';
 
 /**
  * Layout · sistema brand (Apple-store light + glass minimal).
@@ -56,6 +57,7 @@ export function Layout() {
 
   return (
     <div className="brand-page font-brand min-h-screen flex flex-col">
+      <BannerActualizacion />
       <header className="sticky top-0 z-40 brand-glass-strong border-b border-slate-200/60">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
           {/* Logo + producto */}

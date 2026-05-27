@@ -28,6 +28,8 @@ export const herramientasRequeridasSchema = z.object({
   office: z.boolean().default(false),
   labroides: z.boolean().default(false),
   dotacion: z.boolean().default(false),
+  /** Celular corporativo + plan de datos. Agregado 2026-05-27 (Karen). */
+  celular_plan_datos: z.boolean().default(false),
 });
 export type HerramientasRequeridas = z.infer<typeof herramientasRequeridasSchema>;
 

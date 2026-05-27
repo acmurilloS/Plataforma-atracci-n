@@ -1,27 +1,32 @@
 import { useCallback, useRef, useState, type DragEvent } from 'react';
-import { CheckCircle2, FileText, Upload, UploadCloud } from 'lucide-react';
-import { useVacantes } from '../../hooks/useVacantes';
+import { CheckCircle2, ExternalLink, FileText, Upload, UploadCloud } from 'lucide-react';
+import { useDriveUpload } from '../../hooks/useDriveUpload';
 import { cn } from '../../utils/cn';
 
 interface Props {
   empresaCodigo: string;
+  /** URL del aval — para nuevos uploads es el webViewLink de Drive. */
   value?: string;
-  onChange: (url: string | null) => void;
+  /** ID del archivo en Drive (para preview embed). */
+  driveFileId?: string;
+  /**
+   * Callback con la metadata del archivo subido. Usa formato extendido para
+   * que el padre pueda guardar tanto el link como el fileId.
+   */
+  onChange: (info: { url: string; driveFileId: string } | null) => void;
   disabled?: boolean;
 }
 
 /**
- * AvalUploader · sistema brand.
+ * AvalUploader · sistema brand · ahora vía Google Drive.
  *
- * Drop zone con border dashed slate + hover brand-300 + estado "arrastrando"
- * con tinte brand-50. Estado cargado muestra card flat con icono FileText
- * dentro de cuadrito brand-50, nombre del archivo y link "Reemplazar".
+ * Los avales se suben a la Shared Drive corporativa (carpeta "Avales"), no
+ * a Firebase Storage. La vacante guarda `aval_url` (webViewLink) y
+ * `aval_drive_file_id` para poder embebir el preview.
  */
-export function AvalUploader({ empresaCodigo, value, onChange, disabled }: Props) {
-  const { subirAval } = useVacantes();
+export function AvalUploader({ empresaCodigo, value, driveFileId, onChange, disabled }: Props) {
+  const { subir, subiendo, progreso } = useDriveUpload();
   const [arrastrando, setArrastrando] = useState(false);
-  const [progreso, setProgreso] = useState(0);
-  const [subiendo, setSubiendo] = useState(false);
   const [nombre, setNombre] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -32,22 +37,28 @@ export function AvalUploader({ empresaCodigo, value, onChange, disabled }: Props
         setError('Selecciona una empresa antes de adjuntar el aval.');
         return;
       }
+      if (file.type !== 'application/pdf') {
+        setError('El aval debe ser PDF.');
+        return;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        setError('El aval no puede superar 15 MB.');
+        return;
+      }
       setError(null);
-      setSubiendo(true);
-      setProgreso(0);
       setNombre(file.name);
       try {
-        const url = await subirAval(file, empresaCodigo, setProgreso);
-        onChange(url);
+        const fechaIso = new Date().toISOString().slice(0, 10);
+        const nombreEnDrive = `aval-${empresaCodigo}-${fechaIso}-${file.name}`;
+        const archivo = await subir(file, 'Avales', nombreEnDrive);
+        onChange({ url: archivo.webViewLink, driveFileId: archivo.fileId });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'No pudimos subir el aval.');
         setNombre(null);
         onChange(null);
-      } finally {
-        setSubiendo(false);
       }
     },
-    [empresaCodigo, onChange, subirAval],
+    [empresaCodigo, onChange, subir],
   );
 
   const onDrop = useCallback(
@@ -64,7 +75,6 @@ export function AvalUploader({ empresaCodigo, value, onChange, disabled }: Props
   function reemplazar() {
     onChange(null);
     setNombre(null);
-    setProgreso(0);
     inputRef.current?.click();
   }
 
@@ -80,17 +90,25 @@ export function AvalUploader({ empresaCodigo, value, onChange, disabled }: Props
             <div className="flex items-center gap-1.5">
               <CheckCircle2 size={13} strokeWidth={1.75} className="text-success-700 shrink-0" />
               <p className="text-[13px] font-medium text-text-strong truncate">
-                {nombre ?? 'Aval cargado'}
+                {nombre ?? 'Aval cargado en Drive'}
               </p>
             </div>
-            <a
-              href={value}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[12px] text-brand-700 hover:text-brand-800 hover:underline underline-offset-2"
-            >
-              Ver archivo →
-            </a>
+            <div className="flex items-center gap-3 mt-0.5">
+              <a
+                href={value}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[12px] text-brand-700 hover:text-brand-800 hover:underline underline-offset-2"
+              >
+                <ExternalLink size={11} strokeWidth={1.75} />
+                Ver en Drive
+              </a>
+              {driveFileId && (
+                <span className="text-[10px] font-mono text-text-subtle">
+                  Drive · {driveFileId.slice(0, 10)}…
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <button
@@ -141,7 +159,9 @@ export function AvalUploader({ empresaCodigo, value, onChange, disabled }: Props
           Arrastra el PDF del aval o{' '}
           <span className="text-brand-700 underline underline-offset-2">selecciona un archivo</span>
         </p>
-        <p className="text-[11px] text-text-subtle">Solo PDF · máximo 10 MB</p>
+        <p className="text-[11px] text-text-subtle">
+          Solo PDF · máximo 15 MB · se guarda en la Drive del holding
+        </p>
         <input
           ref={inputRef}
           type="file"
@@ -155,7 +175,7 @@ export function AvalUploader({ empresaCodigo, value, onChange, disabled }: Props
           <div className="flex items-center justify-between text-[12px] mb-2">
             <span className="flex items-center gap-1.5 text-text-body font-medium truncate">
               <Upload size={12} strokeWidth={1.75} className="text-brand-700" />
-              {nombre}
+              {nombre} · subiendo a Drive
             </span>
             <span className="text-text-strong font-bold tabular-nums">{Math.round(progreso)}%</span>
           </div>

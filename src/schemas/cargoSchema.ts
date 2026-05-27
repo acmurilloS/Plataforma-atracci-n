@@ -7,6 +7,12 @@ export const herramientasSugeridasSchema = z.object({
   office: z.boolean().default(false),
   labroides: z.boolean().default(false),
   dotacion: z.boolean().default(false),
+  /**
+   * Celular corporativo + plan de datos. Agregado 2026-05-27 (petición Karen).
+   * Dispara ticket adelantado a IT como cualquier otra herramienta.
+   * Opcional/nullable para tolerar docs viejos sin ese campo.
+   */
+  celular_plan_datos: z.boolean().default(false),
 });
 
 export const cargoInputSchema = z
@@ -26,6 +32,7 @@ export const cargoInputSchema = z
       office: false,
       labroides: false,
       dotacion: false,
+      celular_plan_datos: false,
     }),
     activo: z.boolean().default(true),
   })
