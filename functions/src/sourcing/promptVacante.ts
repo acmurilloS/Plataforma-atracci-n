@@ -89,10 +89,25 @@ ${perfilamiento?.criterios_texto || '(sin criterios específicos — usa el nomb
 
 # Estrategia de búsqueda sugerida
 
-Combina queries como estas (adapta a la vacante):
+LinkedIn bloquea el indexado profundo de perfiles individuales, así que NO te
+limites a \`site:linkedin.com/in\`. Combina MÚLTIPLES fuentes públicas:
+
+**LinkedIn (intenta, pero no dependas solo de esto):**
 - \`site:linkedin.com/in "${vacante.cargo_nombre}" "${vacante.sede_nombre}"\`
-- \`site:linkedin.com/in "${vacante.cargo_nombre}" Colombia\`
-- Variantes con sinónimos del cargo, empresas competencia, seniority
+- \`"${vacante.cargo_nombre}" "${vacante.sede_nombre}" linkedin\`
+
+**Otras fuentes (úsalas en paralelo — suelen dar mejores resultados):**
+- Directorios profesionales y gremios colombianos del sector.
+- Para cargos técnicos: \`site:github.com\`, foros técnicos, blogs personales.
+- Páginas "equipo" / "nuestra gente" de las empresas competencia.
+- Portales de empleo con perfiles públicos (computrabajo, elempleo) donde
+  la persona expone su experiencia.
+- Notas de prensa, LinkedIn pulse, conferencias del sector donde figuren
+  como ponentes o panelistas.
+- Variantes con sinónimos del cargo, empresas competencia, seniority, ciudad.
+
+Itera: si una fuente no da, prueba otra. La diversidad de fuentes es clave —
+no todos los buenos candidatos están en LinkedIn indexado.
 
 # Reglas anti-alucinación
 

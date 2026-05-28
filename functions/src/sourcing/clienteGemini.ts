@@ -2,6 +2,10 @@ import { GoogleGenAI } from '@google/genai';
 import { logger } from 'firebase-functions/v2';
 import { respuestaSourcingSchema, type RespuestaSourcing } from './respuestaSchema';
 
+// gemini-2.5-flash: única opción del free tier (pro tiene límite 0 sin
+// billing). Si Equitel habilita facturación en la API de Gemini, subir a
+// gemini-2.5-pro mejora el deep-research. Por ahora flash + grounding +
+// prompt multi-fuente es lo viable sin costo.
 const MODELO_DEFECTO = 'gemini-2.5-flash';
 
 /**
@@ -18,14 +22,36 @@ export async function buscarConGemini(prompt: string): Promise<RespuestaSourcing
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const respuesta = await ai.models.generateContent({
-    model: MODELO_DEFECTO,
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-      temperature: 0.4,
-    },
-  });
+  // Retry con backoff para errores transitorios de Gemini (503 high demand,
+  // 429 rate limit por minuto). El sourcing no es urgente al segundo, así
+  // que reintentar 3 veces con espera creciente vale la pena.
+  async function generarConRetry(intentos = 3): Promise<Awaited<ReturnType<typeof ai.models.generateContent>>> {
+    let ultimoError: unknown;
+    for (let i = 0; i < intentos; i++) {
+      try {
+        return await ai.models.generateContent({
+          model: MODELO_DEFECTO,
+          contents: prompt,
+          config: { tools: [{ googleSearch: {} }], temperature: 0.4 },
+        });
+      } catch (e) {
+        ultimoError = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        const transitorio = /503|429|UNAVAILABLE|RESOURCE_EXHAUSTED|high demand/i.test(msg);
+        if (!transitorio || i === intentos - 1) throw e;
+        const esperaMs = 4000 * (i + 1); // 4s, 8s, 12s
+        logger.warn('[gemini] error transitorio, reintentando', {
+          intento: i + 1,
+          espera_ms: esperaMs,
+          msg: msg.slice(0, 200),
+        });
+        await new Promise((r) => setTimeout(r, esperaMs));
+      }
+    }
+    throw ultimoError;
+  }
+
+  const respuesta = await generarConRetry();
 
   const texto = respuesta.text;
   const grounding = respuesta.candidates?.[0]?.groundingMetadata;
@@ -88,29 +114,33 @@ export async function buscarConGemini(prompt: string): Promise<RespuestaSourcing
     throw new Error('La respuesta de Gemini no validó contra el esquema esperado.');
   }
 
-  // Filtro anti-alucinación: solo conservamos candidatos cuya perfil_url
-  // aparece (parcial o totalmente) en las fuentes que Gemini realmente consultó.
-  if (urlsGrounded.size > 0) {
-    const conservados = valido.data.candidatos.filter((c) => {
-      const url = c.perfil_url.toLowerCase();
-      // Match flexible: el host + path inicial debe aparecer en alguna URL grounded
-      return Array.from(urlsGrounded).some((g) => {
-        if (g === url) return true;
-        // Match por slug LinkedIn (ej. linkedin.com/in/xxx aparece en grounding)
-        const slugMatch = url.match(/linkedin\.com\/in\/([^/?#]+)/i);
-        if (slugMatch && g.includes(slugMatch[1])) return true;
-        return false;
-      });
+  // Anti-alucinación en 2 niveles (anterior era demasiado agresivo — descartaba
+  // perfiles reales de LinkedIn porque /in/ casi nunca aparece como grounding
+  // chunk exacto):
+  //
+  //   1. Gemini hizo búsquedas reales (cantidadBusquedas > 0) → se valida arriba.
+  //   2. La validación HTTP posterior (validarUrlPerfil en buscarCandidatosIA)
+  //      descarta URLs muertas (404) y marca LinkedIn como no_verificable.
+  //
+  // Acá ya NO filtramos por urlsGrounded. En su lugar, marcamos cada candidato
+  // con `url_en_grounding` para que el frontend pueda mostrar un badge de
+  // confianza ("verificado en fuente" vs "requiere validación manual").
+  const candidatosMarcados = valido.data.candidatos.map((c) => {
+    const url = c.perfil_url.toLowerCase();
+    const enGrounding = Array.from(urlsGrounded).some((g) => {
+      if (g === url) return true;
+      const slug = url.match(/linkedin\.com\/in\/([^/?#]+)/i);
+      return !!slug && g.includes(slug[1]);
     });
-    const descartados = valido.data.candidatos.length - conservados.length;
-    if (descartados > 0) {
-      logger.info('[gemini] candidatos descartados por no aparecer en fuentes grounded', {
-        descartados,
-        conservados: conservados.length,
-      });
-    }
-    return { ...valido.data, candidatos: conservados };
-  }
+    return { ...c, url_en_grounding: enGrounding };
+  });
 
-  return valido.data;
+  const verificados = candidatosMarcados.filter((c) => c.url_en_grounding).length;
+  logger.info('[gemini] candidatos procesados', {
+    total: candidatosMarcados.length,
+    con_url_en_grounding: verificados,
+    sin_grounding_directo: candidatosMarcados.length - verificados,
+  });
+
+  return { ...valido.data, candidatos: candidatosMarcados };
 }

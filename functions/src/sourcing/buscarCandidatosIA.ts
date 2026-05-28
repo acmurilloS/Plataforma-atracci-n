@@ -1,7 +1,12 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+
+// Secrets de sourcing. Sin declararlos acá, process.env.X es undefined en
+// runtime aunque estén en functions/.env (que el deploy excluye).
+const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 import { buscarConGemini } from './clienteGemini';
 import { llamarClayFunction } from './clienteClay';
 import { construirPromptSourcing, type ContextoPrompt } from './promptVacante';
@@ -77,7 +82,7 @@ function generarRespuestaDummy(vacante: VacanteParaSourcing): RespuestaSourcing 
 }
 
 export const buscarCandidatosIA = onCall(
-  { region: 'us-central1' },
+  { region: 'us-central1', secrets: [GEMINI_API_KEY], timeoutSeconds: 300 },
   async (req) => {
     if (!req.auth) {
       throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
@@ -248,27 +253,42 @@ export const buscarCandidatosIA = onCall(
       modo = 'dummy';
     }
 
-    // Validar URLs en paralelo y filtrar 404. Conservar 'no_verificable' (LinkedIn 999, etc.).
-    const candidatosOriginales = respuesta.candidatos.length;
+    // Validar URLs. Si una es inválida (404), NO descartamos al candidato —
+    // Gemini suele acertar el NOMBRE+EMPRESA (vienen de búsquedas reales) pero
+    // a veces fabrica la URL del perfil. En vez de perder un candidato real,
+    // reemplazamos la URL rota por una búsqueda de Google con nombre+empresa
+    // para que la analista lo ubique con un click. Marcamos url_rota=true.
+    let urlsRotas = 0;
     if (modo === 'gemini' && respuesta.candidatos.length > 0) {
       const validaciones = await Promise.all(
         respuesta.candidatos.map((c) => validarUrlPerfil(c.perfil_url)),
       );
-      const candidatosFiltrados = respuesta.candidatos.filter((_, i) => {
+      const candidatosAjustados = respuesta.candidatos.map((c, i) => {
         const v = validaciones[i];
-        return v.estado !== 'invalida';
+        if (v.estado === 'invalida') {
+          urlsRotas += 1;
+          const términos = [c.nombres, c.apellidos, c.empresa_actual, 'linkedin']
+            .filter(Boolean)
+            .join(' ');
+          const urlBusqueda = `https://www.google.com/search?q=${encodeURIComponent(términos)}`;
+          return {
+            ...c,
+            perfil_url: urlBusqueda,
+            url_rota: true,
+            perfil_url_original: c.perfil_url,
+            // Bajamos el score: la URL no se pudo confirmar.
+            score_match: Math.max(0, Math.round(c.score_match * 0.7)),
+          };
+        }
+        return { ...c, url_rota: false };
       });
-      const descartados = candidatosOriginales - candidatosFiltrados.length;
-      if (descartados > 0) {
-        logger.info('[sourcing] candidatos descartados por URL inválida', {
-          descartados,
-          total_original: candidatosOriginales,
-          urls_invalidas: validaciones
-            .filter((v) => v.estado === 'invalida')
-            .map((v) => v.url),
+      if (urlsRotas > 0) {
+        logger.info('[sourcing] URLs rotas reemplazadas por búsqueda Google', {
+          urls_rotas: urlsRotas,
+          total: respuesta.candidatos.length,
         });
       }
-      respuesta = { ...respuesta, candidatos: candidatosFiltrados };
+      respuesta = { ...respuesta, candidatos: candidatosAjustados };
     }
 
     const ahora = Timestamp.now();
@@ -328,6 +348,8 @@ export const buscarCandidatosIA = onCall(
         sourcing_empresa_actual: c.empresa_actual,
         sourcing_cargo_actual: c.cargo_actual,
         sourcing_justificacion: c.justificacion_match,
+        sourcing_url_rota: c.url_rota ?? false,
+        sourcing_perfil_url_original: c.perfil_url_original ?? null,
         creado_en: ahora,
         creado_por: req.auth.uid,
         actualizado_en: ahora,

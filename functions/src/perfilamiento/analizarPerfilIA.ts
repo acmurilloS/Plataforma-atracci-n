@@ -1,9 +1,12 @@
 import { GoogleGenAI } from '@google/genai';
+import { defineSecret } from 'firebase-functions/params';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions/v2';
 import { z } from 'zod';
 import { db } from '../utils/admin';
 import { FieldValue } from 'firebase-admin/firestore';
+
+const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
 /**
  * Análisis IA del perfilamiento (paso 3) — validador anti-unicornio.
@@ -28,6 +31,12 @@ const inputSchema = z.object({
   sede_ciudad: z.string(),
   criterios_texto: z.string().min(20),
   empresas_competencia: z.array(z.string()),
+  // Compensación adicional al salario base — sin esto, la IA pensaba que
+  // el salario base era el paquete completo y alertaba "falta rodamiento"
+  // aunque el líder sí lo había puesto.
+  comisiones_texto: z.string().default(''),
+  rodamiento: z.boolean().default(false),
+  garantizado_texto: z.string().default(''),
 });
 
 const respuestaSchema = z.object({
@@ -52,6 +61,14 @@ Vacante:
 - Criticidad: ${d.criticidad}
 - Salario base: $${d.salario_base.toLocaleString('es-CO')} COP
 - Banda salarial del cargo: ${d.banda_min ? `$${d.banda_min.toLocaleString('es-CO')}` : 'sin banda'} - ${d.banda_max ? `$${d.banda_max.toLocaleString('es-CO')}` : 'sin banda'}
+- Comisiones: ${d.comisiones_texto.trim() ? `"${d.comisiones_texto.trim()}"` : 'no aplica / no informadas'}
+- Auxilio de rodamiento: ${d.rodamiento ? 'SÍ incluye (monto/condiciones en garantizado o comisiones)' : 'no incluye'}
+- Garantizado / bonificaciones: ${d.garantizado_texto.trim() ? `"${d.garantizado_texto.trim()}"` : 'no aplica'}
+
+NOTA IMPORTANTE: para calcular si el paquete es competitivo, SUMA mentalmente
+salario base + comisiones promedio + rodamiento + garantizado. NO alertes que
+"falta rodamiento" o "falta auxilio de transporte" si los campos arriba dicen
+que sí incluye o si hay garantizado/comisiones que ya cubren esa expectativa.
 
 Criterios del líder:
 """
@@ -80,7 +97,7 @@ Sé directo, no diplomático. La analista necesita data, no piropos.`;
 }
 
 export const analizarPerfilIA = onCall(
-  { region: 'us-central1', timeoutSeconds: 60 },
+  { region: 'us-central1', timeoutSeconds: 60, secrets: [GEMINI_API_KEY] },
   async (req) => {
     if (!req.auth) {
       throw new HttpsError('unauthenticated', 'Inicia sesión.');
