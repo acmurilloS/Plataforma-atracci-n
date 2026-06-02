@@ -384,6 +384,11 @@ export const buscarCandidatosIA = onCall(
       encontrados: respuesta.candidatos.length,
       postulaciones_ids: postulacionesIds,
       modo,
+      // Devolvemos también qué buscó Gemini y cuántas URLs descartamos para
+      // que el frontend pueda dar feedback útil cuando encontrados=0.
+      query_usada: respuesta.query_usada,
+      fuentes_consultadas: respuesta.fuentes_consultadas,
+      urls_rotas: urlsRotas,
     };
   },
 );

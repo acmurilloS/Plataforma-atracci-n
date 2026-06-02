@@ -21,11 +21,15 @@ interface Props {
 export function BuscarCandidatosIAModal({ open, onClose, onCompletado, vacante }: Props) {
   const { buscarCandidatos, ejecutando } = useSourcing();
   const [error, setError] = useState<string | null>(null);
-  const [resultadoVacio, setResultadoVacio] = useState(false);
+  const [resultadoVacio, setResultadoVacio] = useState<{
+    queryUsada?: string;
+    fuentes?: string[];
+    urlsRotas?: number;
+  } | null>(null);
 
   async function ejecutar() {
     setError(null);
-    setResultadoVacio(false);
+    setResultadoVacio(null);
     try {
       const res = await buscarCandidatos(vacante.id);
       if (res.modo === 'clay') {
@@ -33,13 +37,52 @@ export function BuscarCandidatosIAModal({ open, onClose, onCompletado, vacante }
         return;
       }
       if (res.encontrados === 0) {
-        setResultadoVacio(true);
+        setResultadoVacio({
+          queryUsada: res.query_usada,
+          fuentes: res.fuentes_consultadas,
+          urlsRotas: res.urls_rotas,
+        });
         return;
       }
       onCompletado(res.busqueda_id, res.encontrados ?? 0);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No pudimos ejecutar la búsqueda.');
+      setError(humanizarError(e));
     }
+  }
+
+  /**
+   * Convierte errores técnicos crudos (JSON de Gemini, deadline-exceeded) en
+   * mensajes accionables para el analista.
+   */
+  function humanizarError(e: unknown): string {
+    const raw = e instanceof Error ? e.message : String(e);
+    if (/503|UNAVAILABLE|high demand/i.test(raw)) {
+      return (
+        'Gemini está sobrecargado en este momento (high demand de Google). ' +
+        'Intentamos varios reintentos automáticos y un modelo de respaldo, ' +
+        'pero todos estuvieron saturados. Espera 1-2 minutos y vuelve a darle.'
+      );
+    }
+    if (/deadline-exceeded|timeout/i.test(raw)) {
+      return (
+        'La búsqueda tardó más de lo esperado y se canceló. Puede ser carga ' +
+        'temporal de Gemini — intenta de nuevo en un minuto.'
+      );
+    }
+    if (/429|RESOURCE_EXHAUSTED|quota/i.test(raw)) {
+      return (
+        'Se alcanzó el límite diario de la API de Gemini (free tier). ' +
+        'Si esto pasa seguido, considera habilitar facturación para subir el cupo.'
+      );
+    }
+    if (/GEMINI_API_KEY|no configurada/i.test(raw)) {
+      return (
+        'La clave de la API de Gemini no está configurada. Avísale al admin.'
+      );
+    }
+    return raw.length > 280
+      ? 'No pudimos ejecutar la búsqueda. El servicio devolvió un error técnico — vuelve a intentar en un momento.'
+      : raw;
   }
 
   return (
@@ -119,17 +162,48 @@ export function BuscarCandidatosIAModal({ open, onClose, onCompletado, vacante }
                 strokeWidth={1.75}
                 className="text-warning-700 mt-0.5 shrink-0"
               />
-              <div className="flex-1 space-y-1.5 text-[12px] text-warning-700">
-                <p className="font-semibold">La búsqueda no encontró candidatos verificables.</p>
+              <div className="flex-1 space-y-2 text-[12px] text-warning-700">
+                <p className="font-semibold">Gemini no devolvió candidatos para esta vacante.</p>
                 <p className="leading-[1.5]">
-                  Esto suele pasar cuando los criterios del perfilamiento son genéricos. Vuelve al
-                  perfilamiento, agrega keywords concretas (años de experiencia, herramientas
-                  específicas, sectores) y reintenta.
+                  Esto pasa cuando el rol no tiene huella digital significativa (ej. cargos
+                  operativos, juniors, oficios) o cuando los criterios son demasiado genéricos.
+                  No es un error técnico — la IA hizo la búsqueda, pero no encontró perfiles
+                  públicos verificables.
                 </p>
-                <p className="leading-[1.5]">
-                  Las URLs inventadas por la IA fueron descartadas automáticamente. Cero candidatos
-                  significa que ninguna URL pasó la validación.
-                </p>
+                {(resultadoVacio.urlsRotas ?? 0) > 0 && (
+                  <p className="leading-[1.5]">
+                    Además, {resultadoVacio.urlsRotas} URL(s) inventadas por la IA fueron
+                    descartadas en la validación.
+                  </p>
+                )}
+                <div className="space-y-1 pt-1">
+                  <p className="font-semibold text-[11px]">Qué puedes hacer:</p>
+                  <ul className="list-disc pl-4 space-y-0.5 leading-[1.45]">
+                    <li>Refinar el perfilamiento con palabras clave concretas (herramientas, certificaciones, empresas competencia).</li>
+                    <li>Para roles operativos, usar canales tradicionales (cajas de compensación, instituciones, referidos).</li>
+                    <li>Reintentar en 1–2 minutos si crees que fue saturación temporal de Gemini.</li>
+                  </ul>
+                </div>
+                {resultadoVacio.queryUsada && (
+                  <details className="pt-1.5">
+                    <summary className="cursor-pointer text-[11px] font-medium text-warning-700 hover:text-warning-800">
+                      Ver qué buscó Gemini
+                    </summary>
+                    <div className="mt-1.5 space-y-1 text-[11px] leading-[1.4] text-warning-700/90 pl-2 border-l border-warning-500/30">
+                      <p className="break-words">
+                        <span className="font-medium">Query:</span>{' '}
+                        {resultadoVacio.queryUsada}
+                      </p>
+                      {resultadoVacio.fuentes && resultadoVacio.fuentes.length > 0 && (
+                        <p className="break-words">
+                          <span className="font-medium">Fuentes consultadas:</span>{' '}
+                          {resultadoVacio.fuentes.slice(0, 5).join(', ')}
+                          {resultadoVacio.fuentes.length > 5 && ` (+${resultadoVacio.fuentes.length - 5} más)`}
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                )}
               </div>
             </div>
           </div>

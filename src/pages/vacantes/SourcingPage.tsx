@@ -37,6 +37,10 @@ interface PostulacionSourceada extends PostulacionDoc {
   sourcing_empresa_actual?: string | null;
   sourcing_cargo_actual?: string | null;
   sourcing_justificacion?: string;
+  /** true si la URL original que dio Gemini fue inválida (404) y se reemplazó por búsqueda Google. */
+  sourcing_url_rota?: boolean;
+  /** URL original que dio Gemini (404). Solo para auditoría. */
+  sourcing_perfil_url_original?: string | null;
 }
 
 function tonoScore(score: number): PillTono {
@@ -258,14 +262,28 @@ export default function SourcingPage() {
                   </p>
                 )}
                 {p.candidato_cv_url && (
-                  <a
-                    href={p.candidato_cv_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
-                  >
-                    <ExternalLink size={11} strokeWidth={1.75} /> Ver perfil público
-                  </a>
+                  <div className="mt-3 space-y-1.5">
+                    <a
+                      href={p.candidato_cv_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
+                    >
+                      <ExternalLink size={11} strokeWidth={1.75} />
+                      {p.sourcing_url_rota
+                        ? 'Buscar a esta persona en Google'
+                        : 'Ver perfil público'}
+                    </a>
+                    {p.sourcing_url_rota && (
+                      <p className="text-[11px] text-warning-700 inline-flex items-start gap-1.5 leading-[1.4]">
+                        <X size={11} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+                        <span>
+                          La URL que dio la IA no resolvió, posiblemente fue inventada. Usa el
+                          link de búsqueda para ubicar al candidato manualmente.
+                        </span>
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
