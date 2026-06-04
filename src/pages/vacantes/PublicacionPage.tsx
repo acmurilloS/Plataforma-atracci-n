@@ -51,12 +51,6 @@ interface GeneracionReferidoDoc {
   [k: string]: unknown;
 }
 
-interface PostulacionConRefDoc {
-  id: string;
-  referido_por_cedula: string | null;
-  referido_por_nombre: string | null;
-  [k: string]: unknown;
-}
 
 const CANALES = [
   { valor: 'magneto', label: 'Magneto' },
@@ -82,9 +76,6 @@ export default function PublicacionPage() {
     'referidos_generaciones',
     { filtros: id ? [['vacante_id', '==', id]] : [] },
   );
-  const { docs: postulacionesConRef } = useColeccion<PostulacionConRefDoc>('postulaciones', {
-    filtros: id ? [['vacante_id', '==', id]] : [],
-  });
   const { crear, actualizar } = useMutacion();
 
   const ultimaGeneracion = generacionesReferidos
@@ -94,7 +85,6 @@ export default function PublicacionPage() {
       const tb = b.generado_en?.toMillis?.() ?? 0;
       return tb - ta;
     })[0];
-  const postulacionesReferidas = postulacionesConRef.filter((p) => !!p.referido_por_cedula);
 
   const [canal, setCanal] = useState('magneto');
   const [detalle, setDetalle] = useState('');
@@ -326,9 +316,9 @@ export default function PublicacionPage() {
                 Activa la red de técnicos de Equitel
               </h2>
               <p className="text-[13px] text-text-muted mt-1.5 max-w-2xl">
-                Notifica a los técnicos que ya trabajan con nosotros para que recomienden gente
-                de su red. La plataforma arma el mensaje y la lista de números — tú los pegas a
-                WhatsApp manualmente.
+                Genera un mensaje listo con el link de la vacante para que lo compartas por
+                WhatsApp con los técnicos de Equitel — uno por uno, en grupos o en lista de
+                difusión. La plataforma no envía nada por sí sola.
               </p>
             </div>
             <Button
@@ -336,48 +326,35 @@ export default function PublicacionPage() {
               onClick={() => setModalReferidosAbierto(true)}
               icon={<Users2 size={13} strokeWidth={1.75} />}
             >
-              {ultimaGeneracion ? 'Regenerar invitaciones' : 'Activar referidos'}
+              {ultimaGeneracion ? 'Generar de nuevo' : 'Activar referidos'}
             </Button>
           </div>
 
-          {(ultimaGeneracion || postulacionesReferidas.length > 0) && (
-            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {ultimaGeneracion && (
-                <>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-subtle">
-                      Última generación
-                    </p>
-                    <p className="text-[14px] font-semibold text-text-strong mt-1">
-                      {ultimaGeneracion.generado_en
-                        ? formatearFecha(ultimaGeneracion.generado_en.toDate())
-                        : '—'}
-                    </p>
-                    <p className="text-[11px] text-text-muted">
-                      {ultimaGeneracion.marcada_como_enviada
-                        ? 'Marcadas como enviadas'
-                        : 'Generadas (sin marcar)'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-subtle">
-                      Técnicos invitados
-                    </p>
-                    <p className="text-[14px] font-semibold text-text-strong mt-1">
-                      {ultimaGeneracion.tecnicos_incluidos}
-                    </p>
-                    <p className="text-[11px] text-text-muted">modo {ultimaGeneracion.modo}</p>
-                  </div>
-                </>
-              )}
+          {ultimaGeneracion && (
+            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-subtle">
-                  Postulaciones referidas
+                  Última activación
                 </p>
                 <p className="text-[14px] font-semibold text-text-strong mt-1">
-                  {postulacionesReferidas.length}
+                  {ultimaGeneracion.generado_en
+                    ? formatearFecha(ultimaGeneracion.generado_en.toDate())
+                    : '—'}
                 </p>
-                <p className="text-[11px] text-text-muted">candidatos con `?ref=`</p>
+                <p className="text-[11px] text-text-muted">
+                  {ultimaGeneracion.marcada_como_enviada
+                    ? 'Registrada como enviada'
+                    : 'Sin marcar'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-subtle">
+                  Activaciones totales
+                </p>
+                <p className="text-[14px] font-semibold text-text-strong mt-1">
+                  {generacionesReferidos.length}
+                </p>
+                <p className="text-[11px] text-text-muted">veces que se compartió la vacante</p>
               </div>
             </div>
           )}
