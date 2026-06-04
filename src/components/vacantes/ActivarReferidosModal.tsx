@@ -229,7 +229,10 @@ export function ActivarReferidosModal({ open, onClose, vacante, onGenerada }: Pr
         <div className="space-y-4">
           {/* Resumen */}
           <div className="flex flex-wrap items-center gap-2">
-            <Pill tono="success">{resultado.tecnicos.length} listos</Pill>
+            <Pill tono="success">{resultado.tecnicos.length} en esta sede</Pill>
+            {resultado.excluidos.otra_sede > 0 && (
+              <Pill tono="neutral">{resultado.excluidos.otra_sede} de otras sedes</Pill>
+            )}
             {resultado.excluidos.opt_out > 0 && (
               <Pill tono="neutral">{resultado.excluidos.opt_out} opt-out</Pill>
             )}

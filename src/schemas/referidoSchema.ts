@@ -36,6 +36,8 @@ export interface ExcluidosSummary {
   antiguedad: number;
   /** Excluidos manualmente por Karen vía checkbox en el modal. */
   manual: number;
+  /** Excluidos porque trabajan en una sede distinta a la de la vacante. */
+  otra_sede: number;
 }
 
 export interface ReferidoGeneracionDoc extends CamposAuditoria {

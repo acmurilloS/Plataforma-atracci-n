@@ -54,7 +54,10 @@ const VALORES_DEFECTO: FormConfig = {
   columna_cel_corporativo: 'R',
   columna_cel_personal: 'S',
   columna_fecha_ingreso: 'H',
-  dias_antiguedad_minima: 30,
+  // Decisión JC 2026-06-04: en v1 el único filtro es por sede. La antigüedad
+  // queda configurable pero arranca en 0 (desactivado). Si más adelante se
+  // quiere reactivar, se sube este valor desde el admin.
+  dias_antiguedad_minima: 0,
 };
 
 export function ReferidosTab() {

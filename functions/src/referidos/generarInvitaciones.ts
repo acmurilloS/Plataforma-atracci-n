@@ -170,11 +170,30 @@ export const generarInvitacionesReferidos = onCall(
       cargo: string;
       cel_e164: string;
     }> = [];
-    const excluidos = { opt_out: 0, sin_celular: 0, antiguedad: 0, manual: 0 };
+    const excluidos = {
+      opt_out: 0,
+      sin_celular: 0,
+      antiguedad: 0,
+      manual: 0,
+      otra_sede: 0,
+    };
+
+    // Filtro único v1: solo técnicos de la sede de la vacante.
+    // Decisión 2026-06-04 de JC — la premisa es "Villavicencio conoce gente
+    // en Villavicencio", así que mandar a otras sedes quema la base sin
+    // beneficio. Match case-insensitive y trim porque el Sheet viene en
+    // mayúsculas y la vacante puede tener mixed case.
+    const sedeVacante = (vacante.sede_nombre ?? '').trim().toLowerCase();
 
     for (const fila of datos) {
       const cedula = celda(fila, config.columna_cedula);
       if (!cedula) continue; // fila vacía
+
+      const sedeTecnico = celda(fila, config.columna_sede).trim().toLowerCase();
+      if (sedeVacante && sedeTecnico !== sedeVacante) {
+        excluidos.otra_sede += 1;
+        continue;
+      }
 
       if (optOuts.has(cedula)) {
         excluidos.opt_out += 1;

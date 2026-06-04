@@ -19,6 +19,7 @@ export interface ExcluidosSummary {
   sin_celular: number;
   antiguedad: number;
   manual: number;
+  otra_sede: number;
 }
 
 export interface ResultadoGeneracion {
