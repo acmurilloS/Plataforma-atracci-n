@@ -117,7 +117,8 @@ export const recibirCandidatosClay = onRequest(
         documento_numero: null,
         provisional: true,
         ciudad_residencia: c.ciudad ?? null,
-        origen: 'hunter',
+        // 'sourcing_ia' es el valor válido del enum origenCandidato ('hunter' no existe).
+        origen: 'sourcing_ia',
         magneto_id: null,
         linkedin_url: c.perfil_url,
         fuente_hv_url: c.perfil_url,

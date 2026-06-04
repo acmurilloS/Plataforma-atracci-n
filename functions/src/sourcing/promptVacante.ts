@@ -2,12 +2,11 @@ interface VacanteParaPrompt {
   cargo_nombre: string;
   empresa_nombre: string;
   sede_nombre: string;
+  /** Ciudad limpia (de sedes/{codigo}.ciudad). Si falta, cae a sede_nombre. */
+  ciudad?: string;
   unidad_nombre?: string;
   criticidad?: string;
-  salario_base?: number;
   justificacion?: string;
-  comisiones_texto?: string;
-  garantizado_texto?: string;
 }
 
 interface CargoCatalogo {
@@ -19,7 +18,6 @@ interface CargoCatalogo {
 interface PerfilamientoData {
   criterios_texto?: string;
   empresas_competencia?: string[];
-  herramientas_requeridas?: Record<string, boolean>;
   notas?: string;
 }
 
@@ -30,93 +28,121 @@ export interface ContextoPrompt {
 }
 
 /**
+ * Estrategia de búsqueda adaptada a la categoría del cargo. Antes el prompt
+ * tenía UNA sola estrategia sesgada a LinkedIn, que funciona para roles
+ * digitales/comerciales pero es casi inútil para operativos/técnicos de campo
+ * (que no tienen huella en LinkedIn). Devuelve el bloque de fuentes a priorizar
+ * y una expectativa realista de cantidad.
+ */
+function estrategiaPorCategoria(
+  categoria: string | undefined,
+  cargo: string,
+  ciudad: string,
+): { fuentes: string; expectativa: string } {
+  const cat = (categoria ?? '').toLowerCase();
+
+  if (cat === 'operativo') {
+    return {
+      fuentes: `Este es un cargo OPERATIVO/de campo. Estas personas casi NO tienen perfil en LinkedIn — búscalas donde sí dejan huella:
+- Portales de empleo con hoja de vida pública: \`site:computrabajo.com.co\`, \`site:elempleo.com\`, Magneto.
+- Bolsas de empleo del SENA, cajas de compensación y gremios del sector.
+- Grupos y páginas de Facebook de oficios ("mecánicos ${ciudad}", "técnicos ${ciudad}").
+- Directorios de empresas del sector en ${ciudad} y alrededores.
+- LinkedIn es secundario aquí: úsalo solo si el rol tiene componente técnico-formal.`,
+      expectativa: `Para roles operativos la huella digital es escasa: si tras varias búsquedas honestas solo encuentras 2–4 perfiles públicos verificables, eso es un resultado válido. NUNCA rellenes con nombres inventados.`,
+    };
+  }
+
+  if (cat === 'tecnico') {
+    return {
+      fuentes: `Este es un cargo TÉCNICO. Combina fuentes técnicas y de empleo:
+- \`site:github.com\`, \`site:stackoverflow.com\`, foros y comunidades técnicas del área.
+- Portales de empleo con HV pública: computrabajo, elempleo, Magneto.
+- LinkedIn: \`site:linkedin.com/in "${cargo}" "${ciudad}"\`.
+- Páginas "equipo"/"nuestra gente" de las empresas competencia.
+- Blogs personales, certificaciones públicas, ponencias técnicas.`,
+      expectativa: `Apunta a 5–10 perfiles. Si solo encuentras 3 muy buenos, devuelve esos.`,
+    };
+  }
+
+  if (cat === 'liderazgo') {
+    return {
+      fuentes: `Este es un cargo de LIDERAZGO/dirección. Prioriza fuentes donde figuran perfiles senior:
+- LinkedIn: \`site:linkedin.com/in "${cargo}" "${ciudad}"\` y variantes de seniority.
+- Notas de prensa, entrevistas, paneles y conferencias del sector.
+- Páginas corporativas (equipo directivo) de las empresas competencia.
+- Directorios de asociaciones gremiales y bases de speakers.`,
+      expectativa: `Apunta a 5–8 perfiles de calidad. La cantidad importa menos que la precisión.`,
+    };
+  }
+
+  // comercial / administrativo / default
+  return {
+    fuentes: `Combina LinkedIn con portales de empleo y directorios:
+- LinkedIn: \`site:linkedin.com/in "${cargo}" "${ciudad}"\` y \`"${cargo}" "${ciudad}" linkedin\`.
+- Portales con HV pública: computrabajo, elempleo, Magneto.
+- Páginas "equipo"/"nuestra gente" de las empresas competencia.
+- Directorios profesionales y gremios del sector en ${ciudad}.`,
+    expectativa: `Apunta a 5–10 perfiles. Si solo encuentras 3 muy buenos, devuelve esos.`,
+  };
+}
+
+/**
  * Construye el prompt que se enviará a Gemini con grounding.
  * Retorna instrucciones + datos estructurados + esquema esperado de respuesta.
  */
 export function construirPromptSourcing(ctx: ContextoPrompt): string {
   const { vacante, cargo, perfilamiento } = ctx;
 
+  // Geografía: usamos la ciudad limpia. sede_nombre suele ser texto tipo
+  // "Sede Principal" o un nombre interno que envenena las queries de Google.
+  const ciudad = (vacante.ciudad && vacante.ciudad.trim()) || vacante.sede_nombre;
+
   const empresasCompetencia =
     perfilamiento?.empresas_competencia && perfilamiento.empresas_competencia.length > 0
       ? perfilamiento.empresas_competencia.join(', ')
       : '(no especificadas, infiérelas del sector)';
 
-  const herramientas = perfilamiento?.herramientas_requeridas
-    ? Object.entries(perfilamiento.herramientas_requeridas)
-        .filter(([, v]) => v)
-        .map(([k]) => k)
-        .join(', ') || '(básicas según el cargo)'
-    : '(básicas según el cargo)';
+  const { fuentes, expectativa } = estrategiaPorCategoria(
+    cargo?.categoria,
+    vacante.cargo_nombre,
+    ciudad,
+  );
 
-  const salario = vacante.salario_base
-    ? `${vacante.salario_base.toLocaleString('es-CO')} COP`
-    : '(no especificado)';
-
-  return `Eres un experto en sourcing de talento. Tu tarea: encontrar perfiles públicos en internet (LinkedIn, GitHub, blogs profesionales, sitios de empresas) de personas que coincidan con la vacante descrita.
+  return `Eres un experto en sourcing de talento. Tu tarea: encontrar perfiles públicos REALES en internet de personas que coincidan con la vacante descrita. Cada candidato debe salir de un resultado de búsqueda que tú efectivamente leíste, nunca de tu memoria.
 
 # Vacante
 - Cargo: ${vacante.cargo_nombre}
 - Empresa contratante: ${vacante.empresa_nombre}
-- Sede / ciudad: ${vacante.sede_nombre}
+- Ciudad objetivo: ${ciudad}
 - Unidad: ${vacante.unidad_nombre ?? 'n/a'}
-- Criticidad: ${vacante.criticidad ?? 'Media'}
-- Salario base ofrecido: ${salario}
-- Comisiones: ${vacante.comisiones_texto || 'n/a'}
-- Justificación de la apertura: ${vacante.justificacion || 'n/a'}
-
-# Cargo (catálogo)
-- Categoría: ${cargo?.categoria ?? 'n/a'}
-- Descripción: ${cargo?.descripcion ?? 'n/a'}
+- Categoría del cargo: ${cargo?.categoria ?? 'n/a'}
+- Descripción del cargo: ${cargo?.descripcion ?? 'n/a'}
 
 # Perfilamiento (criterios del líder)
 ${perfilamiento?.criterios_texto || '(sin criterios específicos — usa el nombre del cargo y la descripción)'}
-
 - Empresas competencia (donde típicamente trabajan estos perfiles): ${empresasCompetencia}
-- Herramientas que el cargo va a usar: ${herramientas}
 - Notas: ${perfilamiento?.notas || 'n/a'}
 
 # Instrucciones de búsqueda
 
-**Tu trabajo principal es BUSCAR.** Ejecuta múltiples búsquedas en Google Search con queries diferentes hasta encontrar perfiles reales. No te quedes con una sola búsqueda — itera variando keywords, ciudad, empresa, seniority. La meta es encontrar entre 5 y 15 perfiles.
+**Tu trabajo principal es BUSCAR con Google Search.** Ejecuta entre 3 y 8 búsquedas distintas variando keywords, ciudad, empresa y seniority. NO te quedes con una sola búsqueda. Cada candidato debe venir de un resultado real que leíste.
 
-1. **USA Google Search agresivamente.** Para esta tarea esperas hacer entre 3 y 8 búsquedas distintas. Cada candidato debe venir de un resultado real que tú leíste, no de tu memoria.
-2. **Las URLs deben ser exactas.** Cópialas tal cual aparecen en el resultado de Google. No las modifiques, no las simplifiques, no las construyas a mano.
-3. **Nombres reales solamente.** Solo personas que efectivamente aparecen en los perfiles públicos que encontraste.
-4. **Prioriza ${vacante.sede_nombre}** y ciudades cercanas. Pero si encuentras un perfil excelente en otra ciudad, inclúyelo.
-5. Considera tanto personas "open to work" como personas trabajando en empresas competencia. No es requisito que busquen empleo activamente.
-6. Devuelve hasta 15 candidatos. Idealmente 5–10. Si después de varias búsquedas honestas solo encuentras 2–3 perfiles muy buenos, devuelve eso.
-7. Para cada uno, justificación específica del match (mínimo 30 caracteres). Menciona qué criterio concreto del perfilamiento cumple.
+# Estrategia de fuentes (según la categoría del cargo)
 
-# Estrategia de búsqueda sugerida
+${fuentes}
 
-LinkedIn bloquea el indexado profundo de perfiles individuales, así que NO te
-limites a \`site:linkedin.com/in\`. Combina MÚLTIPLES fuentes públicas:
+Itera: si una fuente no da, prueba otra. La diversidad de fuentes es clave — no todos los buenos candidatos están en LinkedIn.
 
-**LinkedIn (intenta, pero no dependas solo de esto):**
-- \`site:linkedin.com/in "${vacante.cargo_nombre}" "${vacante.sede_nombre}"\`
-- \`"${vacante.cargo_nombre}" "${vacante.sede_nombre}" linkedin\`
+# Reglas de calidad (críticas)
 
-**Otras fuentes (úsalas en paralelo — suelen dar mejores resultados):**
-- Directorios profesionales y gremios colombianos del sector.
-- Para cargos técnicos: \`site:github.com\`, foros técnicos, blogs personales.
-- Páginas "equipo" / "nuestra gente" de las empresas competencia.
-- Portales de empleo con perfiles públicos (computrabajo, elempleo) donde
-  la persona expone su experiencia.
-- Notas de prensa, LinkedIn pulse, conferencias del sector donde figuren
-  como ponentes o panelistas.
-- Variantes con sinónimos del cargo, empresas competencia, seniority, ciudad.
-
-Itera: si una fuente no da, prueba otra. La diversidad de fuentes es clave —
-no todos los buenos candidatos están en LinkedIn indexado.
-
-# Reglas anti-alucinación
-
-- Si una búsqueda no devuelve resultados, prueba otra query antes de descartar.
-- **Copia las URLs tal cual aparecen** en los resultados de Google Search. NO uses solo el slug del nombre. Si Google te muestra \`linkedin.com/in/john-doe-12a3b\`, esa es la URL exacta.
-- Confía en lo que ves en los snippets de Google Search. Si el snippet muestra un perfil de LinkedIn, ese perfil existe.
-- Devuelve entre 5 y 10 candidatos. Si solo encuentras 3 perfiles muy buenos, devuelve esos. Si encuentras 10 razonables, devuelve esos.
-- El analista validará cada perfil manualmente al hacer click — tu trabajo es traer matches plausibles, no perfectos.
-6. NO incluyas emails ni teléfonos (solo datos públicos visibles en el perfil: nombre, headline, empresa actual, ciudad, link).
+1. **Solo personas reales** que efectivamente aparecen en perfiles públicos que encontraste. Si no estás seguro de que la persona existe, NO la incluyas.
+2. **Copia las URLs tal cual** aparecen en el resultado de Google Search. NO las construyas a mano a partir del nombre, NO las simplifiques, NO inventes el slug. Si no tienes la URL exacta del resultado, no inventes una.
+3. **Prioriza ${ciudad}** y ciudades cercanas. Si encuentras un perfil excelente en otra ciudad, inclúyelo pero indícalo.
+4. Considera tanto personas "open to work" como personas ya trabajando en empresas competencia.
+5. **Cantidad:** sin mínimo forzado, máximo 15. ${expectativa} Calidad sobre cantidad — es mejor devolver 3 reales que 10 con relleno inventado.
+6. Para cada candidato, una justificación específica (mínimo 30 caracteres) que mencione qué criterio concreto del perfilamiento cumple.
+7. NO incluyas emails ni teléfonos. Solo datos públicos visibles: nombre, headline, empresa actual, ciudad, link.
 
 # Formato de respuesta (OBLIGATORIO: JSON válido, sin texto adicional)
 
@@ -130,7 +156,7 @@ no todos los buenos candidatos están en LinkedIn indexado.
       "empresa_actual": "string | null",
       "cargo_actual": "string | null",
       "ciudad": "string | null",
-      "perfil_url": "string (URL completa del perfil público)",
+      "perfil_url": "string (URL completa del perfil público, copiada del resultado)",
       "justificacion_match": "string (mínimo 30 caracteres, específica)",
       "score_match": "number 0-100"
     }

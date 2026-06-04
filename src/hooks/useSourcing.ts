@@ -26,14 +26,15 @@ export function useSourcing() {
     setEjecutando(true);
     setError(null);
     try {
-      // timeout 290s para alinear con el timeoutSeconds 300 de la function.
-      // Gemini con grounding + 15-36 búsquedas + retry de errores
-      // transitorios puede tardar 60-180s; el default del SDK (70s) abortaba
-      // con deadline-exceeded.
+      // El cliente debe esperar AL MENOS lo que el servidor (timeoutSeconds 300).
+      // Antes era 290s < 300s: en el peor caso útil, el cliente abortaba 10s
+      // antes de que el servidor terminara, perdiendo un resultado válido. El
+      // servidor se auto-limita a ~260s (presupuesto interno de Gemini 240s +
+      // validación de URLs + escrituras), así que 300s da margen para recibirlo.
       const fn = httpsCallable<{ vacante_id: string }, ResultadoBusqueda>(
         functions,
         'buscarCandidatosIA',
-        { timeout: 290_000 },
+        { timeout: 300_000 },
       );
       const res = await fn({ vacante_id: vacanteId });
       return res.data;

@@ -135,7 +135,7 @@ export function BuscarCandidatosIAModal({ open, onClose, onCompletado, vacante }
             </>,
             <>Tú revisas cada uno y decides si avanza al flujo normal (paso 5).</>,
             <>El primer contacto debe incluir un mensaje de opt-in claro (Habeas Data).</>,
-            <>La búsqueda toma entre 15 y 40 segundos. No cierres la ventana.</>,
+            <>La búsqueda toma entre 1 y 3 minutos (Gemini hace varias búsquedas reales). No cierres la ventana — es normal que tarde.</>,
           ].map((txt, i) => (
             <li
               key={i}

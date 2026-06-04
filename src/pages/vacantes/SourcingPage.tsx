@@ -41,6 +41,10 @@ interface PostulacionSourceada extends PostulacionDoc {
   sourcing_url_rota?: boolean;
   /** URL original que dio Gemini (404). Solo para auditoría. */
   sourcing_perfil_url_original?: string | null;
+  /** true si la URL del perfil estuvo entre las fuentes que Gemini realmente consultó (mayor confianza). */
+  sourcing_url_en_grounding?: boolean;
+  /** true si la URL no se pudo confirmar y conviene validar manualmente antes de promover. */
+  sourcing_requiere_validacion?: boolean;
 }
 
 function tonoScore(score: number): PillTono {
@@ -201,7 +205,7 @@ export default function SourcingPage() {
                 Buscando candidatos en internet…
               </p>
               <p className="text-[11px] text-text-muted mt-0.5">
-                Clay está rastreando perfiles públicos. Puede tomar entre 1 y 5 minutos. Los
+                La IA está rastreando perfiles públicos. Puede tomar entre 1 y 5 minutos. Los
                 resultados aparecerán abajo automáticamente.
               </p>
             </div>
@@ -240,6 +244,15 @@ export default function SourcingPage() {
                       <span className="tabular-nums">{p.sourcing_score}% match</span>
                     </Pill>
                   )}
+                  {p.sourcing_url_en_grounding ? (
+                    <Pill tono="success">
+                      <span className="inline-flex items-center gap-1">
+                        <Check size={10} strokeWidth={2.25} /> Verificado en fuente
+                      </span>
+                    </Pill>
+                  ) : p.sourcing_requiere_validacion ? (
+                    <Pill tono="warning">Validar manualmente</Pill>
+                  ) : null}
                 </div>
                 {p.sourcing_headline && (
                   <p className="text-[13px] text-text-body mt-1.5">{p.sourcing_headline}</p>

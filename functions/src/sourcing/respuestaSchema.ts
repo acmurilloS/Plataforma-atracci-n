@@ -23,6 +23,12 @@ export const candidatoSourceadoSchema = z.object({
   url_rota: z.boolean().optional(),
   /** URL original que dio 404 (para auditoría). */
   perfil_url_original: z.string().optional(),
+  /**
+   * true si la URL no se pudo confirmar (LinkedIn no_verificable fuera de
+   * grounding, o url_rota). Señal para que la analista valide manualmente
+   * antes de promover. Lo calcula el orquestador, no Gemini.
+   */
+  requiere_validacion: z.boolean().optional(),
 });
 
 export type CandidatoSourceado = z.infer<typeof candidatoSourceadoSchema>;

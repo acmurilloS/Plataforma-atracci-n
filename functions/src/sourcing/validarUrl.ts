@@ -20,27 +20,25 @@ export async function validarUrlPerfil(url: string): Promise<ResultadoValidacion
   }
 
   // Algunas plataformas bloquean HEAD pero no GET. Intentar HEAD primero, GET de fallback.
-  const ctrl = AbortSignal.timeout(6000);
+  // Cada fetch usa su PROPIA señal de timeout: antes compartían un solo
+  // AbortSignal.timeout(6000), así que si el HEAD consumía los 6s, el GET
+  // arrancaba con la señal ya disparada y abortaba al instante (todo se
+  // contaba como 'no_verificable').
+  const UA = 'Mozilla/5.0 (compatible; EquitelSourcerBot/1.0; +https://equitel.co)';
   try {
     let res = await fetch(url, {
       method: 'HEAD',
       redirect: 'follow',
-      signal: ctrl,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (compatible; EquitelSourcerBot/1.0; +https://equitel.co)',
-      },
+      signal: AbortSignal.timeout(6000),
+      headers: { 'User-Agent': UA },
     });
-    // LinkedIn devuelve 999 a HEAD bot — intentar GET ligero.
+    // LinkedIn devuelve 999 a HEAD bot — intentar GET ligero con señal fresca.
     if (res.status === 999 || res.status === 405 || res.status === 403) {
       res = await fetch(url, {
         method: 'GET',
         redirect: 'follow',
-        signal: ctrl,
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (compatible; EquitelSourcerBot/1.0; +https://equitel.co)',
-        },
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': UA },
       });
     }
 

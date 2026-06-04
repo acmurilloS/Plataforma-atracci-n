@@ -82,7 +82,9 @@ function generarRespuestaDummy(vacante: VacanteParaSourcing): RespuestaSourcing 
 }
 
 export const buscarCandidatosIA = onCall(
-  { region: 'us-central1', secrets: [GEMINI_API_KEY], timeoutSeconds: 300 },
+  // 512MiB: grounding + parseo + validación de hasta 15 URLs en paralelo
+  // satura los 256MiB por defecto. timeoutSeconds 300 alineado con el cliente.
+  { region: 'us-central1', secrets: [GEMINI_API_KEY], timeoutSeconds: 300, memory: '512MiB' },
   async (req) => {
     if (!req.auth) {
       throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
@@ -214,8 +216,24 @@ export const buscarCandidatosIA = onCall(
         : null;
       const cargoData = cargoSnap?.data() ?? null;
 
+      // Resolver la CIUDAD real de la sede. vacante.sede_nombre suele ser texto
+      // interno ("Sede Principal") que envenena las queries de Google; la ciudad
+      // limpia vive en sedes/{codigo}.ciudad.
+      let ciudadSede = '';
+      const sedeCodigo = (vacante.sede_codigo ?? '') as string;
+      if (sedeCodigo) {
+        const sedeSnap = await db
+          .collection('sedes')
+          .where('codigo', '==', sedeCodigo)
+          .limit(1)
+          .get();
+        if (!sedeSnap.empty) {
+          ciudadSede = String(sedeSnap.docs[0].data().ciudad ?? '');
+        }
+      }
+
       const ctx: ContextoPrompt = {
-        vacante,
+        vacante: { ...vacante, ciudad: ciudadSede || undefined },
         cargo: cargoData
           ? {
               nombre: cargoData.nombre,
@@ -227,7 +245,6 @@ export const buscarCandidatosIA = onCall(
           ? {
               criterios_texto: procesoData.perfilamiento.criterios_texto,
               empresas_competencia: procesoData.perfilamiento.empresas_competencia,
-              herramientas_requeridas: procesoData.perfilamiento.herramientas_requeridas,
               notas: procesoData.perfilamiento.notas,
             }
           : null,
@@ -240,9 +257,17 @@ export const buscarCandidatosIA = onCall(
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Error llamando Gemini';
         logger.error('[sourcing] Gemini falló', { msg });
+        // Si fue agotamiento de presupuesto, devolver deadline-exceeded para
+        // que el modal lo humanice ("tardó más de lo esperado").
+        if (/deadline-exceeded/i.test(msg)) {
+          throw new HttpsError('deadline-exceeded', msg);
+        }
         throw new HttpsError('internal', `Gemini falló: ${msg}`);
       }
-    } else {
+    } else if (process.env.FUNCTIONS_EMULATOR === 'true') {
+      // Modo dummy SOLO en el emulador local (FUNCTIONS_EMULATOR es una señal
+      // nativa de Firebase, jamás presente en producción). Permite probar el
+      // pipeline sin gastar quota. En prod NUNCA se llega acá.
       const respuestaCruda = generarRespuestaDummy(vacante);
       const valido = respuestaSourcingSchema.safeParse(respuestaCruda);
       if (!valido.success) {
@@ -251,6 +276,15 @@ export const buscarCandidatosIA = onCall(
       }
       respuesta = valido.data;
       modo = 'dummy';
+    } else {
+      // Sin key en runtime y no es emulador → ANTES caía silenciosamente a
+      // perfiles DUMMY inventados (el bug histórico de "dummies en prod").
+      // Ahora falla claro, igual que analizarPerfilIA. El modal ya humaniza
+      // este mensaje ("la clave de Gemini no está configurada").
+      throw new HttpsError(
+        'failed-precondition',
+        'GEMINI_API_KEY no configurada. Pídele al admin que la siembre en Secret Manager.',
+      );
     }
 
     // Validar URLs. Si una es inválida (404), NO descartamos al candidato —
@@ -265,6 +299,7 @@ export const buscarCandidatosIA = onCall(
       );
       const candidatosAjustados = respuesta.candidatos.map((c, i) => {
         const v = validaciones[i];
+        const enGrounding = c.url_en_grounding === true;
         if (v.estado === 'invalida') {
           urlsRotas += 1;
           const términos = [c.nombres, c.apellidos, c.empresa_actual, 'linkedin']
@@ -276,11 +311,22 @@ export const buscarCandidatosIA = onCall(
             perfil_url: urlBusqueda,
             url_rota: true,
             perfil_url_original: c.perfil_url,
+            requiere_validacion: true,
             // Bajamos el score: la URL no se pudo confirmar.
             score_match: Math.max(0, Math.round(c.score_match * 0.7)),
           };
         }
-        return { ...c, url_rota: false };
+        // no_verificable (típico LinkedIn que bloquea bots): si la URL NO estuvo
+        // entre las fuentes que Gemini realmente consultó vía grounding, es
+        // sospechosa de invención. La marcamos para validación manual y bajamos
+        // algo el score, sin descartarla (podría ser real e indexada de otra forma).
+        const requiere = v.estado === 'no_verificable' && !enGrounding;
+        return {
+          ...c,
+          url_rota: false,
+          requiere_validacion: requiere,
+          score_match: requiere ? Math.max(0, Math.round(c.score_match * 0.85)) : c.score_match,
+        };
       });
       if (urlsRotas > 0) {
         logger.info('[sourcing] URLs rotas reemplazadas por búsqueda Google', {
@@ -307,9 +353,14 @@ export const buscarCandidatosIA = onCall(
         documento_numero: null,
         provisional: true,
         ciudad_residencia: c.ciudad,
-        origen: 'hunter',
+        // 'sourcing_ia' es el valor válido del enum origenCandidato. Antes se
+        // escribía 'hunter' (NO existe en el enum) → envenenaba la trazabilidad
+        // de todo candidato sourceado.
+        origen: 'sourcing_ia',
         magneto_id: null,
-        linkedin_url: c.perfil_url,
+        // linkedin_url guarda la URL ORIGINAL del perfil (aunque esté rota),
+        // no la URL de búsqueda de Google sustituta — esa es solo para click.
+        linkedin_url: c.perfil_url_original ?? c.perfil_url,
         fuente_hv_url: c.perfil_url,
         observaciones: c.justificacion_match,
         alertas: [],
@@ -350,6 +401,11 @@ export const buscarCandidatosIA = onCall(
         sourcing_justificacion: c.justificacion_match,
         sourcing_url_rota: c.url_rota ?? false,
         sourcing_perfil_url_original: c.perfil_url_original ?? null,
+        // Señal de confianza por candidato: ¿la URL estuvo entre las fuentes que
+        // Gemini realmente consultó? Antes se calculaba y se tiraba. Ahora se
+        // persiste para mostrar el badge "verificado en fuente" vs "validar".
+        sourcing_url_en_grounding: c.url_en_grounding ?? false,
+        sourcing_requiere_validacion: c.requiere_validacion ?? false,
         creado_en: ahora,
         creado_por: req.auth.uid,
         actualizado_en: ahora,
