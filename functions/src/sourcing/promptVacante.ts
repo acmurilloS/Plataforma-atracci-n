@@ -146,6 +146,12 @@ Itera: si una fuente no da, prueba otra. La diversidad de fuentes es clave — n
 
 # Formato de respuesta (OBLIGATORIO: JSON válido, sin texto adicional)
 
+**CRÍTICO:** Tu respuesta debe ser SIEMPRE un objeto JSON, pase lo que pase.
+Si después de buscar no encuentras NINGÚN perfil real, devuelve igualmente el
+JSON con la lista vacía: \`{"candidatos": [], "query_usada": "...", "fuentes_consultadas": [...]}\`.
+NUNCA respondas con un párrafo de disculpa, explicación o texto en prosa. Si no
+hay resultados, el JSON con \`candidatos: []\` ES la respuesta correcta.
+
 \`\`\`json
 {
   "candidatos": [

@@ -125,8 +125,29 @@ export async function buscarConGemini(prompt: string): Promise<RespuestaSourcing
     primeros_500_chars: texto?.slice(0, 500) ?? '',
   });
 
+  const finishReason = respuesta.candidates?.[0]?.finishReason;
+
+  // Cuando Gemini NO encuentra a nadie (caso esperado en roles operativos sin
+  // huella digital), a menudo ignora la instrucción de "solo JSON" y responde
+  // con un párrafo de disculpa en prosa ("I apologize, but I was unable to
+  // find..."). Eso NO es un error de la herramienta: significa 0 candidatos.
+  // Lo tratamos como resultado vacío para que el frontend muestre su empty-state
+  // honesto y accionable, en vez de un "JSON inválido" críptico.
+  function resultadoVacio(motivo: string): RespuestaSourcing {
+    logger.info('[gemini] sin candidatos parseables → resultado vacío', {
+      motivo,
+      finishReason,
+      muestra: (texto ?? '').slice(0, 200),
+    });
+    return {
+      candidatos: [],
+      query_usada: `(sin resultados: ${motivo})`,
+      fuentes_consultadas: [],
+    };
+  }
+
   if (!texto) {
-    throw new Error('Gemini devolvió respuesta vacía.');
+    return resultadoVacio('respuesta vacía de Gemini');
   }
 
   // Gemini a veces envuelve el JSON en ```json ... ```. Limpiar fences.
@@ -143,17 +164,19 @@ export async function buscarConGemini(prompt: string): Promise<RespuestaSourcing
     // Tomamos del primer '{' al último '}'.
     const ini = limpio.indexOf('{');
     const fin = limpio.lastIndexOf('}');
-    if (ini >= 0 && fin > ini) {
-      limpio = limpio.slice(ini, fin + 1);
-      try {
-        parseado = JSON.parse(limpio);
-      } catch {
-        logger.error('[gemini] JSON inválido tras extracción', { longitud: limpio.length });
-        throw new Error('Gemini devolvió un JSON inválido.');
-      }
-    } else {
-      logger.error('[gemini] respuesta sin JSON detectable', { longitud: texto.length });
-      throw new Error('Gemini devolvió un JSON inválido.');
+    if (ini < 0 || fin <= ini) {
+      // No hay objeto JSON → Gemini respondió en prosa (típico "no encontré a
+      // nadie"). Resultado vacío, NO error.
+      return resultadoVacio('respuesta en prosa sin JSON (probable 0 resultados)');
+    }
+    try {
+      parseado = JSON.parse(limpio.slice(ini, fin + 1));
+    } catch {
+      // Hay llaves pero no parsea: posible truncación (MAX_TOKENS) o malformado.
+      // Tampoco mostramos error críptico — vacío + log para diagnóstico.
+      return resultadoVacio(
+        finishReason === 'MAX_TOKENS' ? 'JSON truncado (MAX_TOKENS)' : 'JSON malformado',
+      );
     }
   }
 
