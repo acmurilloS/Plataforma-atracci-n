@@ -32,17 +32,28 @@ interface FormConfig {
   dias_antiguedad_minima: number;
 }
 
+/**
+ * Defaults alineados al Sheet "Base de técnicos" de RRHH (2026-06-04).
+ * Estructura confirmada por JC:
+ *   A=CC, B=NOMBRE, C=Genero, D=EDAD, E=Empresa, F=Unidad, G=Sede,
+ *   H=Fecha de Ingreso, I=Contrato, J=Antigüedad, K=Rango antigüedad,
+ *   L=Cargo, M=Familia, N=Nivel, O=Operativo/tecnico,
+ *   P=Correo corporativo, Q=Correo personal,
+ *   R=Cel corporativo, S=Cel personal, T=lugar de trabajo.
+ * El Sheet ya viene pre-filtrado a 240 técnicos puros → no necesita filtro
+ * por categoría desde la plataforma.
+ */
 const VALORES_DEFECTO: FormConfig = {
   sheet_id: '',
-  hoja: 'BD_TECNICOS',
+  hoja: 'Hoja 1',
   columna_cedula: 'A',
   columna_nombre: 'B',
-  columna_empresa: 'C',
-  columna_sede: 'D',
-  columna_cargo: 'E',
-  columna_cel_corporativo: 'F',
-  columna_cel_personal: 'G',
-  columna_fecha_ingreso: '',
+  columna_empresa: 'E',
+  columna_sede: 'G',
+  columna_cargo: 'L',
+  columna_cel_corporativo: 'R',
+  columna_cel_personal: 'S',
+  columna_fecha_ingreso: 'H',
   dias_antiguedad_minima: 30,
 };
 
