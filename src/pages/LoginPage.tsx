@@ -174,16 +174,33 @@ export default function LoginPage() {
 
       <div className="relative grid grid-cols-1 lg:grid-cols-[52fr_48fr] min-h-screen">
         {/* ─── Panel izquierdo · hero tipográfico ─────────────────────── */}
-        <aside className="relative hidden lg:flex flex-col justify-between px-20 py-16">
-          <div className="flex items-center gap-3">
+        <aside className="relative hidden lg:flex flex-col justify-between px-20 py-16 overflow-hidden">
+          {/* Steve watermark — faded, decorativo, detrás del contenido */}
+          <img
+            src="/steve.png"
+            alt=""
+            aria-hidden
+            draggable={false}
+            className="pointer-events-none select-none absolute"
+            style={{
+              right: '-60px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: '680px',
+              opacity: 0.08,
+              zIndex: 0,
+            }}
+          />
+
+          <div className="relative z-10 flex items-center gap-3">
             <img
               src="/equitel.png"
               alt="Equitel"
-              className="h-10 w-auto object-contain"
+              className="h-16 w-auto object-contain"
               draggable={false}
             />
             <div className="border-l border-slate-200 pl-3">
-              <p className="text-[14px] font-semibold text-text-strong leading-tight">
+              <p className="text-[15px] font-semibold text-text-strong leading-tight">
                 Plataforma de Atracción
               </p>
               <p className="text-[11px] text-text-subtle tracking-[0.02em] leading-tight">
@@ -192,7 +209,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="max-w-xl">
+          <div className="relative z-10 max-w-xl">
             <div className="inline-flex items-center gap-2 brand-glass rounded-full px-3 py-1.5 shadow-brand-card">
               <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />
               <span className="text-[11px] font-bold tracking-[0.12em] uppercase text-brand-700">
@@ -227,7 +244,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-8 max-w-2xl">
+          <div className="relative z-10 grid grid-cols-3 gap-8 max-w-2xl">
             {VALUE_PROPS.map((vp) => (
               <div key={vp.n} className="border-t border-slate-200 pt-4">
                 <p className="text-[11px] font-bold tracking-[0.10em] uppercase text-brand-700">
@@ -239,7 +256,7 @@ export default function LoginPage() {
             ))}
           </div>
 
-          <p className="text-[11px] text-text-subtle">
+          <p className="relative z-10 text-[11px] text-text-subtle">
             © {new Date().getFullYear()} Organización Equitel · Uso interno.
           </p>
         </aside>
@@ -253,7 +270,7 @@ export default function LoginPage() {
           >
             {/* Logo mobile */}
             <div className="lg:hidden flex items-center justify-center mb-6">
-              <img src="/equitel.png" alt="Equitel" className="h-9 w-auto" />
+              <img src="/equitel.png" alt="Equitel" className="h-14 w-auto" />
             </div>
 
             <h2 className="text-[30px] font-medium tracking-[-0.02em] text-text-strong">

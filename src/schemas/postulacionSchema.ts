@@ -114,6 +114,17 @@ export const postulacionInputSchema = z.object({
   razon_descarte: z.string().nullable().default(null),
   /** Etapa donde se descartó. Texto libre — los descartes ad-hoc (ej. `'entrevista_lider'`) no siempre son un estado del enum. */
   descarte_etapa: z.string().nullable().default(null),
+
+  // ── Referidos internos (módulo v1, 2026-06-03) ─────────────────────────────
+  // Se llenan cuando la postulación entra por la landing pública con `?ref=<slug>`.
+  // Se mapean en CarreraPublicaPage tras llamar `resolverRefSlug`. Cuando GH
+  // apruebe el bono en v2, estos campos son la base del cálculo.
+  /** Cédula del técnico que refirió. null cuando la postulación no vino por referido. */
+  referido_por_cedula: z.string().nullable().default(null),
+  /** Snapshot del nombre al momento de capturar — el Sheet puede mutar. */
+  referido_por_nombre: z.string().nullable().default(null),
+  /** ID del documento `referidos_generaciones/` que disparó esta postulación. */
+  referido_generacion_id: z.string().nullable().default(null),
 });
 
 export type PostulacionInput = z.infer<typeof postulacionInputSchema>;

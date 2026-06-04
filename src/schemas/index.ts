@@ -21,3 +21,4 @@ export * from './notificacionSchema';
 export * from './ticketConexionSchema';
 export * from './candidatoSchema';
 export * from './politicasCriticidad';
+export * from './referidoSchema';

@@ -33,6 +33,30 @@ export const herramientasRequeridasSchema = z.object({
 });
 export type HerramientasRequeridas = z.infer<typeof herramientasRequeridasSchema>;
 
+/**
+ * Solicitud de herramientas para IT (reunión Sebastián Orozco 2026-05-28).
+ *
+ * Reemplaza el Google Forms que llenaba cultura/desarrollo. Al guardar el
+ * perfilamiento, una Cloud Function escribe estos campos + los datos de la
+ * vacante en la hoja de trazabilidad de IT y envía el correo de notificación
+ * al buzón administrativo de sistemas. Solo se capturan los campos obligatorios
+ * que pidió Sebastián; el detalle fino de herramientas (tipo de equipo, Office,
+ * Siesa, etc.) lo sigue diligenciando IT en su parte de la hoja.
+ */
+export const solicitudHerramientasSchema = z.object({
+  /** Sí/No explícito. Si es false, IT solo registra el ingreso sin herramientas. */
+  requiere: z.boolean().default(false),
+  /** Persona a la que IT contacta por la solicitud. Default: el líder. */
+  persona_contacto: z.string().max(160).default(''),
+  /** Correo de la persona de contacto. */
+  correo_contacto: z
+    .union([z.string().email(), z.literal('')])
+    .default(''),
+  /** Observaciones adicionales que el analista/líder quiere que vea IT. */
+  observaciones: z.string().max(2000).default(''),
+});
+export type SolicitudHerramientas = z.infer<typeof solicitudHerramientasSchema>;
+
 export const perfilamientoInputSchema = z.object({
   criterios_texto: z
     .string()
@@ -40,6 +64,8 @@ export const perfilamientoInputSchema = z.object({
     .max(2000, 'Máximo 2000 caracteres'),
   empresas_competencia: z.array(z.string().min(1)).default([]),
   herramientas_requeridas: herramientasRequeridasSchema,
+  /** Solicitud de herramientas para IT (correo + hoja de trazabilidad). */
+  solicitud_herramientas: solicitudHerramientasSchema.default({}),
   fecha_entrevista_lider_pactada: z.date({
     required_error: 'Pacta una fecha de entrevista con el líder',
     invalid_type_error: 'Fecha inválida',
@@ -52,6 +78,11 @@ export interface PerfilamientoDoc {
   criterios_texto: string;
   empresas_competencia: string[];
   herramientas_requeridas: HerramientasRequeridas;
+  /**
+   * Opcional: procesos creados antes de 2026-05-29 no lo tienen. La UI y la
+   * Cloud Function deben tolerar `undefined` con valores por defecto.
+   */
+  solicitud_herramientas?: SolicitudHerramientas | null;
   fecha_entrevista_lider_pactada: Timestamp;
   /** Se marca true/false en el paso 14 según si el líder respetó la fecha pactada (Dolor 3). */
   compromiso_agenda_lider_cumplido: boolean | null;
@@ -97,4 +128,12 @@ export interface ProcesoDoc
   fecha_inicio: Timestamp | null;
   fecha_cierre: Timestamp | null;
   razon_cierre: string | null;
+
+  /**
+   * Marca de envío de la solicitud de herramientas a IT (hoja + correo).
+   * La pone la Cloud Function `registrarSolicitudHerramientas` la primera vez
+   * para evitar filas/correos duplicados si la analista re-guarda el
+   * perfilamiento. null mientras no se haya enviado.
+   */
+  solicitud_herramientas_enviada_en?: Timestamp | null;
 }

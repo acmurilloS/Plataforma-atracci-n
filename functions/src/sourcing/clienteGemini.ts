@@ -2,11 +2,12 @@ import { GoogleGenAI } from '@google/genai';
 import { logger } from 'firebase-functions/v2';
 import { respuestaSourcingSchema, type RespuestaSourcing } from './respuestaSchema';
 
-// gemini-2.5-flash: única opción del free tier (pro tiene límite 0 sin
-// billing). Si Equitel habilita facturación en la API de Gemini, subir a
-// gemini-2.5-pro mejora el deep-research. Por ahora flash + grounding +
-// prompt multi-fuente es lo viable sin costo.
+// gemini-2.5-flash es la primera opción. Si está saturado (503 UNAVAILABLE),
+// hacemos fallback a gemini-2.0-flash (también gratis y suele tener menos
+// carga). Si Equitel habilita billing en la API, subir a gemini-2.5-pro
+// mejora el deep-research.
 const MODELO_DEFECTO = 'gemini-2.5-flash';
+const MODELO_FALLBACK = 'gemini-2.0-flash';
 
 /**
  * Llama a Gemini con Google Search grounding habilitado y devuelve la respuesta
@@ -22,15 +23,19 @@ export async function buscarConGemini(prompt: string): Promise<RespuestaSourcing
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // Retry con backoff para errores transitorios de Gemini (503 high demand,
-  // 429 rate limit por minuto). El sourcing no es urgente al segundo, así
-  // que reintentar 3 veces con espera creciente vale la pena.
-  async function generarConRetry(intentos = 3): Promise<Awaited<ReturnType<typeof ai.models.generateContent>>> {
+  // Retry con backoff + fallback a otro modelo cuando 503 high-demand
+  // satura el principal. Total: 4 intentos en flash 2.5 (1+3 retries) y
+  // si todos fallan por saturación, 2 intentos en flash 2.0.
+  async function generarConRetry(
+    modelo: string,
+    intentos = 4,
+    backoffInicialMs = 5000,
+  ): Promise<Awaited<ReturnType<typeof ai.models.generateContent>>> {
     let ultimoError: unknown;
     for (let i = 0; i < intentos; i++) {
       try {
         return await ai.models.generateContent({
-          model: MODELO_DEFECTO,
+          model: modelo,
           contents: prompt,
           config: { tools: [{ googleSearch: {} }], temperature: 0.4 },
         });
@@ -39,9 +44,12 @@ export async function buscarConGemini(prompt: string): Promise<RespuestaSourcing
         const msg = e instanceof Error ? e.message : String(e);
         const transitorio = /503|429|UNAVAILABLE|RESOURCE_EXHAUSTED|high demand/i.test(msg);
         if (!transitorio || i === intentos - 1) throw e;
-        const esperaMs = 4000 * (i + 1); // 4s, 8s, 12s
+        // Backoff exponencial: 5s, 10s, 20s, 40s
+        const esperaMs = backoffInicialMs * Math.pow(2, i);
         logger.warn('[gemini] error transitorio, reintentando', {
+          modelo,
           intento: i + 1,
+          de: intentos,
           espera_ms: esperaMs,
           msg: msg.slice(0, 200),
         });
@@ -51,7 +59,19 @@ export async function buscarConGemini(prompt: string): Promise<RespuestaSourcing
     throw ultimoError;
   }
 
-  const respuesta = await generarConRetry();
+  let respuesta: Awaited<ReturnType<typeof ai.models.generateContent>>;
+  try {
+    respuesta = await generarConRetry(MODELO_DEFECTO, 4, 5000);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const saturacion = /503|UNAVAILABLE|high demand/i.test(msg);
+    if (!saturacion) throw e;
+    logger.warn('[gemini] modelo principal saturado, intentando fallback', {
+      principal: MODELO_DEFECTO,
+      fallback: MODELO_FALLBACK,
+    });
+    respuesta = await generarConRetry(MODELO_FALLBACK, 2, 4000);
+  }
 
   const texto = respuesta.text;
   const grounding = respuesta.candidates?.[0]?.groundingMetadata;

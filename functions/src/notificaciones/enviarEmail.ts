@@ -42,7 +42,7 @@ export async function enviarEmail(payload: EmailPayload): Promise<void> {
     // import { Resend } from 'resend';
     // const r = new Resend(process.env.RESEND_API_KEY);
     // await r.emails.send({
-    //   from: 'Plataforma Atracción <atraccion@equitel.com.co>',
+    //   from: 'Plataforma de Atracción Equitel <steve@equitel.com.co>',
     //   to: payload.destinatario_email,
     //   subject: payload.asunto,
     //   html: payload.mensaje_html ?? payload.mensaje_texto,

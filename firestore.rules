@@ -81,17 +81,14 @@ service cloud.firestore {
 
     // ===== Vacantes =====
     match /vacantes/{id} {
-      // get evalúa por-doc (tiene resource disponible).
-      // Los candidatos anónimos en la landing pueden leer vacantes publicadas
-      // y en proceso para ver descripción y postular.
-      allow get: if signedIn() && (
-        staff()
-        || isAnalista()
-        || isApoyo()
-        || (isLider() && resource.data.lider_uid == request.auth.uid)
-        || resource.data.estado == 'publicada'
-        || resource.data.estado == 'en_proceso'
-      );
+      // get totalmente público (sin requerir login ni Anonymous Auth).
+      // Decisión 2026-06-01: la landing pública debe abrirse desde
+      // cualquier navegador (normal o incógnito), WhatsApp, móvil, etc.
+      // Los datos de la vacante (cargo, salario, justificación) no son
+      // PII — están destinados a ser compartidos como oferta de trabajo.
+      // Para crear postulación sí se requiere signedIn() (anonymous o
+      // identificado), pero LEER la vacante no.
+      allow get: if true;
       // list NO tiene resource; cualquier autenticado puede listar,
       // el cliente debe filtrar (ej. lider por lider_uid).
       // Cada doc individual sigue pasando por allow get.
@@ -198,6 +195,36 @@ service cloud.firestore {
     match /busquedas_sourcing/{id} {
       allow read: if signedIn();
       allow write: if false; // solo Cloud Functions vía Admin SDK
+    }
+
+    // ===== Referidos internos (módulo v1, 2026-06-03) =====
+    // Auditoría de cada vez que se "activan referidos" para una vacante.
+    // Solo escribe la callable generarInvitacionesReferidos.
+    match /referidos_generaciones/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    // Mapeo slug → cédula del técnico. get público porque la landing
+    // (CarreraPublicaPage) lo resuelve al postular con `?ref=<slug>`.
+    // Lo único expuesto es el slug aleatorio — la cédula nunca llega al cliente
+    // directamente, viene a través de la callable `resolverRefSlug` que ya
+    // valida el slug.
+    match /referidos_links/{slug} {
+      allow get: if true;
+      allow list: if signedIn();
+      allow write: if false;
+    }
+    // Técnicos que pidieron no recibir más invitaciones. Solo admin edita.
+    match /referidos_optouts/{cedula} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() || isGH();
+      allow delete: if isAdmin();
+    }
+    // Configuración del módulo (Sheet ID, mapping de columnas).
+    // Solo 1 doc: `configuracion_global/referidos`.
+    match /configuracion_global/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
 
     match /debida_diligencia/{id} {

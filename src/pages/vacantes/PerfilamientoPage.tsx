@@ -20,11 +20,7 @@ import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useFestivosAnio } from '../../hooks/useCatalogos';
 import { functions } from '../../lib/firebase';
-import {
-  fechaInputValue,
-  parsearFechaInput,
-  sumarDiasHabiles,
-} from '../../utils/fechas';
+import { fechaInputValue, parsearFechaInput } from '../../utils/fechas';
 import { crearPreavisosTickets } from '../../utils/crearPreavisosTickets';
 import {
   validarPerfilUnicornio,
@@ -117,6 +113,11 @@ export default function PerfilamientoPage() {
     dotacion: false,
     celular_plan_datos: false,
   });
+  // Solicitud de herramientas para IT (reemplazo del Google Forms).
+  const [requiereHerramientas, setRequiereHerramientas] = useState(false);
+  const [personaContacto, setPersonaContacto] = useState('');
+  const [correoContacto, setCorreoContacto] = useState('');
+  const [observacionesHerr, setObservacionesHerr] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [analisisIA, setAnalisisIA] = useState<(AnalisisIA & { cargando?: boolean }) | null>(null);
@@ -161,6 +162,12 @@ export default function PerfilamientoPage() {
         sede_ciudad: vacante.sede_nombre,
         criterios_texto: criterios,
         empresas_competencia: competencia.split(',').map((s) => s.trim()).filter(Boolean),
+        // Compensación adicional al salario base. Sin esto, la IA pensaba que
+        // el salario base era el paquete total y alertaba que faltaba
+        // rodamiento aunque la líder sí lo había marcado.
+        comisiones_texto: vacante.comisiones_texto ?? '',
+        rodamiento: vacante.rodamiento ?? false,
+        garantizado_texto: vacante.garantizado_texto ?? '',
       });
       setAnalisisIA({ ...res.data, cargando: false });
     } catch (e) {
@@ -182,15 +189,28 @@ export default function PerfilamientoPage() {
         dotacion: !!p.herramientas_requeridas.dotacion,
         celular_plan_datos: !!p.herramientas_requeridas.celular_plan_datos,
       });
+      const sh = p.solicitud_herramientas;
+      setRequiereHerramientas(!!sh?.requiere);
+      setPersonaContacto(sh?.persona_contacto || vacante?.lider_nombre || '');
+      setCorreoContacto(sh?.correo_contacto || '');
+      setObservacionesHerr(sh?.observaciones || '');
       if (p.fecha_entrevista_lider_pactada) {
         setFechaEntrevista(fechaInputValue(p.fecha_entrevista_lider_pactada.toDate()));
       }
-    } else if (vacante?.fecha_entrevista_propuesta) {
-      setFechaEntrevista(fechaInputValue(vacante.fecha_entrevista_propuesta.toDate()));
+    } else if (vacante) {
+      // Proceso nuevo: prellenar la persona de contacto con el líder.
+      setPersonaContacto((prev) => prev || vacante.lider_nombre || '');
+      if (vacante.fecha_entrevista_propuesta) {
+        setFechaEntrevista(fechaInputValue(vacante.fecha_entrevista_propuesta.toDate()));
+      }
     }
   }, [procesoActivo, vacante]);
 
-  const minFecha = sumarDiasHabiles(new Date(), 3, new Set());
+  // La fecha mínima es hoy: el analista decide si tiene sentido operativo.
+  // Antes había un mínimo de 3 días hábiles que bloqueaba fechas válidas
+  // ya pactadas con el líder en la solicitud original.
+  const minFecha = new Date();
+  minFecha.setHours(0, 0, 0, 0);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -204,6 +224,12 @@ export default function PerfilamientoPage() {
         criterios_texto: criterios.trim(),
         empresas_competencia: competencia.split(',').map((s) => s.trim()).filter(Boolean),
         herramientas_requeridas: herramientas,
+        solicitud_herramientas: {
+          requiere: requiereHerramientas,
+          persona_contacto: personaContacto.trim(),
+          correo_contacto: correoContacto.trim(),
+          observaciones: observacionesHerr.trim(),
+        },
         fecha_entrevista_lider_pactada: Timestamp.fromDate(fechaDate),
         compromiso_agenda_lider_cumplido: null,
         notas: notas.trim(),
@@ -258,6 +284,15 @@ export default function PerfilamientoPage() {
         });
       } catch (errPre) {
         console.error('[preavisos] no se pudieron crear', errPre);
+      }
+      // Registra la solicitud en la hoja de IT + correo a sistemas (reemplazo
+      // del Google Forms). No bloquea el flujo si falla: la function es
+      // idempotente y se puede reintentar re-guardando.
+      try {
+        const fn = httpsCallable(functions, 'registrarSolicitudHerramientas');
+        await fn({ vacante_id: vacante.id, proceso_id: procesoId });
+      } catch (errSol) {
+        console.error('[solicitud-herramientas] no se pudo registrar', errSol);
       }
       nav(`/vacantes/${vacante.id}/publicacion`);
     } catch (e) {
@@ -446,6 +481,110 @@ export default function PerfilamientoPage() {
                 </button>
               );
             })}
+          </div>
+        </Card>
+
+        {/* ─── Solicitud de herramientas · IT ──────────────────── */}
+        <Card padding="lg">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <Briefcase size={14} strokeWidth={1.75} className="text-text-muted" />
+              <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                Solicitud de herramientas · IT
+              </p>
+            </div>
+            <Pill tono="info">Se registra y notifica a sistemas</Pill>
+          </div>
+          <p className="text-[12px] text-text-muted mb-4 max-w-2xl">
+            Al guardar, esta solicitud queda en la hoja de trazabilidad de IT y se
+            envía el correo a sistemas — reemplaza el formulario externo. El detalle
+            fino (tipo de equipo, Office, Siesa, etc.) lo define IT en su parte.
+          </p>
+
+          <div className="space-y-5">
+            <div>
+              <span className="block text-[13px] font-medium text-text-strong mb-1.5">
+                ¿Este ingreso requiere herramientas tecnológicas?{' '}
+                <span className="text-brand-600">*</span>
+              </span>
+              <div className="inline-flex rounded-brand-input border border-slate-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setRequiereHerramientas(true)}
+                  className={cn(
+                    'px-5 py-2 text-[13px] font-medium transition-colors',
+                    requiereHerramientas
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-white text-text-muted hover:bg-slate-50',
+                  )}
+                >
+                  Sí
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRequiereHerramientas(false)}
+                  className={cn(
+                    'px-5 py-2 text-[13px] font-medium transition-colors border-l border-slate-200',
+                    !requiereHerramientas
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-white text-text-muted hover:bg-slate-50',
+                  )}
+                >
+                  No
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label
+                  htmlFor="persona-contacto"
+                  className="block text-[13px] font-medium text-text-strong mb-1.5"
+                >
+                  Persona de contacto
+                </label>
+                <input
+                  id="persona-contacto"
+                  value={personaContacto}
+                  onChange={(e) => setPersonaContacto(e.target.value)}
+                  className={inputClass}
+                  placeholder="Quién atiende dudas de IT (por defecto el líder)"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="correo-contacto"
+                  className="block text-[13px] font-medium text-text-strong mb-1.5"
+                >
+                  Correo de contacto
+                </label>
+                <input
+                  id="correo-contacto"
+                  type="email"
+                  value={correoContacto}
+                  onChange={(e) => setCorreoContacto(e.target.value)}
+                  className={inputClass}
+                  placeholder="correo@equitel.com.co"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="observaciones-herr"
+                className="block text-[13px] font-medium text-text-strong mb-1.5"
+              >
+                Observaciones para IT
+              </label>
+              <textarea
+                id="observaciones-herr"
+                value={observacionesHerr}
+                onChange={(e) => setObservacionesHerr(e.target.value)}
+                rows={3}
+                className={textareaClass}
+                placeholder="Notas que IT debe tener en cuenta: equipo a reasignar, accesos especiales, fechas, etc."
+              />
+            </div>
           </div>
         </Card>
 

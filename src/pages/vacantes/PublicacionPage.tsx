@@ -9,6 +9,7 @@ import {
   Link as LinkIcon,
   Megaphone,
   Sparkles,
+  Users2,
 } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { useDoc } from '../../hooks/useDoc';
@@ -17,6 +18,7 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
 import { BuscarCandidatosIAModal } from '../../components/vacantes/BuscarCandidatosIAModal';
+import { ActivarReferidosModal } from '../../components/vacantes/ActivarReferidosModal';
 import { Button, Card, Pill } from '../../components/brand';
 import type { VacanteDoc } from '../../schemas';
 
@@ -40,6 +42,22 @@ interface PublicacionDoc {
   [k: string]: unknown;
 }
 
+interface GeneracionReferidoDoc {
+  id: string;
+  generado_en: Timestamp | null;
+  tecnicos_incluidos: number;
+  marcada_como_enviada: boolean;
+  modo: 'personal' | 'difusion';
+  [k: string]: unknown;
+}
+
+interface PostulacionConRefDoc {
+  id: string;
+  referido_por_cedula: string | null;
+  referido_por_nombre: string | null;
+  [k: string]: unknown;
+}
+
 const CANALES = [
   { valor: 'magneto', label: 'Magneto' },
   { valor: 'linkedin_pagina', label: 'LinkedIn página empresarial' },
@@ -60,7 +78,23 @@ export default function PublicacionPage() {
   const { docs: publicaciones, cargando } = useColeccion<PublicacionDoc>('publicaciones', {
     filtros: id ? [['vacante_id', '==', id]] : [],
   });
+  const { docs: generacionesReferidos } = useColeccion<GeneracionReferidoDoc>(
+    'referidos_generaciones',
+    { filtros: id ? [['vacante_id', '==', id]] : [] },
+  );
+  const { docs: postulacionesConRef } = useColeccion<PostulacionConRefDoc>('postulaciones', {
+    filtros: id ? [['vacante_id', '==', id]] : [],
+  });
   const { crear, actualizar } = useMutacion();
+
+  const ultimaGeneracion = generacionesReferidos
+    .slice()
+    .sort((a, b) => {
+      const ta = a.generado_en?.toMillis?.() ?? 0;
+      const tb = b.generado_en?.toMillis?.() ?? 0;
+      return tb - ta;
+    })[0];
+  const postulacionesReferidas = postulacionesConRef.filter((p) => !!p.referido_por_cedula);
 
   const [canal, setCanal] = useState('magneto');
   const [detalle, setDetalle] = useState('');
@@ -68,6 +102,7 @@ export default function PublicacionPage() {
   const [err, setErr] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [modalIAAbierto, setModalIAAbierto] = useState(false);
+  const [modalReferidosAbierto, setModalReferidosAbierto] = useState(false);
 
   const puedeBuscarConIA = rol === 'analista' || rol === 'coordinador' || rol === 'admin';
 
@@ -275,6 +310,80 @@ export default function PublicacionPage() {
         </Card>
       )}
 
+      {/* ─── Referidos internos (paso 4.6) ────────────────────── */}
+      {puedeBuscarConIA && (
+        <Card padding="lg">
+          <div className="flex items-start gap-4 flex-wrap">
+            <div className="w-12 h-12 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
+              <Users2 size={20} strokeWidth={1.75} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Pill tono="brand">Paso 4.6 · Referidos internos</Pill>
+                <Pill tono="neutral">Manual</Pill>
+              </div>
+              <h2 className="mt-2 text-[18px] font-semibold tracking-[-0.012em] text-text-strong">
+                Activa la red de técnicos de Equitel
+              </h2>
+              <p className="text-[13px] text-text-muted mt-1.5 max-w-2xl">
+                Notifica a los técnicos que ya trabajan con nosotros para que recomienden gente
+                de su red. La plataforma arma el mensaje y la lista de números — tú los pegas a
+                WhatsApp manualmente.
+              </p>
+            </div>
+            <Button
+              variant="brand-primary"
+              onClick={() => setModalReferidosAbierto(true)}
+              icon={<Users2 size={13} strokeWidth={1.75} />}
+            >
+              {ultimaGeneracion ? 'Regenerar invitaciones' : 'Activar referidos'}
+            </Button>
+          </div>
+
+          {(ultimaGeneracion || postulacionesReferidas.length > 0) && (
+            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {ultimaGeneracion && (
+                <>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-subtle">
+                      Última generación
+                    </p>
+                    <p className="text-[14px] font-semibold text-text-strong mt-1">
+                      {ultimaGeneracion.generado_en
+                        ? formatearFecha(ultimaGeneracion.generado_en.toDate())
+                        : '—'}
+                    </p>
+                    <p className="text-[11px] text-text-muted">
+                      {ultimaGeneracion.marcada_como_enviada
+                        ? 'Marcadas como enviadas'
+                        : 'Generadas (sin marcar)'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-subtle">
+                      Técnicos invitados
+                    </p>
+                    <p className="text-[14px] font-semibold text-text-strong mt-1">
+                      {ultimaGeneracion.tecnicos_incluidos}
+                    </p>
+                    <p className="text-[11px] text-text-muted">modo {ultimaGeneracion.modo}</p>
+                  </div>
+                </>
+              )}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-subtle">
+                  Postulaciones referidas
+                </p>
+                <p className="text-[14px] font-semibold text-text-strong mt-1">
+                  {postulacionesReferidas.length}
+                </p>
+                <p className="text-[11px] text-text-muted">candidatos con `?ref=`</p>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* ─── Registrar publicación ────────────────────────────── */}
       <Card padding="lg">
         <div className="flex items-center gap-2 mb-5">
@@ -452,6 +561,12 @@ export default function PublicacionPage() {
           setModalIAAbierto(false);
           if (vacante) nav(`/vacantes/${vacante.id}/sourcing`);
         }}
+        vacante={vacante}
+      />
+
+      <ActivarReferidosModal
+        open={modalReferidosAbierto}
+        onClose={() => setModalReferidosAbierto(false)}
         vacante={vacante}
       />
     </div>

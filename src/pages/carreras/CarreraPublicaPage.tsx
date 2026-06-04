@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import {
   addDoc,
@@ -9,15 +9,22 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { Check, Upload } from 'lucide-react';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Card, Pill } from '../../components/brand';
 import { TIPO_SOLICITUD_LABEL } from '../../schemas';
-import { auth, db, storage } from '../../lib/firebase';
+import { auth, db, functions, storage } from '../../lib/firebase';
 import { formatearCOP } from '../../utils/moneda';
 import { cn } from '../../utils/cn';
 import type { VacanteDoc } from '../../schemas';
+
+interface ReferidoResuelto {
+  cedula_tecnico: string;
+  nombre_tecnico: string;
+  generacion_id: string;
+}
 
 /**
  * CarreraPublicaPage · sistema brand.
@@ -36,11 +43,14 @@ const inputClass = cn(
 
 export default function CarreraPublicaPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const refSlug = searchParams.get('ref');
   const [vacante, setVacante] = useState<VacanteDoc | null>(null);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [postulado, setPostulado] = useState<{ ok: boolean; id: string } | null>(null);
+  const [referido, setReferido] = useState<ReferidoResuelto | null>(null);
 
   const [form, setForm] = useState({
     nombres: '',
@@ -73,6 +83,38 @@ export default function CarreraPublicaPage() {
     return unsub;
   }, []);
 
+  // Resolver el slug del ?ref= a {cedula, nombre} del técnico referidor.
+  // Si el slug es inválido o no existe, dejamos `referido` en null y la
+  // postulación sigue su flujo normal sin marca de referido.
+  useEffect(() => {
+    if (!refSlug || !authReady) return;
+    (async () => {
+      try {
+        const fn = httpsCallable<
+          { slug: string },
+          | { encontrado: false }
+          | {
+              encontrado: true;
+              cedula_tecnico: string;
+              nombre_tecnico: string;
+              generacion_id: string;
+            }
+        >(functions, 'resolverRefSlug');
+        const res = await fn({ slug: refSlug });
+        if (res.data.encontrado) {
+          setReferido({
+            cedula_tecnico: res.data.cedula_tecnico,
+            nombre_tecnico: res.data.nombre_tecnico,
+            generacion_id: res.data.generacion_id,
+          });
+        }
+      } catch (e) {
+        // El candidato no debe ver errores por un slug malo.
+        console.warn('No se pudo resolver ?ref=', e);
+      }
+    })();
+  }, [refSlug, authReady]);
+
   useEffect(() => {
     if (!id || !authReady) return;
     (async () => {
@@ -84,11 +126,12 @@ export default function CarreraPublicaPage() {
           return;
         }
         const data = snap.data() as Omit<VacanteDoc, 'id'>;
-        if (!['publicada', 'en_proceso'].includes(data.estado)) {
-          setErrorCarga('Esta vacante ya no está recibiendo postulaciones.');
-          setCargando(false);
-          return;
-        }
+        // La landing pública SIEMPRE muestra la vacante si existe, sin
+        // importar su estado. Así Karen puede compartir el link desde el
+        // momento que se crea la solicitud y los candidatos ven la oferta
+        // aunque aún no se haya pasado el aval. Si la vacante está cerrada,
+        // desierta o cancelada, el formulario de postular se deshabilita
+        // arriba — pero el detalle queda visible.
         setVacante({ id: snap.id, ...data });
         setCargando(false);
       } catch (e) {
@@ -171,7 +214,9 @@ export default function CarreraPublicaPage() {
         candidato_cv_url: cv_url,
         estado: 'postulado',
         cumple_criterios: null,
-        fuente: 'postulacion_directa',
+        // Si llegó por ?ref= y resolvimos el slug → fuente='referido'. Si no,
+        // sigue siendo postulación directa.
+        fuente: referido ? 'referido' : 'postulacion_directa',
         marcas: { postulado_en: ahora },
         fecha_postulacion: ahora,
         ultima_transicion_estado: ahora,
@@ -179,6 +224,9 @@ export default function CarreraPublicaPage() {
         razon_descarte: null,
         descarte_etapa: null,
         analista_uid: vacante.analista_uid ?? null,
+        referido_por_cedula: referido?.cedula_tecnico ?? null,
+        referido_por_nombre: referido?.nombre_tecnico ?? null,
+        referido_generacion_id: referido?.generacion_id ?? null,
         creado_en: serverTimestamp(),
         creado_por: uid,
         actualizado_en: serverTimestamp(),

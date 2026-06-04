@@ -4,37 +4,36 @@ import { logger } from 'firebase-functions/v2';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../utils/admin';
+import { enviarConGmail } from './enviarConGmail';
 
 /**
  * onNotificacionCreate · cada notificación interna también se manda al
  * correo del destinatario.
  *
- * Usa Resend (https://resend.com) como provider — API simple, 3k emails/mes
- * gratis, sin requerir DNS al inicio (sandbox `notificaciones@resend.dev`).
- * Cuando quieran enviar desde @equitel.com.co se verifica el dominio.
+ * Provider: Gmail SMTP vía nodemailer (mismo patrón que el Repositorio
+ * Jurídico). Remitente: `Plataforma de Atracción Equitel <steve@equitel.com.co>`.
+ * La cuenta Workspace autenticada con `GMAIL_USER` debe tener "Send mail as"
+ * configurado para steve@equitel.com.co (ya configurado en la cuenta que usa
+ * Legal — la misma que aquí).
  *
- * Si la secret RESEND_API_KEY no está configurada, la function se queda
- * en silencio (no falla) — útil para el período entre deploy y cuando se
- * cuente con la API key. Las notificaciones siguen apareciendo en la
- * campanita de la app igual.
+ * Si los secrets `GMAIL_USER` / `GMAIL_APP_PASSWORD` no están sembrados, la
+ * function se queda en silencio (no falla) — útil mientras se rotan creds.
+ * Las notificaciones siguen apareciendo en la campanita igual.
  *
  * Idempotente: si la notificación ya tiene `email_enviado_en` no reintenta.
- *
- * Para configurar la key:
- *   firebase functions:secrets:set RESEND_API_KEY
- *   firebase deploy --only functions:onNotificacionCreate
  */
 
-const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
+const GMAIL_USER = defineSecret('GMAIL_USER');
+const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
-const FROM = 'Plataforma Equitel <notificaciones@resend.dev>';
+const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
 
 export const onNotificacionCreate = onDocumentCreated(
   {
     document: 'notificaciones/{id}',
     region: 'us-central1',
-    secrets: [RESEND_API_KEY],
+    secrets: [GMAIL_USER, GMAIL_APP_PASSWORD],
   },
   async (event) => {
     const snap = event.data;
@@ -43,19 +42,8 @@ export const onNotificacionCreate = onDocumentCreated(
 
     if (noti.email_enviado_en) return;
 
-    let apiKey = '';
-    try {
-      apiKey = RESEND_API_KEY.value();
-    } catch {
-      // Secret no configurada todavía
-    }
-    // Sanitizar: PowerShell y otros editores a veces agregan BOM (﻿) o
-    // espacios al pegar la API key. Los headers HTTP son ByteString y
-    // rechazan caracteres > 0xFF — fetch falla con "Cannot convert ... to
-    // ByteString" si hay BOM. Lo eliminamos defensivamente.
-    apiKey = apiKey.replace(/^﻿/, '').replace(/[\r\n]/g, '').trim();
-    if (!apiKey) {
-      logger.info('onNotificacionCreate · RESEND_API_KEY ausente, email omitido', {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      logger.info('onNotificacionCreate · GMAIL_* ausentes, email omitido', {
         notif_id: snap.id,
       });
       return;
@@ -89,31 +77,12 @@ export const onNotificacionCreate = onDocumentCreated(
     const html = construirHtml({ nombre, titulo, mensaje, link });
 
     try {
-      const resp = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: FROM,
-          to: email,
-          subject: `[Equitel Atracción] ${titulo}`,
-          html,
-        }),
+      await enviarConGmail({
+        from: FROM,
+        to: [email],
+        subject: `[Equitel Atracción] ${titulo}`,
+        html,
       });
-
-      if (!resp.ok) {
-        const errBody = await resp.text();
-        logger.error('onNotificacionCreate · Resend rechazó', {
-          status: resp.status,
-          body: errBody,
-        });
-        await snap.ref.update({
-          email_error: `${resp.status}: ${errBody.slice(0, 500)}`,
-        });
-        return;
-      }
 
       await snap.ref.update({
         email_enviado_en: FieldValue.serverTimestamp(),
@@ -132,7 +101,9 @@ export const onNotificacionCreate = onDocumentCreated(
 
       logger.info('onNotificacionCreate · email enviado', { email, titulo });
     } catch (e) {
-      logger.error('onNotificacionCreate · error enviando', { e: String(e) });
+      const errMsg = e instanceof Error ? e.message : String(e);
+      logger.error('onNotificacionCreate · error enviando', { e: errMsg });
+      await snap.ref.update({ email_error: errMsg.slice(0, 500) });
     }
   },
 );
