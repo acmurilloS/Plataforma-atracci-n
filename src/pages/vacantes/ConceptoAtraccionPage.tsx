@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Timestamp } from 'firebase/firestore';
-import { ArrowLeft, Check, Plus, Printer, Save, Trash2 } from 'lucide-react';
+import { Timestamp, doc, getDoc } from 'firebase/firestore';
+import { ArrowLeft, Check, FileDown, Plus, Printer, Save, Trash2 } from 'lucide-react';
+import { db } from '../../lib/firebase';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -23,6 +24,27 @@ import { Button, Pill } from '../../components/brand';
  * el formato oficial VIDA-F-03 con bordes negros para que se vea como
  * documento corporativo cuando se exporta a PDF o se imprime.
  */
+/** Estados donde el candidato ya es relevante para la terna/concepto. */
+const ESTADOS_AVANZADOS = new Set([
+  'en_terna',
+  'seleccionado_por_lider',
+  'descartado_por_lider',
+  'en_contratacion',
+  'contratado',
+  'entrevistado_analista',
+  'referencias_validadas',
+]);
+
+/** Campos del informe que usamos para pre-llenar el Concepto. */
+interface InformeMin {
+  id: string;
+  postulacion_id: string;
+  resumen_ejecutivo?: string;
+  trayectoria?: string;
+  version?: number;
+  [k: string]: unknown;
+}
+
 export default function ConceptoAtraccionPage() {
   const { id } = useParams<{ id: string }>();
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', id);
@@ -32,6 +54,11 @@ export default function ConceptoAtraccionPage() {
   const { docs: conceptos } = useColeccion<ConceptoAtraccionDoc>('conceptos_atraccion', {
     filtros: id ? [['vacante_id', '==', id]] : [],
     limit: 1,
+  });
+  // Informes de los candidatos de esta vacante. Sirven para auto-llenar el
+  // Concepto sin volver a digitar lo que ya se escribió en el Informe (paso 11).
+  const { docs: informes } = useColeccion<InformeMin>('informes', {
+    filtros: id ? [['vacante_id', '==', id]] : [],
   });
   const { crear, actualizar } = useMutacion();
   const { user, perfil } = useAuth();
@@ -43,33 +70,82 @@ export default function ConceptoAtraccionPage() {
   const [guardado, setGuardado] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Arma las filas del Concepto desde los Informes + datos del candidato:
+  //   · experiencia ← informe.trayectoria (paso 11)
+  //   · concepto    ← informe.resumen_ejecutivo (paso 11)
+  //   · ciudad/formación ← candidato (ciudad_residencia / especialidad_tecnica)
+  // Así el analista no vuelve a digitar lo que ya escribió en el Informe.
+  const armarDesdeInformes = useCallback(async (): Promise<CandidatoConcepto[]> => {
+    const terna = postulaciones.filter((p) => ESTADOS_AVANZADOS.has(p.estado));
+
+    // Último informe (mayor versión) por postulación.
+    const informePorPost = new Map<string, InformeMin>();
+    for (const inf of informes) {
+      const prev = informePorPost.get(inf.postulacion_id);
+      if (!prev || (inf.version ?? 0) > (prev.version ?? 0)) {
+        informePorPost.set(inf.postulacion_id, inf);
+      }
+    }
+
+    // Traer los candidatos de la terna (para ciudad y especialidad).
+    const candCache = new Map<string, Record<string, unknown>>();
+    await Promise.all(
+      terna.map(async (p) => {
+        if (!p.candidato_id || candCache.has(p.candidato_id)) return;
+        try {
+          const snap = await getDoc(doc(db, 'candidatos', p.candidato_id));
+          if (snap.exists()) candCache.set(p.candidato_id, snap.data() as Record<string, unknown>);
+        } catch {
+          /* candidato no accesible → se deja vacío */
+        }
+      }),
+    );
+
+    return terna.map((p) => {
+      const inf = informePorPost.get(p.id);
+      const cand = p.candidato_id ? candCache.get(p.candidato_id) : null;
+      return {
+        postulacion_id: p.id,
+        nombre: p.candidato_nombre,
+        ciudad: (cand?.ciudad_residencia as string) ?? '',
+        edad: '',
+        formacion: (cand?.especialidad_tecnica as string) ?? '',
+        experiencia: inf?.trayectoria ?? '',
+        concepto: inf?.resumen_ejecutivo ?? '',
+      };
+    });
+  }, [postulaciones, informes]);
+
   useEffect(() => {
     if (concepto) {
       setFilas(concepto.candidatos);
       return;
     }
-    const estadosAvanzados = new Set([
-      'en_terna',
-      'seleccionado_por_lider',
-      'descartado_por_lider',
-      'en_contratacion',
-      'contratado',
-      'entrevistado_analista',
-      'referencias_validadas',
-    ]);
-    const auto: CandidatoConcepto[] = postulaciones
-      .filter((p) => estadosAvanzados.has(p.estado))
-      .map((p) => ({
-        postulacion_id: p.id,
-        nombre: p.candidato_nombre,
-        ciudad: '',
-        edad: '',
-        formacion: '',
-        experiencia: '',
-        concepto: '',
-      }));
-    setFilas(auto);
-  }, [concepto, postulaciones]);
+    // Primera vez (sin Concepto guardado): pre-llenar desde los Informes.
+    let cancelado = false;
+    armarDesdeInformes().then((rows) => {
+      if (!cancelado) setFilas(rows);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [concepto, armarDesdeInformes]);
+
+  async function traerDeInformes() {
+    const hayContenido = filas.some((f) => f.concepto || f.experiencia || f.ciudad);
+    if (
+      hayContenido &&
+      !window.confirm(
+        'Esto vuelve a llenar la tabla con los datos de los Informes y el candidato. ' +
+          'Se reemplaza lo que esté escrito. ¿Continuar?',
+      )
+    ) {
+      return;
+    }
+    const rows = await armarDesdeInformes();
+    setFilas(rows);
+    setGuardado(false);
+  }
 
   function actualizarFila(i: number, patch: Partial<CandidatoConcepto>) {
     setFilas((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
@@ -167,8 +243,8 @@ export default function ConceptoAtraccionPage() {
               Concepto de Atracción y Desarrollo
             </h1>
             <p className="mt-3 text-[14px] text-text-muted leading-[1.55] max-w-xl">
-              Formato oficial VIDA-F-03 v0. Completa los datos por candidato, guarda y exporta a
-              PDF para anexarlo al expediente.
+              Formato oficial VIDA-F-03 v0. La tabla se llena sola con lo que escribiste en los
+              Informes (paso 11); ajusta lo que falte, guarda y exporta a PDF.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -178,6 +254,13 @@ export default function ConceptoAtraccionPage() {
                 Guardado
               </span>
             )}
+            <Button
+              onClick={traerDeInformes}
+              variant="neutral-secondary"
+              icon={<FileDown size={13} strokeWidth={1.75} />}
+            >
+              Traer de los informes
+            </Button>
             <Button
               onClick={guardar}
               disabled={guardando}

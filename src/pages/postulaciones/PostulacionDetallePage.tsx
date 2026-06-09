@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import {
   ArrowLeft,
   Calendar,
@@ -12,6 +13,7 @@ import {
   Send,
   Sparkles,
 } from 'lucide-react';
+import { functions } from '../../lib/firebase';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -237,6 +239,12 @@ function PruebasTab({ postulacion }: SubProps) {
   const { crear, actualizar } = useMutacion();
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState<'psicotecnica' | 'tecnica' | 'conocimiento'>('psicotecnica');
+  const [link, setLink] = useState('');
+  const [instrucciones, setInstrucciones] = useState('');
+  const [enviandoCorreo, setEnviandoCorreo] = useState(false);
+  const [msg, setMsg] = useState<{ tipo: 'ok' | 'err'; texto: string } | null>(null);
+
+  const emailCandidato = (postulacion.candidato_email ?? '').trim();
 
   async function enviar() {
     if (!nombre.trim()) return;
@@ -245,7 +253,7 @@ function PruebasTab({ postulacion }: SubProps) {
       candidato_id: postulacion.candidato_id,
       proceso_id: postulacion.proceso_id,
       tipo,
-      proveedor: 'magneto',
+      proveedor: 'externo',
       codigo_prueba: nombre.toLowerCase().replace(/\s+/g, '_'),
       nombre,
       enviada_en: Timestamp.now(),
@@ -256,6 +264,43 @@ function PruebasTab({ postulacion }: SubProps) {
       cumple_expectativas: null,
     });
     setNombre('');
+    setMsg({ tipo: 'ok', texto: 'Prueba registrada (sin correo).' });
+  }
+
+  // Envía el correo al candidato con el link de la prueba vía Cloud Function
+  // (reusa el Gmail corporativo). La function crea el registro y manda el correo.
+  async function enviarPorCorreo() {
+    setMsg(null);
+    if (!nombre.trim() || !link.trim()) return;
+    setEnviandoCorreo(true);
+    try {
+      const fn = httpsCallable<
+        {
+          postulacion_id: string;
+          tipo: string;
+          nombre_prueba: string;
+          link: string;
+          instrucciones: string;
+        },
+        { ok: true; email_destinatario: string }
+      >(functions, 'enviarPruebaCandidato');
+      const res = await fn({
+        postulacion_id: postulacion.id,
+        tipo,
+        nombre_prueba: nombre,
+        link,
+        instrucciones,
+      });
+      setMsg({ tipo: 'ok', texto: `Prueba enviada a ${res.data.email_destinatario}.` });
+      setNombre('');
+      setLink('');
+      setInstrucciones('');
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : 'No se pudo enviar la prueba.';
+      setMsg({ tipo: 'err', texto: raw });
+    } finally {
+      setEnviandoCorreo(false);
+    }
   }
 
   async function registrarResultado(p: P) {
@@ -278,27 +323,76 @@ function PruebasTab({ postulacion }: SubProps) {
             Enviar prueba · paso 7
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <select
-            value={tipo}
-            onChange={(e) =>
-              setTipo(e.target.value as 'psicotecnica' | 'tecnica' | 'conocimiento')
-            }
-            className={cn(inputClass, 'md:w-auto')}
-          >
-            <option value="psicotecnica">Psicotécnica</option>
-            <option value="tecnica">Técnica</option>
-            <option value="conocimiento">Conocimiento</option>
-          </select>
+        <div className="space-y-3">
+          <div className="flex gap-2 flex-wrap">
+            <select
+              value={tipo}
+              onChange={(e) =>
+                setTipo(e.target.value as 'psicotecnica' | 'tecnica' | 'conocimiento')
+              }
+              className={cn(inputClass, 'md:w-auto')}
+            >
+              <option value="psicotecnica">Psicotécnica</option>
+              <option value="tecnica">Técnica</option>
+              <option value="conocimiento">Conocimiento</option>
+            </select>
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Nombre de la prueba"
+              className={cn(inputClass, 'flex-1 min-w-[200px]')}
+            />
+          </div>
           <input
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="Nombre de la prueba"
-            className={cn(inputClass, 'flex-1 min-w-[200px]')}
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="Link de la prueba (Magneto, formulario, etc.) — https://…"
+            className={cn(inputClass, 'w-full')}
           />
-          <Button onClick={enviar} variant="brand-primary" disabled={!nombre.trim()}>
-            Enviar
-          </Button>
+          <textarea
+            value={instrucciones}
+            onChange={(e) => setInstrucciones(e.target.value)}
+            rows={2}
+            placeholder="Instrucciones para el candidato (opcional): plazo, duración, recomendaciones…"
+            className={textareaClass}
+          />
+
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <Button
+              onClick={enviarPorCorreo}
+              variant="brand-primary"
+              loading={enviandoCorreo}
+              disabled={enviandoCorreo || !nombre.trim() || !link.trim() || !emailCandidato}
+              icon={<Mail size={13} strokeWidth={1.75} />}
+            >
+              {enviandoCorreo ? 'Enviando…' : 'Enviar al candidato'}
+            </Button>
+            <Button
+              onClick={enviar}
+              variant="neutral-secondary"
+              disabled={enviandoCorreo || !nombre.trim()}
+            >
+              Solo registrar (sin correo)
+            </Button>
+            {!emailCandidato && (
+              <span className="text-[11px] text-warning-700">
+                El candidato no tiene correo — agrégalo en Datos Básicos para poder enviarle la prueba.
+              </span>
+            )}
+          </div>
+
+          {msg && (
+            <div
+              className={cn(
+                'rounded-md border px-3 py-2 text-[12px]',
+                msg.tipo === 'ok'
+                  ? 'border-success-500/20 bg-success-50 text-success-700'
+                  : 'border-danger-500/20 bg-danger-50 text-danger-700',
+              )}
+            >
+              {msg.texto}
+            </div>
+          )}
         </div>
       </Card>
 

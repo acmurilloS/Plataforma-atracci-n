@@ -25,3 +25,6 @@ export { registrarSolicitudHerramientas } from './solicitudes/registrarSolicitud
 export { generarInvitacionesReferidos } from './referidos/generarInvitaciones';
 export { resolverRefSlug } from './referidos/resolverRefSlug';
 export { marcarComoEnviadasReferidos } from './referidos/marcarComoEnviadas';
+
+// Envío de pruebas al candidato por correo (paso 7, 2026-06-09).
+export { enviarPruebaCandidato } from './pruebas/enviarPruebaCandidato';
