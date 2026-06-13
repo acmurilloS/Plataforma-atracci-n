@@ -99,6 +99,7 @@ export default function PostulacionDetallePage() {
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', post?.vacante_id ?? null);
   const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
   const [tab, setTab] = useState<Tab>('pruebas');
+  const [enviandoPortal, setEnviandoPortal] = useState(false);
 
   if (!post)
     return (
@@ -107,6 +108,24 @@ export default function PostulacionDetallePage() {
 
   const criticidad = vacante?.criticidad ?? null;
   const tono = ESTADO_TONO[post.estado] ?? 'neutral';
+
+  /** Envía (o reenvía) al candidato el link a su portal público de consentimientos. */
+  async function enviarPortal() {
+    if (!post) return;
+    setEnviandoPortal(true);
+    try {
+      const fn = httpsCallable<
+        { postulacion_id: string },
+        { ok: true; url: string; email_destinatario: string }
+      >(functions, 'enviarPortalCandidato');
+      const res = await fn({ postulacion_id: post.id });
+      window.alert(`Portal enviado al candidato (${res.data.email_destinatario}).`);
+    } catch (e) {
+      window.alert('No se pudo enviar el portal: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEnviandoPortal(false);
+    }
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
@@ -168,6 +187,30 @@ export default function PostulacionDetallePage() {
             <FileSignature size={12} strokeWidth={1.75} />
             Acuerdo de imagen y voz
           </Link>
+          <button
+            onClick={enviarPortal}
+            disabled={enviandoPortal}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-[12px] font-medium text-white hover:bg-brand-700 disabled:opacity-60 transition-colors duration-150"
+          >
+            <Mail size={12} strokeWidth={1.75} />
+            {enviandoPortal
+              ? 'Enviando…'
+              : post.portal_enviado_en
+                ? 'Reenviar portal al candidato'
+                : 'Enviar portal al candidato'}
+          </button>
+          {(post.consentimiento_datos_aceptado_en || post.consentimiento_imagen_aceptado_en) && (
+            <p className="text-[11px] text-text-muted leading-[1.5] px-0.5">
+              Consentimientos:{' '}
+              <span className={post.consentimiento_datos_aceptado_en ? 'text-success-700 font-medium' : ''}>
+                {post.consentimiento_datos_aceptado_en ? '✓' : '○'} datos
+              </span>
+              {' · '}
+              <span className={post.consentimiento_imagen_aceptado_en ? 'text-success-700 font-medium' : ''}>
+                {post.consentimiento_imagen_aceptado_en ? '✓' : '○'} imagen y voz
+              </span>
+            </p>
+          )}
         </div>
       </div>
 

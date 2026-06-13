@@ -6,6 +6,7 @@ import CatalogosAdminPage from './pages/admin/CatalogosAdminPage';
 import PanelAdminPage from './pages/admin/PanelAdminPage';
 import TicketsPage from './pages/apoyo/TicketsPage';
 import CarreraPublicaPage from './pages/carreras/CarreraPublicaPage';
+import PortalCandidatoPage from './pages/portal/PortalCandidatoPage';
 import DashboardCoordPage from './pages/coord/DashboardCoordPage';
 import CarpetasPage from './pages/gh/CarpetasPage';
 import ExamenesMedicosPage from './pages/gh/ExamenesMedicosPage';
@@ -43,6 +44,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/carreras/:id" element={<CarreraPublicaPage />} />
+          <Route path="/portal/:token" element={<PortalCandidatoPage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/seguimiento" replace />} />
             <Route path="/seguimiento" element={<SeguimientoPage />} />

@@ -39,3 +39,8 @@ export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';
 
 // Correo al candidato con el listado de documentos requeridos (paso 10, 2026-06-12).
 export { enviarListadoDocumentos } from './documentos/enviarListadoDocumentos';
+
+// Portal del candidato (público, sin login): consentimientos digitales (2026-06-13).
+export { enviarPortalCandidato } from './portal/enviarPortalCandidato';
+export { resolverPortalToken } from './portal/resolverPortalToken';
+export { registrarConsentimientoPortal } from './portal/registrarConsentimientoPortal';

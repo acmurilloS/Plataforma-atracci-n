@@ -160,4 +160,11 @@ export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
   ultima_transicion_estado: Timestamp;
   /** Historial completo de hitos por estado. */
   marcas: MarcasPostulacion;
+  // ── Portal del candidato (público, sin login) + consentimientos digitales ──
+  // Los escribe el backend (Cloud Functions). El token vive además en
+  // `portal_candidato_tokens/{token}` para la resolución pública.
+  portal_token?: string | null;
+  portal_enviado_en?: Timestamp | null;
+  consentimiento_datos_aceptado_en?: Timestamp | null;
+  consentimiento_imagen_aceptado_en?: Timestamp | null;
 }
