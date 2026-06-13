@@ -12,6 +12,7 @@ import {
   Phone,
   Send,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { functions } from '../../lib/firebase';
 import { useDoc } from '../../hooks/useDoc';
@@ -27,7 +28,7 @@ import { politicaParaCriticidad } from '../../schemas';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { cn } from '../../utils/cn';
-import type { PostulacionDoc, VacanteDoc, Criticidad } from '../../schemas';
+import type { PostulacionDoc, VacanteDoc, Criticidad, CargoDoc } from '../../schemas';
 
 /**
  * PostulacionDetallePage · sistema brand.
@@ -96,6 +97,7 @@ export default function PostulacionDetallePage() {
   const { id } = useParams<{ id: string }>();
   const { doc: post } = useDoc<PostulacionDoc>('postulaciones', id);
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', post?.vacante_id ?? null);
+  const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
   const [tab, setTab] = useState<Tab>('pruebas');
 
   if (!post)
@@ -202,7 +204,9 @@ export default function PostulacionDetallePage() {
 
       {/* ─── Contenido tabs ──────────────────────────────────── */}
       <div>
-        {tab === 'pruebas' && <PruebasTab postulacion={post} />}
+        {tab === 'pruebas' && (
+          <PruebasTab postulacion={post} pruebasSugeridas={cargo?.pruebas_sugeridas ?? []} />
+        )}
         {tab === 'entrevistas' && <EntrevistasTab postulacion={post} />}
         {tab === 'referencias' && <ReferenciasTab postulacion={post} />}
         {tab === 'documentos' && <DocumentosTab postulacion={post} />}
@@ -221,7 +225,10 @@ interface SubProps {
 // ───────────────────────────────────────────────────────────────
 // Pruebas (paso 7)
 // ───────────────────────────────────────────────────────────────
-function PruebasTab({ postulacion }: SubProps) {
+function PruebasTab({
+  postulacion,
+  pruebasSugeridas = [],
+}: SubProps & { pruebasSugeridas?: string[] }) {
   interface P {
     id: string;
     nombre: string;
@@ -237,69 +244,125 @@ function PruebasTab({ postulacion }: SubProps) {
     filtros: [['postulacion_id', '==', postulacion.id]],
   });
   const { crear, actualizar } = useMutacion();
-  const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState<'psicotecnica' | 'tecnica' | 'conocimiento'>('psicotecnica');
-  const [link, setLink] = useState('');
   const [instrucciones, setInstrucciones] = useState('');
+  // Lista de pruebas a enviar de una sola vez (varios links en un correo).
+  const [filas, setFilas] = useState<{ nombre: string; link: string }[]>([
+    { nombre: '', link: '' },
+  ]);
   const [enviandoCorreo, setEnviandoCorreo] = useState(false);
+  const [registrando, setRegistrando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'err'; texto: string } | null>(null);
 
   const emailCandidato = (postulacion.candidato_email ?? '').trim();
+  const filasCompletas = filas.filter((f) => f.nombre.trim() && f.link.trim());
+  const filasConNombre = filas.filter((f) => f.nombre.trim());
 
-  async function enviar() {
-    if (!nombre.trim()) return;
-    await crear('pruebas', {
-      postulacion_id: postulacion.id,
-      candidato_id: postulacion.candidato_id,
-      proceso_id: postulacion.proceso_id,
-      tipo,
-      proveedor: 'externo',
-      codigo_prueba: nombre.toLowerCase().replace(/\s+/g, '_'),
-      nombre,
-      enviada_en: Timestamp.now(),
-      realizada_en: null,
-      resultado_url: null,
-      resultado_resumen: null,
-      competencias: null,
-      cumple_expectativas: null,
-    });
-    setNombre('');
-    setMsg({ tipo: 'ok', texto: 'Prueba registrada (sin correo).' });
+  function setFila(i: number, patch: Partial<{ nombre: string; link: string }>) {
+    setFilas((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
+    setMsg(null);
+  }
+  function agregarFila() {
+    setFilas((prev) => [...prev, { nombre: '', link: '' }]);
+  }
+  function quitarFila(i: number) {
+    setFilas((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  // Envía el correo al candidato con el link de la prueba vía Cloud Function
-  // (reusa el Gmail corporativo). La function crea el registro y manda el correo.
+  // Pre-carga los nombres de las pruebas definidas para el cargo (matriz
+  // prueba×cargo). Los links se pegan a mano (Magneto/formulario). Así se
+  // pueden enviar "todas las del cargo" sin teclear cada nombre.
+  function cargarDelCargo() {
+    if (pruebasSugeridas.length === 0) {
+      setMsg({ tipo: 'err', texto: 'Este cargo no tiene pruebas sugeridas en el catálogo.' });
+      return;
+    }
+    const yaPresentes = new Set(
+      filas.map((f) => f.nombre.trim().toLowerCase()).filter(Boolean),
+    );
+    const nuevas = pruebasSugeridas
+      .filter((n) => n.trim() && !yaPresentes.has(n.trim().toLowerCase()))
+      .map((n) => ({ nombre: n.trim(), link: '' }));
+    if (nuevas.length === 0) {
+      setMsg({ tipo: 'ok', texto: 'Las pruebas del cargo ya están en la lista. Pega los links.' });
+      return;
+    }
+    setFilas((prev) => {
+      const base = prev.filter((f) => f.nombre.trim() || f.link.trim());
+      return [...base, ...nuevas];
+    });
+    setMsg({ tipo: 'ok', texto: `Se cargaron ${nuevas.length} prueba(s) del cargo. Pega los links.` });
+  }
+
+  // Envía un solo correo con todas las pruebas que tengan nombre + link.
   async function enviarPorCorreo() {
     setMsg(null);
-    if (!nombre.trim() || !link.trim()) return;
+    if (filasCompletas.length === 0) {
+      setMsg({ tipo: 'err', texto: 'Agrega al menos una prueba con nombre y link.' });
+      return;
+    }
     setEnviandoCorreo(true);
     try {
       const fn = httpsCallable<
         {
           postulacion_id: string;
           tipo: string;
-          nombre_prueba: string;
-          link: string;
           instrucciones: string;
+          pruebas: { nombre: string; link: string }[];
         },
-        { ok: true; email_destinatario: string }
+        { ok: true; enviadas: number; email_destinatario: string }
       >(functions, 'enviarPruebaCandidato');
       const res = await fn({
         postulacion_id: postulacion.id,
         tipo,
-        nombre_prueba: nombre,
-        link,
         instrucciones,
+        pruebas: filasCompletas,
       });
-      setMsg({ tipo: 'ok', texto: `Prueba enviada a ${res.data.email_destinatario}.` });
-      setNombre('');
-      setLink('');
+      setMsg({
+        tipo: 'ok',
+        texto: `${res.data.enviadas} prueba(s) enviada(s) a ${res.data.email_destinatario}.`,
+      });
+      setFilas([{ nombre: '', link: '' }]);
       setInstrucciones('');
     } catch (e) {
-      const raw = e instanceof Error ? e.message : 'No se pudo enviar la prueba.';
+      const raw = e instanceof Error ? e.message : 'No se pudieron enviar las pruebas.';
       setMsg({ tipo: 'err', texto: raw });
     } finally {
       setEnviandoCorreo(false);
+    }
+  }
+
+  // Registra las pruebas (con nombre) sin mandar correo — para envíos por fuera.
+  async function registrarSolo() {
+    if (filasConNombre.length === 0) return;
+    setRegistrando(true);
+    try {
+      for (const f of filasConNombre) {
+        await crear('pruebas', {
+          postulacion_id: postulacion.id,
+          candidato_id: postulacion.candidato_id,
+          proceso_id: postulacion.proceso_id,
+          tipo,
+          proveedor: 'externo',
+          codigo_prueba: f.nombre.toLowerCase().replace(/\s+/g, '_'),
+          nombre: f.nombre,
+          link_prueba: f.link.trim() || null,
+          instrucciones: instrucciones.trim() || null,
+          enviada_en: Timestamp.now(),
+          realizada_en: null,
+          resultado_url: null,
+          resultado_resumen: null,
+          competencias: null,
+          cumple_expectativas: null,
+        });
+      }
+      setMsg({ tipo: 'ok', texto: `${filasConNombre.length} prueba(s) registrada(s) sin correo.` });
+      setFilas([{ nombre: '', link: '' }]);
+      setInstrucciones('');
+    } catch (e) {
+      setMsg({ tipo: 'err', texto: e instanceof Error ? e.message : 'No se pudo registrar.' });
+    } finally {
+      setRegistrando(false);
     }
   }
 
@@ -317,38 +380,74 @@ function PruebasTab({ postulacion }: SubProps) {
   return (
     <div className="space-y-6">
       <Card padding="lg">
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles size={14} strokeWidth={1.75} className="text-text-muted" />
-          <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-            Enviar prueba · paso 7
-          </p>
-        </div>
-        <div className="space-y-3">
-          <div className="flex gap-2 flex-wrap">
-            <select
-              value={tipo}
-              onChange={(e) =>
-                setTipo(e.target.value as 'psicotecnica' | 'tecnica' | 'conocimiento')
-              }
-              className={cn(inputClass, 'md:w-auto')}
-            >
-              <option value="psicotecnica">Psicotécnica</option>
-              <option value="tecnica">Técnica</option>
-              <option value="conocimiento">Conocimiento</option>
-            </select>
-            <input
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Nombre de la prueba"
-              className={cn(inputClass, 'flex-1 min-w-[200px]')}
-            />
+        <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} strokeWidth={1.75} className="text-text-muted" />
+            <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+              Enviar pruebas · paso 7
+            </p>
           </div>
-          <input
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-            placeholder="Link de la prueba (Magneto, formulario, etc.) — https://…"
-            className={cn(inputClass, 'w-full')}
-          />
+          <select
+            value={tipo}
+            onChange={(e) =>
+              setTipo(e.target.value as 'psicotecnica' | 'tecnica' | 'conocimiento')
+            }
+            className={cn(inputClass, 'w-auto')}
+          >
+            <option value="psicotecnica">Psicotécnica</option>
+            <option value="tecnica">Técnica</option>
+            <option value="conocimiento">Conocimiento</option>
+          </select>
+        </div>
+
+        <div className="space-y-3">
+          {/* Filas de pruebas: varios links en un solo correo */}
+          {filas.map((f, i) => (
+            <div key={i} className="flex gap-2 flex-wrap items-start">
+              <input
+                value={f.nombre}
+                onChange={(e) => setFila(i, { nombre: e.target.value })}
+                placeholder="Nombre de la prueba"
+                className={cn(inputClass, 'w-full md:w-[220px]')}
+              />
+              <input
+                value={f.link}
+                onChange={(e) => setFila(i, { link: e.target.value })}
+                placeholder="Link (Magneto, formulario…) — https://…"
+                className={cn(inputClass, 'flex-1 min-w-[200px]')}
+              />
+              {filas.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => quitarFila(i)}
+                  className="px-2 py-2 text-text-subtle hover:text-danger-600"
+                  title="Quitar"
+                >
+                  <X size={15} strokeWidth={1.75} />
+                </button>
+              )}
+            </div>
+          ))}
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={agregarFila}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800"
+            >
+              + Agregar otra prueba
+            </button>
+            {pruebasSugeridas.length > 0 && (
+              <button
+                type="button"
+                onClick={cargarDelCargo}
+                className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800"
+              >
+                Cargar pruebas del cargo ({pruebasSugeridas.length})
+              </button>
+            )}
+          </div>
+
           <textarea
             value={instrucciones}
             onChange={(e) => setInstrucciones(e.target.value)}
@@ -362,15 +461,18 @@ function PruebasTab({ postulacion }: SubProps) {
               onClick={enviarPorCorreo}
               variant="brand-primary"
               loading={enviandoCorreo}
-              disabled={enviandoCorreo || !nombre.trim() || !link.trim() || !emailCandidato}
+              disabled={enviandoCorreo || registrando || filasCompletas.length === 0 || !emailCandidato}
               icon={<Mail size={13} strokeWidth={1.75} />}
             >
-              {enviandoCorreo ? 'Enviando…' : 'Enviar al candidato'}
+              {enviandoCorreo
+                ? 'Enviando…'
+                : `Enviar al candidato${filasCompletas.length > 1 ? ` (${filasCompletas.length})` : ''}`}
             </Button>
             <Button
-              onClick={enviar}
+              onClick={registrarSolo}
               variant="neutral-secondary"
-              disabled={enviandoCorreo || !nombre.trim()}
+              loading={registrando}
+              disabled={enviandoCorreo || registrando || filasConNombre.length === 0}
             >
               Solo registrar (sin correo)
             </Button>

@@ -10,22 +10,25 @@ const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
 const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
 
+interface PruebaInput {
+  nombre: string;
+  link: string;
+}
+
 /**
  * enviarPruebaCandidato · paso 7.
  *
- * Registra una prueba enviada Y le manda el correo al candidato con el link
- * para que la realice — todo desde el aplicativo (decisión JC 2026-06-09, en
- * respuesta a Karen: "automatizarlo para que quede dentro del aplicativo la
- * opción de enviar pruebas").
+ * Registra una o VARIAS pruebas enviadas Y le manda UN solo correo al candidato
+ * con todos los links — desde el aplicativo (decisión JC 2026-06-09, en respuesta
+ * a Karen). Permite mandar varias pruebas de una (ej. todas las del cargo).
  *
  * Reusa el Gmail SMTP corporativo (steve@equitel.com.co) que ya manda los
- * recordatorios al líder — sin costo nuevo de mensajería. El candidato es un
- * postulado que dejó su correo al aplicar, así que escribirle sobre su propio
- * proceso es legítimo (no aplica el bloqueo de Habeas Data del sourcing).
+ * recordatorios al líder — sin costo nuevo. El candidato es un postulado que
+ * dejó su correo al aplicar, así que escribirle sobre su propio proceso es
+ * legítimo (no aplica el bloqueo de Habeas Data del sourcing).
  *
  * El `link` es flexible: sirve para Magneto, un formulario, o cualquier
- * plataforma donde viva la prueba. La analista pega el link y la plataforma
- * arma el correo.
+ * plataforma donde viva la prueba.
  */
 export const enviarPruebaCandidato = onCall(
   { region: 'us-central1', secrets: [GMAIL_USER, GMAIL_APP_PASSWORD] },
@@ -40,14 +43,24 @@ export const enviarPruebaCandidato = onCall(
 
     const postulacionId = String(req.data?.postulacion_id ?? '');
     const tipo = String(req.data?.tipo ?? 'psicotecnica');
-    const nombrePrueba = String(req.data?.nombre_prueba ?? '').trim();
-    const link = String(req.data?.link ?? '').trim();
     const instrucciones = String(req.data?.instrucciones ?? '').trim();
 
     if (!postulacionId) throw new HttpsError('invalid-argument', 'Falta postulacion_id.');
-    if (!nombrePrueba) throw new HttpsError('invalid-argument', 'Falta el nombre de la prueba.');
-    if (!link || !/^https?:\/\//i.test(link)) {
-      throw new HttpsError('invalid-argument', 'El link de la prueba debe empezar por http(s)://');
+
+    // Normalizar y validar la lista de pruebas (al menos una con nombre + link válido).
+    const crudas = Array.isArray(req.data?.pruebas) ? (req.data.pruebas as unknown[]) : [];
+    const pruebas: PruebaInput[] = crudas
+      .map((p) => {
+        const o = (p ?? {}) as Record<string, unknown>;
+        return { nombre: String(o.nombre ?? '').trim(), link: String(o.link ?? '').trim() };
+      })
+      .filter((p) => p.nombre && /^https?:\/\//i.test(p.link));
+
+    if (pruebas.length === 0) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Agrega al menos una prueba con nombre y link válido (debe empezar por http/https).',
+      );
     }
 
     const postSnap = await db.collection('postulaciones').doc(postulacionId).get();
@@ -63,55 +76,69 @@ export const enviarPruebaCandidato = onCall(
     }
     const nombreCandidato = String(post.candidato_nombre ?? '').trim() || 'candidato/a';
     const cargo = String(post.cargo_nombre ?? 'la vacante').trim();
-
     const ahora = Timestamp.now();
 
-    // 1) Registrar la prueba (mismo shape que el registro manual + campos de envío).
-    const pruebaRef = db.collection('pruebas').doc();
-    await pruebaRef.set({
-      id: pruebaRef.id,
-      postulacion_id: postulacionId,
-      candidato_id: post.candidato_id ?? null,
-      proceso_id: post.proceso_id ?? null,
-      tipo,
-      proveedor: 'externo',
-      codigo_prueba: nombrePrueba.toLowerCase().replace(/\s+/g, '_'),
-      nombre: nombrePrueba,
-      link_prueba: link,
-      instrucciones: instrucciones || null,
-      enviada_en: ahora,
-      email_enviado_en: ahora,
-      email_destinatario: email,
-      realizada_en: null,
-      resultado_url: null,
-      resultado_resumen: null,
-      competencias: null,
-      cumple_expectativas: null,
-      creado_en: ahora,
-      creado_por: req.auth.uid,
-      actualizado_en: ahora,
-      actualizado_por: req.auth.uid,
-    });
+    // 1) Registrar cada prueba (mismo shape que el registro manual + campos de envío).
+    const pruebaIds: string[] = [];
+    for (const pr of pruebas) {
+      const pruebaRef = db.collection('pruebas').doc();
+      await pruebaRef.set({
+        id: pruebaRef.id,
+        postulacion_id: postulacionId,
+        candidato_id: post.candidato_id ?? null,
+        proceso_id: post.proceso_id ?? null,
+        tipo,
+        proveedor: 'externo',
+        codigo_prueba: pr.nombre.toLowerCase().replace(/\s+/g, '_'),
+        nombre: pr.nombre,
+        link_prueba: pr.link,
+        instrucciones: instrucciones || null,
+        enviada_en: ahora,
+        email_enviado_en: ahora,
+        email_destinatario: email,
+        realizada_en: null,
+        resultado_url: null,
+        resultado_resumen: null,
+        competencias: null,
+        cumple_expectativas: null,
+        creado_en: ahora,
+        creado_por: req.auth.uid,
+        actualizado_en: ahora,
+        actualizado_por: req.auth.uid,
+      });
+      pruebaIds.push(pruebaRef.id);
+    }
 
-    // 2) Mandar el correo al candidato.
+    // 2) Mandar UN correo con todas las pruebas.
+    const bloquesPruebas = pruebas
+      .map(
+        (pr) => `
+        <div style="margin:0 0 18px; padding-bottom:14px; border-bottom:1px solid #eee;">
+          <p style="font-size:15px; font-weight:600; margin:0 0 8px;">${escapeHtml(pr.nombre)}</p>
+          <p style="margin:0 0 8px;">
+            <a href="${escapeAttr(pr.link)}"
+               style="background:#be1e0d; color:#fff; text-decoration:none; padding:10px 20px;
+                      border-radius:6px; font-weight:600; display:inline-block;">
+              Realizar la prueba
+            </a>
+          </p>
+          <p style="font-size:12px; color:#666; margin:0; word-break:break-all;">
+            O copia este enlace: <a href="${escapeAttr(pr.link)}" style="color:#be1e0d;">${escapeHtml(
+              pr.link,
+            )}</a>
+          </p>
+        </div>`,
+      )
+      .join('');
+
+    const plural = pruebas.length > 1;
     const html = `
       <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
         <p>Hola ${escapeHtml(nombreCandidato.split(' ')[0] || nombreCandidato)},</p>
-        <p>Como parte del proceso de selección para el cargo
-           <strong>${escapeHtml(cargo)}</strong> en Equitel, te compartimos una prueba que
-           necesitamos que completes:</p>
-        <p style="font-size:15px; font-weight:600;">${escapeHtml(nombrePrueba)}</p>
-        <p style="margin:24px 0;">
-          <a href="${escapeAttr(link)}"
-             style="background:#be1e0d; color:#fff; text-decoration:none; padding:11px 22px;
-                    border-radius:6px; font-weight:600; display:inline-block;">
-            Realizar la prueba
-          </a>
-        </p>
-        <p style="font-size:13px; color:#555;">
-          O copia este enlace en tu navegador:<br>
-          <a href="${escapeAttr(link)}" style="color:#be1e0d;">${escapeHtml(link)}</a>
-        </p>
+        <p>Como parte del proceso de atracción para el cargo
+           <strong>${escapeHtml(cargo)}</strong> en Equitel, te compartimos
+           ${plural ? 'las siguientes pruebas' : 'una prueba'} que necesitamos que completes:</p>
+        ${bloquesPruebas}
         ${
           instrucciones
             ? `<p style="font-size:13px; color:#333;"><strong>Instrucciones:</strong><br>${escapeHtml(
@@ -128,24 +155,29 @@ export const enviarPruebaCandidato = onCall(
       await enviarConGmail({
         from: FROM,
         to: [email],
-        subject: `Prueba del proceso de selección · ${cargo}`,
+        subject: `${plural ? 'Pruebas' : 'Prueba'} del proceso de atracción · ${cargo}`,
         html,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       logger.error('[enviarPruebaCandidato] correo falló', { postulacionId, msg });
-      // Dejamos rastro de que el registro existe pero el correo no salió.
-      await pruebaRef.update({ email_enviado_en: null, email_error: msg });
+      // Dejar rastro de que los registros existen pero el correo no salió.
+      await Promise.all(
+        pruebaIds.map((pid) =>
+          db.collection('pruebas').doc(pid).update({ email_enviado_en: null, email_error: msg }),
+        ),
+      );
       throw new HttpsError(
         'internal',
-        'La prueba quedó registrada pero el correo no se pudo enviar. Revisa la configuración de correo o reintenta.',
+        'Las pruebas quedaron registradas pero el correo no se pudo enviar. Revisa la configuración de correo o reintenta.',
       );
     }
 
     await db.collection('eventos').add({
       tipo: 'prueba_enviada_candidato',
       postulacion_id: postulacionId,
-      prueba_id: pruebaRef.id,
+      prueba_ids: pruebaIds,
+      cantidad: pruebas.length,
       vacante_id: post.vacante_id ?? null,
       analista_uid: req.auth.uid,
       email_destinatario: email,
@@ -153,12 +185,17 @@ export const enviarPruebaCandidato = onCall(
       creado_por: req.auth.uid,
     });
 
-    logger.info('[enviarPruebaCandidato] prueba enviada por correo', {
+    logger.info('[enviarPruebaCandidato] pruebas enviadas por correo', {
       postulacionId,
-      prueba_id: pruebaRef.id,
+      cantidad: pruebas.length,
     });
 
-    return { ok: true as const, prueba_id: pruebaRef.id, email_destinatario: email };
+    return {
+      ok: true as const,
+      enviadas: pruebas.length,
+      prueba_ids: pruebaIds,
+      email_destinatario: email,
+    };
   },
 );
 
