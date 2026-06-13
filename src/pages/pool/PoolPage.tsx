@@ -9,6 +9,7 @@ import {
   type CandidatoDoc,
   type DominioCandidato,
   type ResultadoUltimaPostulacion,
+  type VacanteDoc,
 } from '../../schemas';
 import { Card, Pill, type PillTono } from '../../components/brand';
 import { cn } from '../../utils/cn';
@@ -74,6 +75,16 @@ export default function PoolPage() {
     limit: 500,
   });
 
+  // Mapa vacante_id → cargo para mostrar el CARGO (no solo el consecutivo) en la
+  // columna "Última vacante". Vacantes es una colección chica, así que cargarla
+  // y mapear sirve para candidatos viejos y nuevos sin migrar datos.
+  const { docs: vacantes } = useColeccion<VacanteDoc>('vacantes', { limit: 1000 });
+  const cargoPorVacante = useMemo(() => {
+    const m = new Map<string, string>();
+    vacantes.forEach((v) => m.set(v.id, v.cargo_nombre));
+    return m;
+  }, [vacantes]);
+
   const filtrados = useMemo(() => {
     const b = filtroBusqueda.toLowerCase().trim();
     return candidatos.filter((c) => {
@@ -88,12 +99,13 @@ export default function PoolPage() {
       }
       if (filtroResultado && c.resultado_ultima_postulacion !== filtroResultado) return false;
       if (b) {
-        const haystack = `${c.nombres} ${c.apellidos} ${c.email ?? ''} ${c.documento_numero ?? ''} ${c.especialidad_tecnica ?? ''}`.toLowerCase();
+        const cargo = c.ultima_vacante_id ? (cargoPorVacante.get(c.ultima_vacante_id) ?? '') : '';
+        const haystack = `${c.nombres} ${c.apellidos} ${c.email ?? ''} ${c.documento_numero ?? ''} ${c.especialidad_tecnica ?? ''} ${cargo} ${c.ultima_vacante_consecutivo ?? ''}`.toLowerCase();
         if (!haystack.includes(b)) return false;
       }
       return true;
     });
-  }, [candidatos, filtroBusqueda, filtroDominio, filtroCiudad, filtroResultado, soloAptos]);
+  }, [candidatos, filtroBusqueda, filtroDominio, filtroCiudad, filtroResultado, soloAptos, cargoPorVacante]);
 
   const stats = useMemo(() => {
     const sinDuplicados = candidatos.filter((c) => !c.duplicado_de);
@@ -329,10 +341,17 @@ export default function PoolPage() {
                         onClick={(e) => e.stopPropagation()}
                         className="text-brand-700 hover:text-brand-800 hover:underline font-medium"
                       >
-                        {c.ultima_vacante_consecutivo || c.ultima_vacante_id.slice(0, 6)}
+                        {cargoPorVacante.get(c.ultima_vacante_id) ||
+                          c.ultima_vacante_consecutivo ||
+                          'Ver vacante'}
                       </Link>
                     ) : (
                       <span className="text-text-subtle">—</span>
+                    )}
+                    {c.ultima_vacante_id && c.ultima_vacante_consecutivo && (
+                      <p className="text-[10px] text-text-subtle font-mono">
+                        {c.ultima_vacante_consecutivo}
+                      </p>
                     )}
                     <p className="text-[10px] text-text-subtle tabular-nums">
                       {c.fecha_ultima_postulacion
