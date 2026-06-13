@@ -1,4 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -51,10 +52,6 @@ export const onEntrevistaCreate = onDocumentCreated(
     const post = postSnap.data() as Record<string, unknown>;
 
     const email = String(post.candidato_email ?? '').trim();
-    if (!email) {
-      logger.info('onEntrevistaCreate · candidato sin correo, omito', { id: snap.id });
-      return;
-    }
     const nombreCandidato = String(post.candidato_nombre ?? '').trim() || 'candidato/a';
     const cargo = String(post.cargo_nombre ?? 'la vacante').trim();
 
@@ -141,31 +138,131 @@ export const onEntrevistaCreate = onDocumentCreated(
       </div>
     `.trim();
 
-    try {
-      await enviarConGmail({
-        from: FROM,
-        to: [email],
-        subject: `Agendamiento de tu entrevista · ${cargo}`,
-        html,
-      });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      logger.error('onEntrevistaCreate · correo falló', { id: snap.id, msg });
-      return;
+    // Correo al candidato (si tiene correo registrado).
+    if (email) {
+      try {
+        await enviarConGmail({
+          from: FROM,
+          to: [email],
+          subject: `Agendamiento de tu entrevista · ${cargo}`,
+          html,
+        });
+      } catch (e) {
+        logger.error('onEntrevistaCreate · correo candidato falló', {
+          id: snap.id,
+          msg: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    // Entrevista con el LÍDER (paso 13): notificar al líder en su campana +
+    // correo dedicado con botón "Agregar a Google Calendar". El entrevistador
+    // de una entrevista 'lider' es el líder de la vacante. Petición Karen 2026-06-12.
+    if (tipo === 'lider') {
+      const liderUid = String(ent.entrevistador_uid ?? '');
+      if (liderUid) {
+        let liderEmail = '';
+        let liderNombre = String(ent.entrevistador_nombre ?? '');
+        try {
+          const u = await getAuth().getUser(liderUid);
+          liderEmail = u.email ?? '';
+          if (!liderNombre) liderNombre = u.displayName ?? '';
+        } catch (e) {
+          logger.warn('onEntrevistaCreate · líder no encontrado en Auth', {
+            liderUid,
+            e: String(e),
+          });
+        }
+
+        const gcalLider = construirGCalUrl({
+          titulo: `Entrevista con ${nombreCandidato} · ${cargo}`,
+          inicio,
+          fin,
+          detalle: `Entrevista (${modalidadLabel}) con el candidato ${nombreCandidato} para el cargo ${cargo}.${
+            modalidad === 'virtual' && salaOLink ? `\nLink: ${salaOLink}` : ''
+          }`,
+          ubicacion: locationCal,
+        });
+
+        if (liderEmail) {
+          const htmlLider = `
+            <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
+              <p>Hola ${escapeHtml(liderNombre.split(' ')[0] || liderNombre)},</p>
+              <p>Quedó agendada tu entrevista con el candidato
+                 <strong>${escapeHtml(nombreCandidato)}</strong> para el cargo
+                 <strong>${escapeHtml(cargo)}</strong>:</p>
+              <table style="border-collapse:collapse; font-size:14px; margin:8px 0 14px;">
+                <tr><td style="padding:2px 10px 2px 0; font-weight:600;">Fecha y hora:</td><td>${escapeHtml(
+                  fechaLegible,
+                )}</td></tr>
+                <tr><td style="padding:2px 10px 2px 0; font-weight:600;">Candidato:</td><td>${escapeHtml(
+                  nombreCandidato,
+                )}</td></tr>
+                <tr><td style="padding:2px 10px 2px 0; font-weight:600;">Modalidad:</td><td>${modalidadLabel}</td></tr>
+              </table>
+              ${bloqueLugar}
+              <p style="margin:18px 0;">
+                <a href="${escapeAttr(gcalLider)}"
+                   style="background:#be1e0d; color:#fff; text-decoration:none; padding:10px 20px;
+                          border-radius:6px; font-weight:600; display:inline-block;">
+                  Agregar a Google Calendar
+                </a>
+              </p>
+              <p style="font-size:13px; color:#555;">Equipo de Atracción · Organización Equitel</p>
+            </div>
+          `.trim();
+          try {
+            await enviarConGmail({
+              from: FROM,
+              to: [liderEmail],
+              subject: `Entrevista agendada con ${nombreCandidato} · ${cargo}`,
+              html: htmlLider,
+            });
+          } catch (e) {
+            logger.error('onEntrevistaCreate · correo líder falló', {
+              id: snap.id,
+              msg: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        // Notificación en la campana del líder. email_enviado_en se pre-setea
+        // para que onNotificacionCreate NO mande otro correo (ya enviamos el
+        // dedicado con el botón de calendario).
+        try {
+          await db.collection('notificaciones').add({
+            destinatario_uid: liderUid,
+            tipo: 'generica',
+            titulo: 'Entrevista agendada con candidato',
+            mensaje: `Quedó agendada tu entrevista con ${nombreCandidato} (${cargo}) para el ${fechaLegible}. Modalidad: ${modalidadLabel}.`,
+            link: `/postulaciones/${postId}`,
+            leida: false,
+            leida_en: null,
+            email_enviado_en: FieldValue.serverTimestamp(),
+            creado_en: FieldValue.serverTimestamp(),
+            creado_por: 'system',
+            actualizado_en: FieldValue.serverTimestamp(),
+            actualizado_por: 'system',
+          });
+        } catch (e) {
+          logger.warn('onEntrevistaCreate · no se pudo notificar al líder', { e: String(e) });
+        }
+      }
     }
 
     await snap.ref.update({ correo_candidato_enviado_en: FieldValue.serverTimestamp() });
     await db.collection('eventos').add({
-      tipo: 'entrevista_notificada_candidato',
+      tipo: 'entrevista_notificada',
       entrevista_id: snap.id,
       postulacion_id: postId,
       modalidad,
-      email_destinatario: email,
+      tipo_entrevista: tipo,
+      email_destinatario: email || null,
       creado_en: FieldValue.serverTimestamp(),
       creado_por: 'system',
     });
 
-    logger.info('onEntrevistaCreate · candidato notificado', { id: snap.id, modalidad });
+    logger.info('onEntrevistaCreate · procesada', { id: snap.id, modalidad, tipo });
   },
 );
 

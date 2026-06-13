@@ -207,7 +207,13 @@ export default function PostulacionDetallePage() {
         {tab === 'pruebas' && (
           <PruebasTab postulacion={post} pruebasSugeridas={cargo?.pruebas_sugeridas ?? []} />
         )}
-        {tab === 'entrevistas' && <EntrevistasTab postulacion={post} />}
+        {tab === 'entrevistas' && (
+          <EntrevistasTab
+            postulacion={post}
+            liderUid={vacante?.lider_uid ?? null}
+            liderNombre={vacante?.lider_nombre ?? null}
+          />
+        )}
         {tab === 'referencias' && <ReferenciasTab postulacion={post} />}
         {tab === 'documentos' && <DocumentosTab postulacion={post} />}
         {tab === 'informe' && <InformeTab postulacion={post} />}
@@ -581,7 +587,11 @@ function PruebasTab({
 // ───────────────────────────────────────────────────────────────
 // Entrevistas (pasos 8 y 13)
 // ───────────────────────────────────────────────────────────────
-function EntrevistasTab({ postulacion }: SubProps) {
+function EntrevistasTab({
+  postulacion,
+  liderUid,
+  liderNombre,
+}: SubProps & { liderUid?: string | null; liderNombre?: string | null }) {
   interface E {
     id: string;
     tipo: string;
@@ -621,6 +631,13 @@ function EntrevistasTab({ postulacion }: SubProps) {
         : modalidad === 'presencial'
           ? sedeDireccion.trim() || null
           : null;
+    // Para entrevista con el líder (paso 13), el entrevistador es el LÍDER de la
+    // vacante (no quien agenda). Así le llega la notificación y puede registrar
+    // el feedback. Para la de analista (paso 8), el entrevistador es quien agenda.
+    const esLider = tipo === 'lider';
+    const entrevistadorUid = esLider && liderUid ? liderUid : user.uid;
+    const entrevistadorNombre =
+      esLider && liderNombre ? liderNombre : `${perfil.nombre} ${perfil.apellido}`;
     await crear('entrevistas', {
       postulacion_id: postulacion.id,
       candidato_id: postulacion.candidato_id,
@@ -630,8 +647,8 @@ function EntrevistasTab({ postulacion }: SubProps) {
       programada_para: Timestamp.fromDate(new Date(`${fecha}T${hora || '10:00'}:00`)),
       duracion_min: 45,
       sala_o_link: salaOLink,
-      entrevistador_uid: user.uid,
-      entrevistador_nombre: `${perfil.nombre} ${perfil.apellido}`,
+      entrevistador_uid: entrevistadorUid,
+      entrevistador_nombre: entrevistadorNombre,
       google_calendar_event_id: null,
       estado: 'programada',
       realizada_en: null,
