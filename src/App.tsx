@@ -24,6 +24,7 @@ import PublicacionPage from './pages/vacantes/PublicacionPage';
 import SourcingPage from './pages/vacantes/SourcingPage';
 import TernaPage from './pages/vacantes/TernaPage';
 import ConceptoAtraccionPage from './pages/vacantes/ConceptoAtraccionPage';
+import ReferenciasPdfPage from './pages/postulaciones/ReferenciasPdfPage';
 import PoolPage from './pages/pool/PoolPage';
 import VacantesAbiertasPage from './pages/internos/VacantesAbiertasPage';
 
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="/vacantes/:id/terna" element={<TernaPage />} />
             <Route path="/vacantes/:id/concepto-atraccion" element={<ConceptoAtraccionPage />} />
             <Route path="/postulaciones/:id" element={<PostulacionDetallePage />} />
+            <Route path="/postulaciones/:id/referencias-pdf" element={<ReferenciasPdfPage />} />
             <Route path="/postulaciones/:id/autorizacion-datos" element={<AutorizacionDatosPage />} />
             <Route path="/postulaciones/:id/autorizacion-imagen" element={<AutorizacionImagenPage />} />
             <Route

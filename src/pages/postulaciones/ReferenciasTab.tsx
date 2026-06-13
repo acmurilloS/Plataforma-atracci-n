@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
-import { CheckCircle2, ClipboardList, Phone, Plus } from 'lucide-react';
+import { CheckCircle2, ClipboardList, FileDown, Phone, Plus } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
@@ -53,6 +54,7 @@ const inputClass =
 const textareaClass = inputClass + ' resize-none leading-relaxed';
 
 export function ReferenciasTab({ postulacion }: Props) {
+  const navigate = useNavigate();
   const { docs } = useColeccion<ReferenciaDoc>('referencias', {
     filtros: [['postulacion_id', '==', postulacion.id]],
     orden: ['creado_en', 'asc'],
@@ -79,13 +81,24 @@ export function ReferenciasTab({ postulacion }: Props) {
             {docs.length === 1 ? 'referencia' : 'referencias'}
           </p>
         </div>
-        <Button
-          variant="brand-primary"
-          onClick={() => setCrearAbierto(true)}
-          icon={<Plus size={13} strokeWidth={1.75} />}
-        >
-          Nueva referencia
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {docs.length > 0 && (
+            <Button
+              variant="neutral-secondary"
+              onClick={() => navigate(`/postulaciones/${postulacion.id}/referencias-pdf`)}
+              icon={<FileDown size={13} strokeWidth={1.75} />}
+            >
+              Descargar PDF
+            </Button>
+          )}
+          <Button
+            variant="brand-primary"
+            onClick={() => setCrearAbierto(true)}
+            icon={<Plus size={13} strokeWidth={1.75} />}
+          >
+            Nueva referencia
+          </Button>
+        </div>
       </div>
 
       {/* Referencias que el candidato aportó al postularse (landing). Punto de
