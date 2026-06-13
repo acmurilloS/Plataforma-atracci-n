@@ -1,8 +1,9 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { Timestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
-import { Check, FileText, FolderOpen, Upload, X } from 'lucide-react';
-import { storage } from '../../lib/firebase';
+import { Check, FileText, FolderOpen, Mail, Upload, X } from 'lucide-react';
+import { storage, functions } from '../../lib/firebase';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
@@ -17,7 +18,7 @@ import {
   type PostulacionDoc,
   type SeccionDocumento,
 } from '../../schemas';
-import { Pill, type PillTono } from '../../components/brand';
+import { Button, Pill, type PillTono } from '../../components/brand';
 import { cn } from '../../utils/cn';
 
 /**
@@ -53,12 +54,48 @@ export function DocumentosTab({ postulacion }: Props) {
   const { crear, actualizar } = useMutacion();
   const { user, perfil } = useAuth();
   const [errGlobal, setErrGlobal] = useState<string | null>(null);
+  const [enviandoListado, setEnviandoListado] = useState(false);
+  const [msgListado, setMsgListado] = useState<{ tipo: 'ok' | 'err'; texto: string } | null>(null);
 
   const docsPorClave = useMemo(() => {
     const m = new Map<string, DocumentoCandidatoDoc>();
     docs.forEach((d) => m.set(d.clave, d));
     return m;
   }, [docs]);
+
+  const emailCandidato = (postulacion.candidato_email ?? '').trim();
+
+  // Documentos que aporta el candidato y siguen pendientes — los que pediremos
+  // por correo (los candidatos no tienen acceso a la plataforma).
+  const docsParaCandidato = useMemo(
+    () =>
+      CATALOGO_DOCUMENTOS_CARPETA.filter((c) => c.aporta_candidato)
+        .filter((c) => (docsPorClave.get(c.clave)?.estado ?? 'pendiente') === 'pendiente')
+        .map((c) => c.nombre + (c.opcional ? ' (si aplica)' : '')),
+    [docsPorClave],
+  );
+
+  async function enviarListado() {
+    if (docsParaCandidato.length === 0) return;
+    setMsgListado(null);
+    setEnviandoListado(true);
+    try {
+      const fn = httpsCallable<
+        { postulacion_id: string; documentos: string[] },
+        { ok: true; enviados: number; email_destinatario: string }
+      >(functions, 'enviarListadoDocumentos');
+      const res = await fn({ postulacion_id: postulacion.id, documentos: docsParaCandidato });
+      setMsgListado({
+        tipo: 'ok',
+        texto: `Listado enviado a ${res.data.email_destinatario} (${res.data.enviados} documentos). Cuando responda con los adjuntos, los subes aquí.`,
+      });
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : 'No se pudo enviar el listado.';
+      setMsgListado({ tipo: 'err', texto: raw });
+    } finally {
+      setEnviandoListado(false);
+    }
+  }
 
   const totalReq = totalObligatorios();
   const verificadosObligatorios = useMemo(
@@ -123,6 +160,41 @@ export function DocumentosTab({ postulacion }: Props) {
             style={{ width: `${porcentaje}%` }}
           />
         </div>
+
+        {/* Enviar al candidato el listado de documentos que debe aportar.
+            Los candidatos no tienen acceso a la plataforma → se piden por correo. */}
+        <div className="mt-5 pt-4 border-t border-slate-100 flex items-center gap-3 flex-wrap">
+          <Button
+            variant="neutral-secondary"
+            onClick={enviarListado}
+            loading={enviandoListado}
+            disabled={enviandoListado || docsParaCandidato.length === 0 || !emailCandidato}
+            icon={<Mail size={13} strokeWidth={1.75} />}
+          >
+            Enviar listado al candidato
+            {docsParaCandidato.length > 0 ? ` (${docsParaCandidato.length})` : ''}
+          </Button>
+          <span className="text-[11px] text-text-muted">
+            {!emailCandidato
+              ? 'El candidato no tiene correo — agrégalo en Datos Básicos.'
+              : docsParaCandidato.length === 0
+                ? 'No hay documentos del candidato pendientes por solicitar.'
+                : 'Le llega un correo con la lista para que los envíe; tú los subes aquí.'}
+          </span>
+        </div>
+
+        {msgListado && (
+          <div
+            className={cn(
+              'mt-3 rounded-md border px-3 py-2 text-[12px]',
+              msgListado.tipo === 'ok'
+                ? 'border-success-500/20 bg-success-50 text-success-700'
+                : 'border-danger-500/20 bg-danger-50 text-danger-700',
+            )}
+          >
+            {msgListado.texto}
+          </div>
+        )}
       </div>
 
       {errGlobal && (

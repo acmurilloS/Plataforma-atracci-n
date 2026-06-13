@@ -34,3 +34,6 @@ export { onExamenMedicoCreate } from './examenes/onExamenMedicoCreate';
 
 // Correo al candidato con el agendamiento de su entrevista (pasos 8/13, 2026-06-12).
 export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';
+
+// Correo al candidato con el listado de documentos requeridos (paso 10, 2026-06-12).
+export { enviarListadoDocumentos } from './documentos/enviarListadoDocumentos';

@@ -28,6 +28,12 @@ export interface DocumentoCarpetaCatalogo {
   opcional: boolean;
   /** Texto guía para el candidato / GH. */
   ayuda?: string;
+  /**
+   * True si este documento lo APORTA el candidato (cédula, certificados, HV…).
+   * Los internos/generados (contrato, afiliaciones, autorización, referencias)
+   * van en false. Se usa para el correo "envío de listado al candidato".
+   */
+  aporta_candidato?: boolean;
 }
 
 /**
@@ -81,6 +87,7 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'seguridad_social',
     nombre: 'Certificación de EPS',
     opcional: true,
+    aporta_candidato: true,
     ayuda: 'Solo si el candidato ya estaba afiliado a una EPS y la mantiene.',
   },
   {
@@ -88,6 +95,7 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'seguridad_social',
     nombre: 'Certificación de AFP',
     opcional: true,
+    aporta_candidato: true,
     ayuda: 'Solo si el candidato ya estaba afiliado a un fondo de pensiones.',
   },
   {
@@ -95,6 +103,7 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'seguridad_social',
     nombre: 'Carta de Cesantías',
     opcional: true,
+    aporta_candidato: true,
     ayuda: 'Solo si traslada cesantías de un empleador anterior.',
   },
 
@@ -104,24 +113,28 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'hoja_vida',
     nombre: 'Fotocopias de la Cédula de Ciudadanía (4)',
     opcional: false,
+    aporta_candidato: true,
   },
   {
     clave: 'certificado_judicial',
     seccion: 'hoja_vida',
     nombre: 'Fotocopia Certificado Judicial Vigente (1)',
     opcional: false,
+    aporta_candidato: true,
   },
   {
     clave: 'certificados_laborales',
     seccion: 'hoja_vida',
     nombre: 'Certificados Laborales (2)',
     opcional: false,
+    aporta_candidato: true,
   },
   {
     clave: 'certificados_estudio',
     seccion: 'hoja_vida',
     nombre: 'Fotocopias de los Certificados de Estudio',
     opcional: false,
+    aporta_candidato: true,
   },
   {
     clave: 'certificado_medico',
@@ -134,6 +147,7 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'hoja_vida',
     nombre: 'Hoja de Vida',
     opcional: false,
+    aporta_candidato: true,
   },
   {
     clave: 'autorizacion_datos',
