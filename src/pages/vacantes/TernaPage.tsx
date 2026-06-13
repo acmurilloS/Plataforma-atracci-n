@@ -250,6 +250,27 @@ export default function TernaPage() {
         recordatorio_24h_enviado_en: null,
         recordatorio_expirado_en: null,
       });
+
+      // Notificar al líder en su perfil (campana) + correo automático. El
+      // trigger onNotificacionCreate envía el correo al crearse la notificación,
+      // así el analista NO tiene que descargar y mandar el correo a mano.
+      if (vacante.lider_uid) {
+        const analista = perfil ? `${perfil.nombre} ${perfil.apellido}` : 'El analista';
+        try {
+          await crear('notificaciones', {
+            destinatario_uid: vacante.lider_uid,
+            tipo: 'terna_lista',
+            titulo: 'Terna lista para tu revisión',
+            mensaje: `${analista} te envió la terna de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${enTerna.length} candidato(s). Revísala y decide desde la plataforma — tienes 48 horas.`,
+            link: `/vacantes/${vacante.id}/terna`,
+            leida: false,
+            leida_en: null,
+          });
+        } catch (e) {
+          // La terna ya quedó cerrada; un fallo al notificar no debe romper el flujo.
+          console.warn('No se pudo crear la notificación al líder', e);
+        }
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos cerrar la terna.');
     } finally {

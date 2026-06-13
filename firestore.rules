@@ -262,7 +262,10 @@ service cloud.firestore {
       allow get: if signedIn() && resource.data.destinatario_uid == request.auth.uid;
       allow list: if signedIn();
       allow update: if signedIn() && resource.data.destinatario_uid == request.auth.uid;
-      allow create: if staff();
+      // staff + analista pueden notificar (ej. el analista avisa al líder que la
+      // terna está lista para su revisión). El analista no es staff() pero sí
+      // dispara notificaciones legítimas del flujo.
+      allow create: if staff() || isAnalista();
       allow delete: if false;
     }
 
