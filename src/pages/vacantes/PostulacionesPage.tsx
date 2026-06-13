@@ -60,6 +60,7 @@ export default function PostulacionesPage() {
     especialidad_tecnica: string;
     anios_experiencia: string;
     fuente: FuentePostulacion;
+    fuente_detalle: string;
   }>({
     nombres: '',
     apellidos: '',
@@ -71,6 +72,7 @@ export default function PostulacionesPage() {
     especialidad_tecnica: '',
     anios_experiencia: '',
     fuente: 'magneto',
+    fuente_detalle: '',
   });
   const [err, setErr] = useState<string | null>(null);
   const [procesando, setProcesando] = useState(false);
@@ -134,6 +136,7 @@ export default function PostulacionesPage() {
         estado: 'postulado',
         cumple_criterios: null,
         fuente: form.fuente,
+        fuente_detalle: form.fuente_detalle.trim(),
         marcas: { postulado_en: ahora },
         fecha_postulacion: ahora,
         ultima_transicion_estado: ahora,
@@ -156,6 +159,7 @@ export default function PostulacionesPage() {
         especialidad_tecnica: '',
         anios_experiencia: '',
         fuente: 'magneto',
+        fuente_detalle: '',
       });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos agregar.');
@@ -512,6 +516,14 @@ export default function PostulacionesPage() {
                 ))}
               </select>
             </BrandLabel>
+            <BrandLabel label="Detalle de la fuente (opcional)">
+              <input
+                value={form.fuente_detalle}
+                onChange={(e) => setForm({ ...form, fuente_detalle: e.target.value })}
+                placeholder='ej. "aviso Promotor en Magneto" o el cargo de la publicación'
+                className={inputClass}
+              />
+            </BrandLabel>
           </div>
           {err && (
             <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
@@ -624,6 +636,10 @@ export default function PostulacionesPage() {
                       <Pill tono="info">🏢 Interno</Pill>
                     )}
                   </div>
+                  <p className="text-[11px] text-text-subtle mt-0.5">
+                    {p.fuente?.replace(/_/g, ' ')}
+                    {p.fuente_detalle ? ` · ${p.fuente_detalle}` : ''}
+                  </p>
                 </td>
                 <td className="px-4 py-3 text-text-muted text-[12px]">
                   {p.candidato_email || (

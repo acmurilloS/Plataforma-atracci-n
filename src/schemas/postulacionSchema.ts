@@ -114,6 +114,12 @@ export const postulacionInputSchema = z.object({
   // Trazabilidad de origen
   fuente: fuentePostulacion,
   origen_publicacion_id: z.string().nullable().default(null),
+  /**
+   * Detalle libre opcional de la fuente cuando viene de un canal externo
+   * (ej. "Magneto · aviso Promotor Plan Brisa"). Permite saber de qué
+   * publicación concreta llegó el candidato.
+   */
+  fuente_detalle: z.string().default(''),
   analista_uid: z.string().nullable().default(null),
 
   // Estado

@@ -392,12 +392,12 @@ export default function PublicacionPage() {
             </label>
             <label className="block md:col-span-2">
               <span className="block text-[13px] font-medium text-text-strong mb-1.5">
-                Detalle
+                Detalle <span className="text-text-subtle font-normal">(opcional)</span>
               </span>
               <input
                 value={detalle}
                 onChange={(e) => setDetalle(e.target.value)}
-                placeholder='ej. "Caja Compensar Bogotá" o "Post LinkedIn personal"'
+                placeholder='ej. "Magneto · aviso Promotor", "Caja Compensar Bogotá", "Post LinkedIn"'
                 className={inputClass}
               />
             </label>
