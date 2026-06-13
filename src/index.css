@@ -138,6 +138,10 @@
 @media print {
   @page { size: A4; margin: 14mm; }
   body { background: white; }
-  header, nav, [class*="sticky"] { display: none !important; }
+  /* Ocultar el chrome de la app (la barra superior es sticky y la marcamos
+     con print:hidden). NO ocultar el tag <header> genérico: documentos como
+     el Concepto VIDA-F-03 usan <header> para su encabezado oficial y debe
+     salir en el PDF. */
+  nav, [class*="sticky"] { display: none !important; }
   .max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl { max-width: 100%; }
 }
