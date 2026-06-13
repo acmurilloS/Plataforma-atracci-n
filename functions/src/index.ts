@@ -28,3 +28,6 @@ export { marcarComoEnviadasReferidos } from './referidos/marcarComoEnviadas';
 
 // Envío de pruebas al candidato por correo (paso 7, 2026-06-09).
 export { enviarPruebaCandidato } from './pruebas/enviarPruebaCandidato';
+
+// Correo de orden de exámenes médicos a los gestores SST (paso 15, 2026-06-09).
+export { onExamenMedicoCreate } from './examenes/onExamenMedicoCreate';
