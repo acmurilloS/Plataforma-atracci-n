@@ -256,12 +256,16 @@ export default function TernaPage() {
       // así el analista NO tiene que descargar y mandar el correo a mano.
       if (vacante.lider_uid) {
         const analista = perfil ? `${perfil.nombre} ${perfil.apellido}` : 'El analista';
+        // Listar los nombres de la terna para que el líder vea de una quién
+        // está, sin tener que entrar (sale en la campana y en el correo).
+        const nombres = enTerna.map((p) => p.candidato_nombre).filter(Boolean);
+        const lista = nombres.length > 0 ? `: ${nombres.join(', ')}` : '';
         try {
           await crear('notificaciones', {
             destinatario_uid: vacante.lider_uid,
             tipo: 'terna_lista',
             titulo: 'Terna lista para tu revisión',
-            mensaje: `${analista} te envió la terna de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${enTerna.length} candidato(s). Revísala y decide desde la plataforma — tienes 48 horas.`,
+            mensaje: `${analista} te envió la terna de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${enTerna.length} candidato(s)${lista}. Revísala y decide desde la plataforma — tienes 48 horas.`,
             link: `/vacantes/${vacante.id}/terna`,
             leida: false,
             leida_en: null,
