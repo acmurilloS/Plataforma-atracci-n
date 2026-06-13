@@ -65,6 +65,19 @@ export const estadoPostulacion = z.enum([
 ]);
 export type EstadoPostulacion = z.infer<typeof estadoPostulacion>;
 
+/**
+ * Referencia laboral que el candidato aporta al postularse desde la landing
+ * pública (contacto de un empleo anterior). El analista las valida después en
+ * el paso 9 (ReferenciasTab).
+ */
+export const referenciaAportadaSchema = z.object({
+  nombre: z.string().default(''),
+  empresa: z.string().default(''),
+  cargo: z.string().default(''),
+  telefono: z.string().default(''),
+});
+export type ReferenciaAportada = z.infer<typeof referenciaAportadaSchema>;
+
 export const fuentePostulacion = z.enum([
   'postulacion_directa',
   'magneto',
@@ -125,6 +138,12 @@ export const postulacionInputSchema = z.object({
   referido_por_nombre: z.string().nullable().default(null),
   /** ID del documento `referidos_generaciones/` que disparó esta postulación. */
   referido_generacion_id: z.string().nullable().default(null),
+
+  // ── Referencias laborales aportadas por el candidato (landing pública) ─────
+  /** true si el candidato marcó que no tiene experiencia / no aplica. */
+  referencias_no_aplica: z.boolean().default(false),
+  /** Contactos de referencia de empleos anteriores (típicamente 2). */
+  referencias_aportadas: z.array(referenciaAportadaSchema).default([]),
 });
 
 export type PostulacionInput = z.infer<typeof postulacionInputSchema>;

@@ -73,6 +73,17 @@ export default function CarreraPublicaPage() {
   const [enviando, setEnviando] = useState(false);
   const [errSubmit, setErrSubmit] = useState<string | null>(null);
 
+  // Referencias laborales: el candidato registra 2 contactos de empleos
+  // anteriores, o marca "no aplica" si no tiene experiencia.
+  const [refsNoAplica, setRefsNoAplica] = useState(false);
+  const [refs, setRefs] = useState([
+    { nombre: '', empresa: '', cargo: '', telefono: '' },
+    { nombre: '', empresa: '', cargo: '', telefono: '' },
+  ]);
+  function setRef(i: number, patch: Partial<{ nombre: string; empresa: string; cargo: string; telefono: string }>) {
+    setRefs((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -177,6 +188,25 @@ export default function CarreraPublicaPage() {
       setErrSubmit('Adjunta tu CV en PDF.');
       return;
     }
+    // Referencias: si no marcó "no aplica", debe registrar 2 contactos con
+    // nombre y teléfono. Si no tiene experiencia, marca "no aplica".
+    const refsLimpias = refs
+      .map((r) => ({
+        nombre: r.nombre.trim(),
+        empresa: r.empresa.trim(),
+        cargo: r.cargo.trim(),
+        telefono: r.telefono.trim(),
+      }))
+      .filter((r) => r.nombre || r.empresa || r.cargo || r.telefono);
+    if (!refsNoAplica) {
+      const completas = refsLimpias.filter((r) => r.nombre && r.telefono);
+      if (completas.length < 2) {
+        setErrSubmit(
+          'Registra 2 contactos de referencia (nombre y teléfono) de tus últimos empleos, o marca "No tengo experiencia / no aplica".',
+        );
+        return;
+      }
+    }
     setEnviando(true);
     setErrSubmit(null);
     try {
@@ -255,6 +285,8 @@ export default function CarreraPublicaPage() {
         referido_por_cedula: referido?.cedula_tecnico ?? null,
         referido_por_nombre: referido?.nombre_tecnico ?? null,
         referido_generacion_id: referido?.generacion_id ?? null,
+        referencias_no_aplica: refsNoAplica,
+        referencias_aportadas: refsNoAplica ? [] : refsLimpias,
         creado_en: serverTimestamp(),
         creado_por: uid,
         actualizado_en: serverTimestamp(),
@@ -574,6 +606,66 @@ export default function CarreraPublicaPage() {
                   className={cn(inputClass, 'resize-y')}
                 />
               </Field>
+
+              {/* Referencias laborales */}
+              <div className="rounded-md border border-slate-200 bg-slate-50/40 p-3.5 space-y-3">
+                <div>
+                  <p className="text-[12px] font-semibold text-text-strong">
+                    Referencias laborales
+                  </p>
+                  <p className="text-[11px] text-text-muted leading-[1.5] mt-0.5">
+                    Registra 2 contactos de referencia de tus últimos empleos (nombre y
+                    teléfono). Si no tienes experiencia, marca la casilla.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-[12px] text-text-body cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={refsNoAplica}
+                    onChange={(e) => setRefsNoAplica(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-300/40"
+                  />
+                  No tengo experiencia laboral / no aplica
+                </label>
+
+                {!refsNoAplica &&
+                  refs.map((r, i) => (
+                    <div
+                      key={i}
+                      className="space-y-2 rounded-md border border-slate-200 bg-white p-3"
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-muted">
+                        Referencia {i + 1}
+                      </p>
+                      <input
+                        placeholder="Nombre del contacto"
+                        value={r.nombre}
+                        onChange={(e) => setRef(i, { nombre: e.target.value })}
+                        className={inputClass}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          placeholder="Empresa"
+                          value={r.empresa}
+                          onChange={(e) => setRef(i, { empresa: e.target.value })}
+                          className={inputClass}
+                        />
+                        <input
+                          placeholder="Cargo (opcional)"
+                          value={r.cargo}
+                          onChange={(e) => setRef(i, { cargo: e.target.value })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <input
+                        placeholder="Teléfono"
+                        value={r.telefono}
+                        onChange={(e) => setRef(i, { telefono: e.target.value })}
+                        className={inputClass}
+                      />
+                    </div>
+                  ))}
+              </div>
 
               <Field
                 label={

@@ -88,6 +88,44 @@ export function ReferenciasTab({ postulacion }: Props) {
         </Button>
       </div>
 
+      {/* Referencias que el candidato aportó al postularse (landing). Punto de
+          partida para que el analista las valide arriba. */}
+      {(postulacion.referencias_no_aplica ||
+        (postulacion.referencias_aportadas?.length ?? 0) > 0) && (
+        <Card padding="lg" className="bg-slate-50/50">
+          <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted mb-2">
+            Aportadas por el candidato al postularse
+          </p>
+          {postulacion.referencias_no_aplica ? (
+            <p className="text-[13px] text-text-muted italic">
+              El candidato indicó que no tiene experiencia laboral / no aplica.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(postulacion.referencias_aportadas ?? []).map((r, i) => (
+                <div
+                  key={i}
+                  className="rounded-md border border-slate-200 bg-white p-3 text-[12px]"
+                >
+                  <p className="font-semibold text-text-strong">{r.nombre || '(sin nombre)'}</p>
+                  {(r.cargo || r.empresa) && (
+                    <p className="text-text-muted mt-0.5">
+                      {[r.cargo, r.empresa].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                  {r.telefono && (
+                    <p className="text-text-body inline-flex items-center gap-1 mt-1">
+                      <Phone size={11} strokeWidth={1.75} />
+                      {r.telefono}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       {err && (
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
           {err}
