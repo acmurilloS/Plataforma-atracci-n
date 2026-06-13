@@ -598,20 +598,38 @@ function EntrevistasTab({ postulacion }: SubProps) {
   const { crear, actualizar } = useMutacion();
   const { user, perfil } = useAuth();
   const [fecha, setFecha] = useState('');
+  const [hora, setHora] = useState('10:00');
   const [tipo, setTipo] = useState<'analista' | 'lider'>('analista');
   const [modalidad, setModalidad] = useState<'presencial' | 'virtual' | 'telefonica'>('virtual');
+  const [link, setLink] = useState('');
+  const [sedeDireccion, setSedeDireccion] = useState('');
+
+  // Sedes para el dropdown de dirección cuando la entrevista es presencial.
+  const { docs: sedes } = useColeccion<{
+    id: string;
+    nombre: string;
+    ciudad: string;
+    direccion: string;
+    activo: boolean;
+  }>('sedes', {});
 
   async function agendar() {
     if (!fecha || !user || !perfil) return;
+    const salaOLink =
+      modalidad === 'virtual'
+        ? link.trim() || null
+        : modalidad === 'presencial'
+          ? sedeDireccion.trim() || null
+          : null;
     await crear('entrevistas', {
       postulacion_id: postulacion.id,
       candidato_id: postulacion.candidato_id,
       proceso_id: postulacion.proceso_id,
       tipo,
       modalidad,
-      programada_para: Timestamp.fromDate(new Date(`${fecha}T10:00:00`)),
+      programada_para: Timestamp.fromDate(new Date(`${fecha}T${hora || '10:00'}:00`)),
       duracion_min: 45,
-      sala_o_link: null,
+      sala_o_link: salaOLink,
       entrevistador_uid: user.uid,
       entrevistador_nombre: `${perfil.nombre} ${perfil.apellido}`,
       google_calendar_event_id: null,
@@ -620,6 +638,8 @@ function EntrevistasTab({ postulacion }: SubProps) {
       feedback: null,
     });
     setFecha('');
+    setLink('');
+    setSedeDireccion('');
   }
 
   async function registrarFeedback(e: E) {
@@ -649,44 +669,101 @@ function EntrevistasTab({ postulacion }: SubProps) {
             Agendar entrevista · pasos 8 / 13
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap items-end">
-          <label className="block">
-            <span className="block text-[11px] font-medium text-text-strong mb-1">Fecha</span>
-            <input
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              className={cn(inputClass, 'md:w-auto')}
-            />
-          </label>
-          <label className="block">
-            <span className="block text-[11px] font-medium text-text-strong mb-1">Tipo</span>
-            <select
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value as 'analista' | 'lider')}
-              className={cn(inputClass, 'md:w-auto')}
-            >
-              <option value="analista">Con analista (paso 8)</option>
-              <option value="lider">Con líder (paso 13)</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-[11px] font-medium text-text-strong mb-1">Modalidad</span>
-            <select
-              value={modalidad}
-              onChange={(e) =>
-                setModalidad(e.target.value as 'presencial' | 'virtual' | 'telefonica')
-              }
-              className={cn(inputClass, 'md:w-auto')}
-            >
-              <option value="virtual">Virtual</option>
-              <option value="presencial">Presencial</option>
-              <option value="telefonica">Telefónica</option>
-            </select>
-          </label>
-          <Button onClick={agendar} variant="brand-primary" disabled={!fecha}>
-            Agendar
-          </Button>
+        <div className="space-y-3">
+          <div className="flex gap-2 flex-wrap items-end">
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-strong mb-1">Fecha</span>
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                className={cn(inputClass, 'md:w-auto')}
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-strong mb-1">Hora</span>
+              <input
+                type="time"
+                value={hora}
+                onChange={(e) => setHora(e.target.value)}
+                className={cn(inputClass, 'md:w-auto')}
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-strong mb-1">Tipo</span>
+              <select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value as 'analista' | 'lider')}
+                className={cn(inputClass, 'md:w-auto')}
+              >
+                <option value="analista">Con analista (paso 8)</option>
+                <option value="lider">Con líder (paso 13)</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-strong mb-1">Modalidad</span>
+              <select
+                value={modalidad}
+                onChange={(e) =>
+                  setModalidad(e.target.value as 'presencial' | 'virtual' | 'telefonica')
+                }
+                className={cn(inputClass, 'md:w-auto')}
+              >
+                <option value="virtual">Virtual</option>
+                <option value="presencial">Presencial</option>
+                <option value="telefonica">Telefónica</option>
+              </select>
+            </label>
+          </div>
+
+          {modalidad === 'virtual' && (
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-strong mb-1">
+                Link de la videollamada{' '}
+                <span className="text-text-subtle font-normal">(se lo enviamos al candidato)</span>
+              </span>
+              <input
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
+                placeholder="https://meet.google.com/… o el link de la reunión"
+                className={inputClass}
+              />
+            </label>
+          )}
+
+          {modalidad === 'presencial' && (
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-strong mb-1">
+                Sede / dirección
+              </span>
+              <select
+                value={sedeDireccion}
+                onChange={(e) => setSedeDireccion(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Selecciona la sede…</option>
+                {sedes
+                  .filter((s) => s.activo !== false)
+                  .map((s) => {
+                    const dir = [s.direccion, s.ciudad].filter(Boolean).join(', ');
+                    const valor = dir ? `${dir} (${s.nombre})` : `${s.nombre}`;
+                    return (
+                      <option key={s.id} value={valor}>
+                        {s.nombre}
+                        {s.ciudad ? ` · ${s.ciudad}` : ''}
+                        {s.direccion ? ` · ${s.direccion}` : ' · (sin dirección)'}
+                      </option>
+                    );
+                  })}
+              </select>
+            </label>
+          )}
+
+          <div className="flex justify-end">
+            <Button onClick={agendar} variant="brand-primary" disabled={!fecha}>
+              Agendar
+            </Button>
+          </div>
         </div>
       </Card>
 

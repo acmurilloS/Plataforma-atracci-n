@@ -31,3 +31,6 @@ export { enviarPruebaCandidato } from './pruebas/enviarPruebaCandidato';
 
 // Correo de orden de exámenes médicos a los gestores SST (paso 15, 2026-06-09).
 export { onExamenMedicoCreate } from './examenes/onExamenMedicoCreate';
+
+// Correo al candidato con el agendamiento de su entrevista (pasos 8/13, 2026-06-12).
+export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';
