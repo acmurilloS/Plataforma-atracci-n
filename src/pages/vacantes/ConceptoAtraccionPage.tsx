@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Timestamp, doc, getDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, FileDown, Plus, Printer, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, FileDown, Plus, Printer, Save, Send, Trash2 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
@@ -61,13 +61,18 @@ export default function ConceptoAtraccionPage() {
     filtros: id ? [['vacante_id', '==', id]] : [],
   });
   const { crear, actualizar } = useMutacion();
-  const { user, perfil } = useAuth();
+  const { user, perfil, rol } = useAuth();
 
   const concepto = conceptos[0] ?? null;
+  // El líder llega aquí desde la notificación "Concepto listo": ve la hoja en
+  // modo solo-lectura (sin editar/guardar/enviar), solo para revisar e imprimir.
+  const esLider = rol === 'lider';
 
   const [filas, setFilas] = useState<CandidatoConcepto[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  const [enviandoLider, setEnviandoLider] = useState(false);
+  const [enviadoLider, setEnviadoLider] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   // Arma las filas del Concepto desde los Informes + datos del candidato:
@@ -173,8 +178,8 @@ export default function ConceptoAtraccionPage() {
     setGuardado(false);
   }
 
-  async function guardar() {
-    if (!vacante || !user) return;
+  async function guardar(): Promise<boolean> {
+    if (!vacante || !user) return false;
     setGuardando(true);
     setErr(null);
     try {
@@ -202,10 +207,53 @@ export default function ConceptoAtraccionPage() {
       }
       setGuardado(true);
       setTimeout(() => setGuardado(false), 2500);
+      return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos guardar.');
+      return false;
     } finally {
       setGuardando(false);
+    }
+  }
+
+  /**
+   * Guarda el concepto y le avisa al líder de la vacante que ya puede revisarlo.
+   * La notificación cae en su campana y, vía onNotificacionCreate, también le
+   * llega por correo con un botón que lo lleva directo a este cuadro.
+   */
+  async function enviarAlLider() {
+    if (!vacante || !user) return;
+    if (!vacante.lider_uid) {
+      setErr('Esta vacante no tiene un líder asignado, así que no hay a quién enviarle el concepto.');
+      return;
+    }
+    setEnviandoLider(true);
+    setErr(null);
+    // Guardamos primero para que el líder abra exactamente lo que está en pantalla.
+    const ok = await guardar();
+    if (!ok) {
+      setEnviandoLider(false);
+      return;
+    }
+    try {
+      const analista = perfil ? `${perfil.nombre} ${perfil.apellido}` : 'El equipo de Atracción';
+      const nombres = filas.map((f) => f.nombre).filter(Boolean);
+      const lista = nombres.length > 0 ? `: ${nombres.join(', ')}` : '';
+      await crear('notificaciones', {
+        destinatario_uid: vacante.lider_uid,
+        tipo: 'concepto_listo',
+        titulo: 'Concepto de atracción listo para tu revisión',
+        mensaje: `${analista} te compartió el concepto de atracción de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${nombres.length} candidato(s) finalista(s)${lista}. Ábrelo para revisarlo desde la plataforma.`,
+        link: `/vacantes/${vacante.id}/concepto-atraccion`,
+        leida: false,
+        leida_en: null,
+      });
+      setEnviadoLider(true);
+      setTimeout(() => setEnviadoLider(false), 4000);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No pudimos enviar el concepto al líder.');
+    } finally {
+      setEnviandoLider(false);
     }
   }
 
@@ -234,7 +282,7 @@ export default function ConceptoAtraccionPage() {
         <div className="mt-6 flex items-start justify-between flex-wrap gap-6">
           <div>
             <Pill tono="brand" dot>
-              Pasos 11 – 12 · Analista
+              {esLider ? 'Revisión · Líder' : 'Pasos 11 – 12 · Analista'}
             </Pill>
             <h1
               className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
@@ -243,8 +291,9 @@ export default function ConceptoAtraccionPage() {
               Concepto de Atracción y Desarrollo
             </h1>
             <p className="mt-3 text-[14px] text-text-muted leading-[1.55] max-w-xl">
-              Formato oficial VIDA-F-03 v0. La tabla se llena sola con lo que escribiste en los
-              Informes (paso 11); ajusta lo que falte, guarda y exporta a PDF.
+              {esLider
+                ? 'Concepto de atracción de los candidatos finalistas, preparado por el equipo de Atracción. Revísalo y, si lo necesitas, expórtalo a PDF.'
+                : 'Formato oficial VIDA-F-03 v0. La tabla se llena sola con lo que escribiste en los Informes (paso 11); ajusta lo que falte, guarda, envíaselo al líder o expórtalo a PDF.'}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -254,22 +303,41 @@ export default function ConceptoAtraccionPage() {
                 Guardado
               </span>
             )}
-            <Button
-              onClick={traerDeInformes}
-              variant="neutral-secondary"
-              icon={<FileDown size={13} strokeWidth={1.75} />}
-            >
-              Traer de los informes
-            </Button>
-            <Button
-              onClick={guardar}
-              disabled={guardando}
-              loading={guardando}
-              variant="brand-primary"
-              icon={<Save size={13} strokeWidth={1.75} />}
-            >
-              {guardando ? 'Guardando…' : 'Guardar'}
-            </Button>
+            {enviadoLider && (
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-success-700 font-medium">
+                <Check size={13} strokeWidth={2} />
+                Enviado al líder
+              </span>
+            )}
+            {!esLider && (
+              <>
+                <Button
+                  onClick={traerDeInformes}
+                  variant="neutral-secondary"
+                  icon={<FileDown size={13} strokeWidth={1.75} />}
+                >
+                  Traer de los informes
+                </Button>
+                <Button
+                  onClick={guardar}
+                  disabled={guardando || enviandoLider}
+                  loading={guardando}
+                  variant="neutral-secondary"
+                  icon={<Save size={13} strokeWidth={1.75} />}
+                >
+                  {guardando ? 'Guardando…' : 'Guardar'}
+                </Button>
+                <Button
+                  onClick={enviarAlLider}
+                  disabled={enviandoLider || guardando}
+                  loading={enviandoLider}
+                  variant="brand-primary"
+                  icon={<Send size={13} strokeWidth={1.75} />}
+                >
+                  {enviandoLider ? 'Enviando…' : 'Enviar al líder'}
+                </Button>
+              </>
+            )}
             <Button
               onClick={imprimir}
               variant="neutral-secondary"
@@ -381,40 +449,57 @@ export default function ConceptoAtraccionPage() {
             {filas.map((f, i) => (
               <tr key={i}>
                 <td className="border border-text-strong align-top">
-                  <CeldaInput valor={f.nombre} onChange={(v) => actualizarFila(i, { nombre: v })} />
+                  <CeldaInput
+                    valor={f.nombre}
+                    onChange={(v) => actualizarFila(i, { nombre: v })}
+                    soloLectura={esLider}
+                  />
                 </td>
                 <td className="border border-text-strong align-top">
-                  <CeldaInput valor={f.ciudad} onChange={(v) => actualizarFila(i, { ciudad: v })} />
+                  <CeldaInput
+                    valor={f.ciudad}
+                    onChange={(v) => actualizarFila(i, { ciudad: v })}
+                    soloLectura={esLider}
+                  />
                 </td>
                 <td className="border border-text-strong align-top">
-                  <CeldaInput valor={f.edad} onChange={(v) => actualizarFila(i, { edad: v })} />
+                  <CeldaInput
+                    valor={f.edad}
+                    onChange={(v) => actualizarFila(i, { edad: v })}
+                    soloLectura={esLider}
+                  />
                 </td>
                 <td className="border border-text-strong align-top">
                   <CeldaTextarea
                     valor={f.formacion}
                     onChange={(v) => actualizarFila(i, { formacion: v })}
+                    soloLectura={esLider}
                   />
                 </td>
                 <td className="border border-text-strong align-top">
                   <CeldaTextarea
                     valor={f.experiencia}
                     onChange={(v) => actualizarFila(i, { experiencia: v })}
+                    soloLectura={esLider}
                   />
                 </td>
                 <td className="border border-text-strong align-top">
                   <CeldaTextarea
                     valor={f.concepto}
                     onChange={(v) => actualizarFila(i, { concepto: v })}
+                    soloLectura={esLider}
                   />
                 </td>
                 <td className="border border-text-strong align-top text-center print:hidden">
-                  <button
-                    onClick={() => eliminarFila(i)}
-                    className="text-danger-700 hover:bg-danger-50 p-1 rounded transition-colors"
-                    title="Eliminar fila"
-                  >
-                    <Trash2 size={12} strokeWidth={1.75} />
-                  </button>
+                  {!esLider && (
+                    <button
+                      onClick={() => eliminarFila(i)}
+                      className="text-danger-700 hover:bg-danger-50 p-1 rounded transition-colors"
+                      title="Eliminar fila"
+                    >
+                      <Trash2 size={12} strokeWidth={1.75} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -422,15 +507,17 @@ export default function ConceptoAtraccionPage() {
         </table>
       </div>
 
-      <div className="flex justify-end print:hidden">
-        <Button
-          onClick={agregarFila}
-          variant="neutral-secondary"
-          icon={<Plus size={13} strokeWidth={1.75} />}
-        >
-          Agregar fila
-        </Button>
-      </div>
+      {!esLider && (
+        <div className="flex justify-end print:hidden">
+          <Button
+            onClick={agregarFila}
+            variant="neutral-secondary"
+            icon={<Plus size={13} strokeWidth={1.75} />}
+          >
+            Agregar fila
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -449,15 +536,18 @@ function DatoFila({ label, valor }: { label: string; valor: string }) {
 function CeldaInput({
   valor,
   onChange,
+  soloLectura,
 }: {
   valor: string;
   onChange: (v: string) => void;
+  soloLectura?: boolean;
 }) {
   return (
     <input
       value={valor}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-2 py-1.5 text-[11px] border-0 focus:bg-brand-50/40 focus:outline-none print:bg-transparent"
+      readOnly={soloLectura}
+      className="w-full px-2 py-1.5 text-[11px] border-0 focus:bg-brand-50/40 focus:outline-none print:bg-transparent read-only:cursor-default read-only:focus:bg-transparent"
     />
   );
 }
@@ -465,16 +555,19 @@ function CeldaInput({
 function CeldaTextarea({
   valor,
   onChange,
+  soloLectura,
 }: {
   valor: string;
   onChange: (v: string) => void;
+  soloLectura?: boolean;
 }) {
   return (
     <textarea
       value={valor}
       onChange={(e) => onChange(e.target.value)}
       rows={3}
-      className="w-full px-2 py-1.5 text-[11px] border-0 resize-none focus:bg-brand-50/40 focus:outline-none print:bg-transparent"
+      readOnly={soloLectura}
+      className="w-full px-2 py-1.5 text-[11px] border-0 resize-none focus:bg-brand-50/40 focus:outline-none print:bg-transparent read-only:cursor-default read-only:focus:bg-transparent"
     />
   );
 }
