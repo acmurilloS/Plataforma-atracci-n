@@ -51,6 +51,10 @@ export default function CarreraPublicaPage() {
   const [authReady, setAuthReady] = useState(false);
   const [postulado, setPostulado] = useState<{ ok: boolean; id: string } | null>(null);
   const [referido, setReferido] = useState<ReferidoResuelto | null>(null);
+  // Contexto del cargo para el candidato (lo que ve quien quiere postularse):
+  // criterios del perfilamiento, o la descripción del cargo. NUNCA la
+  // justificación (campo interno de por qué se abrió la vacante).
+  const [contextoCargo, setContextoCargo] = useState('');
 
   const [form, setForm] = useState({
     nombres: '',
@@ -134,6 +138,30 @@ export default function CarreraPublicaPage() {
         // arriba — pero el detalle queda visible.
         setVacante({ id: snap.id, ...data });
         setCargando(false);
+
+        // Contexto del cargo para el candidato: primero los criterios del
+        // perfilamiento (lo que el líder definió para esta vacante), si no, la
+        // descripción del cargo del catálogo. Se deja la justificación FUERA
+        // de la landing — es interna.
+        try {
+          let contexto = '';
+          if (data.proceso_activo_id) {
+            const ps = await getDoc(doc(db, 'procesos', data.proceso_activo_id));
+            const perf = ps.exists()
+              ? (ps.data() as { perfilamiento?: { criterios_texto?: string } }).perfilamiento
+              : null;
+            contexto = (perf?.criterios_texto ?? '').trim();
+          }
+          if (!contexto && data.cargo_id) {
+            const cs = await getDoc(doc(db, 'cargos_catalogo', data.cargo_id));
+            contexto = cs.exists()
+              ? String((cs.data() as { descripcion?: string }).descripcion ?? '').trim()
+              : '';
+          }
+          setContextoCargo(contexto);
+        } catch (e) {
+          console.warn('No se pudo cargar el contexto del cargo', e);
+        }
       } catch (e) {
         console.error(e);
         setErrorCarga('No pudimos cargar la información. Intenta más tarde.');
@@ -339,15 +367,17 @@ export default function CarreraPublicaPage() {
 
       <main className="max-w-5xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <Card padding="lg">
-            <Pill tono="brand">Sobre esta vacante</Pill>
-            <h2 className="mt-3 text-[20px] font-semibold tracking-[-0.012em] text-text-strong mb-3">
-              Lo que buscamos
-            </h2>
-            <p className="text-[14px] text-text-body whitespace-pre-line leading-[1.65]">
-              {vacante.justificacion}
-            </p>
-          </Card>
+          {contextoCargo && (
+            <Card padding="lg">
+              <Pill tono="brand">Sobre esta vacante</Pill>
+              <h2 className="mt-3 text-[20px] font-semibold tracking-[-0.012em] text-text-strong mb-3">
+                Lo que buscamos
+              </h2>
+              <p className="text-[14px] text-text-body whitespace-pre-line leading-[1.65]">
+                {contextoCargo}
+              </p>
+            </Card>
+          )}
 
           <Card padding="lg">
             <Pill tono="info">Condiciones</Pill>
