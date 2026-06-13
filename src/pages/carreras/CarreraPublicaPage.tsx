@@ -543,6 +543,9 @@ export default function CarreraPublicaPage() {
                 <div className="col-span-2">
                   <Field label="Número">
                     <input
+                      required
+                      inputMode="numeric"
+                      placeholder="Sin puntos ni espacios"
                       value={form.documento_numero}
                       onChange={(e) =>
                         setForm({ ...form, documento_numero: e.target.value })

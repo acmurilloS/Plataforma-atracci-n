@@ -1,15 +1,20 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import {
+  AlertTriangle,
   Building2,
+  CheckCircle2,
   ExternalLink,
   HeartPulse,
+  RefreshCw,
   Send,
   Stethoscope,
   User,
   XCircle,
 } from 'lucide-react';
+import { functions } from '../../lib/firebase';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
@@ -46,6 +51,10 @@ interface ExamenDoc {
   apto: boolean | null;
   recomendaciones: string | null;
   estado: string;
+  // Trazabilidad del correo a gestores SST (ver functions/src/examenes/ordenGestores.ts).
+  correo_gestor_enviado_en?: Timestamp | null;
+  correo_gestor_error?: string | null;
+  correo_gestor_datos_faltantes?: string[];
   [k: string]: unknown;
 }
 
@@ -70,6 +79,37 @@ export default function ExamenesMedicosPage() {
   }, [postulaciones]);
   const { actualizar } = useMutacion();
   const [procesando, setProcesando] = useState<string | null>(null);
+  const [reenviando, setReenviando] = useState<string | null>(null);
+
+  /** Reenvía manualmente la orden a los gestores SST (fallo previo o dato que faltaba). */
+  async function reenviarGestores(ex: ExamenDoc) {
+    setReenviando(ex.id);
+    try {
+      const fn = httpsCallable<
+        { examen_id: string },
+        { ok: true; faltantes: string[]; destinatarios: number }
+      >(functions, 'reenviarOrdenGestores');
+      const res = await fn({ examen_id: ex.id });
+      const faltantes = res.data.faltantes ?? [];
+      if (faltantes.length > 0) {
+        window.alert(
+          `Orden reenviada a los ${res.data.destinatarios} gestores SST.\n\n` +
+            `Ojo: todavía faltó ${faltantes.join(', ')}. Complétalo en los Datos Básicos del ` +
+            `candidato y vuelve a reenviar para que les llegue completo.`,
+        );
+      } else {
+        window.alert(
+          `Orden reenviada a los ${res.data.destinatarios} gestores SST con los 6 datos completos.`,
+        );
+      }
+    } catch (e) {
+      window.alert(
+        'No se pudo reenviar a los gestores: ' + (e instanceof Error ? e.message : String(e)),
+      );
+    } finally {
+      setReenviando(null);
+    }
+  }
 
   function resolverInfo(ex: ExamenDoc) {
     const post = postulacionPorId.get(ex.postulacion_id);
@@ -226,6 +266,24 @@ export default function ExamenesMedicosPage() {
                       </>
                     )}
                   </p>
+                  {/* Acuse del correo a los gestores SST */}
+                  {ex.correo_gestor_error ? (
+                    <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-danger-700 font-medium">
+                      <AlertTriangle size={12} strokeWidth={1.75} />
+                      No se pudo avisar a los gestores SST — usa “Reenviar a gestores”
+                    </p>
+                  ) : ex.correo_gestor_enviado_en ? (
+                    <p className="mt-1.5 inline-flex items-center gap-1.5 flex-wrap text-[11px] text-success-700 font-medium">
+                      <CheckCircle2 size={12} strokeWidth={1.75} />
+                      Gestores SST notificados {formatearFecha(ex.correo_gestor_enviado_en.toDate())}
+                      {ex.correo_gestor_datos_faltantes &&
+                        ex.correo_gestor_datos_faltantes.length > 0 && (
+                          <span className="text-warning-700 font-normal">
+                            · faltó: {ex.correo_gestor_datos_faltantes.join(', ')}
+                          </span>
+                        )}
+                    </p>
+                  ) : null}
                   {ex.recomendaciones && (
                     <p className="mt-2 rounded-md bg-slate-50 border border-slate-200 px-3 py-2 text-[12px] text-text-body italic">
                       <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-subtle not-italic">
@@ -241,6 +299,20 @@ export default function ExamenesMedicosPage() {
               </div>
 
               <div className="mt-4 flex gap-2 justify-end flex-wrap">
+                {(ex.estado === 'solicitada' ||
+                  ex.estado === 'enviada' ||
+                  ex.correo_gestor_error) && (
+                  <Button
+                    onClick={() => reenviarGestores(ex)}
+                    disabled={reenviando === ex.id}
+                    loading={reenviando === ex.id}
+                    variant="neutral-secondary"
+                    size="small"
+                    icon={<RefreshCw size={13} strokeWidth={1.75} />}
+                  >
+                    Reenviar a gestores
+                  </Button>
+                )}
                 {ex.estado === 'solicitada' && (
                   <Button
                     onClick={() => enviar(ex)}

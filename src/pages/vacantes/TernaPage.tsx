@@ -137,7 +137,12 @@ export default function TernaPage() {
         cargo_nombre: vacante.cargo_nombre,
         vacante_consecutivo: vacante.consecutivo,
         empresa_codigo: vacante.empresa_codigo,
+        // Snapshot autosuficiente para el correo a gestores SST: así no depende
+        // de joins en vivo a la vacante (nombre de empresa/unidad/sede).
+        empresa_nombre: vacante.empresa_nombre,
+        unidad_nombre: vacante.unidad_nombre,
         sede_codigo: vacante.sede_codigo,
+        sede_nombre: vacante.sede_nombre,
         solicitada_en: Timestamp.now(),
         solicitada_por_uid: user.uid,
         orden_url: null,
