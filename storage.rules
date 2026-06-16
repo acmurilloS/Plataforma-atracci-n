@@ -2,20 +2,53 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    match /avales/{empresa}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.contentType == 'application/pdf'
-        && request.resource.size < 10 * 1024 * 1024;
+    // Usuario interno (tiene rol en sus custom claims). Los candidatos entran con
+    // auth ANÓNIMA y NO tienen rol, así que esto los excluye de lo sensible.
+    function tieneRol() {
+      return request.auth != null && request.auth.token.rol != null;
     }
+    function esPdf() {
+      return request.resource.contentType == 'application/pdf';
+    }
+    function esPdfOImagen() {
+      return request.resource.contentType != null
+        && (request.resource.contentType == 'application/pdf'
+            || request.resource.contentType.matches('image/.*'));
+    }
+
+    // Avales de vacante (PDF). Solo usuarios internos suben y leen.
+    match /avales/{empresa}/{file} {
+      allow read: if tieneRol();
+      allow write: if tieneRol() && esPdf() && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // Hojas de vida. Las sube el candidato (anónimo) al postularse o el analista.
+    // Lectura para cualquier autenticado (se necesita para obtener la URL tras
+    // subir); el path no es listable, así que el riesgo es bajo.
     match /cvs/{vacante}/{file} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.contentType == 'application/pdf'
-        && request.resource.size < 5 * 1024 * 1024;
+      allow write: if request.auth != null && esPdf() && request.resource.size < 5 * 1024 * 1024;
     }
+
+    // Carpeta digital del candidato. Sube y lee el analista/GH (con rol).
+    match /documentos_candidato/{candidato}/{file} {
+      allow read: if tieneRol();
+      allow write: if tieneRol() && esPdfOImagen() && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Documentos que el candidato sube desde su portal público (anónimo).
+    // Necesita leer para obtener su URL de descarga tras subir; la escritura queda
+    // limitada a PDF/imagen y tamaño.
+    match /portal_docs/{token}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && esPdfOImagen() && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // Todo lo demás: denegado. Antes había un catch-all (read/write si auth!=null)
+    // que dejaba a cualquier candidato anónimo leer TODO el bucket (avales,
+    // carpetas con cédulas y PII) y sobrescribirlo.
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

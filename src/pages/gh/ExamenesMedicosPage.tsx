@@ -165,6 +165,8 @@ export default function ExamenesMedicosPage() {
         estado: 'enviada',
       });
       setAccion(null);
+    } catch (e) {
+      window.alert('No se pudo enviar la orden: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setProcesando(null);
     }
@@ -191,6 +193,10 @@ export default function ExamenesMedicosPage() {
         await actualizar('vacantes', ex.vacante_id, { estado: 'en_contratacion' });
       }
       setAccion(null);
+    } catch (e) {
+      window.alert(
+        'No se pudo registrar el concepto: ' + (e instanceof Error ? e.message : String(e)),
+      );
     } finally {
       setProcesando(null);
     }

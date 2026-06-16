@@ -20,7 +20,9 @@ export const registrarDocumentoPortal = onCall({ region: 'us-central1' }, async 
   if (!token) throw new HttpsError('invalid-argument', 'Falta token.');
   if (!/^[A-Za-z0-9]{8,12}$/.test(token)) throw new HttpsError('not-found', 'Token inválido.');
   if (!nombreArchivo) throw new HttpsError('invalid-argument', 'Falta el nombre del archivo.');
-  if (!/^https:\/\//.test(url)) {
+  // Solo aceptamos URLs de descarga de Firebase Storage (las que produce el
+  // propio portal al subir), para que nadie registre un enlace externo arbitrario.
+  if (!/^https:\/\/firebasestorage\.googleapis\.com\//.test(url)) {
     throw new HttpsError('invalid-argument', 'URL del archivo inválida.');
   }
 

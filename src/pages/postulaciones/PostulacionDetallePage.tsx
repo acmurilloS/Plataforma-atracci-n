@@ -657,6 +657,7 @@ function EntrevistasTab({
   const [modalidad, setModalidad] = useState<'presencial' | 'virtual' | 'telefonica'>('virtual');
   const [link, setLink] = useState('');
   const [sedeDireccion, setSedeDireccion] = useState('');
+  const [agendando, setAgendando] = useState(false);
 
   // Sedes para el dropdown de dirección cuando la entrevista es presencial.
   const { docs: sedes } = useColeccion<{
@@ -674,7 +675,11 @@ function EntrevistasTab({
     const porUbicacion = new Map<string, (typeof sedes)[number]>();
     for (const s of sedes) {
       if (s.activo === false) continue;
-      const clave = (s.ciudad || s.nombre).trim().toLowerCase();
+      // Por ciudad + dirección: colapsa los duplicados por empresa (misma sede
+      // física) pero conserva direcciones genuinamente distintas en una ciudad.
+      const clave = `${(s.ciudad || s.nombre).trim().toLowerCase()}|${(s.direccion || '')
+        .trim()
+        .toLowerCase()}`;
       const prev = porUbicacion.get(clave);
       if (!prev || (!prev.direccion && s.direccion)) porUbicacion.set(clave, s);
     }
@@ -682,7 +687,10 @@ function EntrevistasTab({
   }, [sedes]);
 
   async function agendar() {
-    if (!fecha || !user || !perfil) return;
+    // Guard anti doble-submit: agendar dos veces creaba 2 entrevistas (2 correos).
+    if (agendando || !fecha || !user || !perfil) return;
+    setAgendando(true);
+    try {
     const salaOLink =
       modalidad === 'virtual'
         ? link.trim() || null
@@ -715,6 +723,9 @@ function EntrevistasTab({
     setFecha('');
     setLink('');
     setSedeDireccion('');
+    } finally {
+      setAgendando(false);
+    }
   }
 
   async function registrarFeedback(e: E) {
@@ -833,7 +844,12 @@ function EntrevistasTab({
           )}
 
           <div className="flex justify-end">
-            <Button onClick={agendar} variant="brand-primary" disabled={!fecha}>
+            <Button
+              onClick={agendar}
+              variant="brand-primary"
+              disabled={!fecha || agendando}
+              loading={agendando}
+            >
               Agendar
             </Button>
           </div>

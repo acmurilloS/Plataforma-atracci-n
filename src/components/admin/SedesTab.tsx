@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, MapPin, Ban, Pencil, Check, X, RotateCcw } from 'lucide-react';
@@ -63,7 +63,12 @@ export function SedesTab() {
 
   async function guardarEdicion(id: string, patch: Partial<SedeInput>) {
     setErr(null);
-    await actualizarSede(id, patch);
+    try {
+      await actualizarSede(id, patch);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No pudimos guardar los cambios.');
+      throw e;
+    }
   }
 
   async function desactivar(s: SedeDoc) {
@@ -229,6 +234,15 @@ function FilaSede({
   const [guardando, setGuardando] = useState(false);
   const inactiva = sede.activo === false;
 
+  // Si la sede cambia en el servidor mientras no estoy editando, re-siembro.
+  useEffect(() => {
+    if (!editando) {
+      setNombre(sede.nombre);
+      setCiudad(sede.ciudad);
+      setDireccion(sede.direccion ?? '');
+    }
+  }, [sede.nombre, sede.ciudad, sede.direccion, editando]);
+
   function cancelar() {
     setNombre(sede.nombre);
     setCiudad(sede.ciudad);
@@ -239,8 +253,14 @@ function FilaSede({
   async function guardar() {
     setGuardando(true);
     try {
-      await onGuardar(sede.id, { nombre: nombre.trim(), ciudad: ciudad.trim(), direccion: direccion.trim() });
+      await onGuardar(sede.id, {
+        nombre: nombre.trim(),
+        ciudad: ciudad.trim(),
+        direccion: direccion.trim(),
+      });
       setEditando(false);
+    } catch {
+      /* el padre muestra el error; la fila queda en edición para reintentar */
     } finally {
       setGuardando(false);
     }
