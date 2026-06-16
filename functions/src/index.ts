@@ -44,3 +44,4 @@ export { enviarListadoDocumentos } from './documentos/enviarListadoDocumentos';
 export { enviarPortalCandidato } from './portal/enviarPortalCandidato';
 export { resolverPortalToken } from './portal/resolverPortalToken';
 export { registrarConsentimientoPortal } from './portal/registrarConsentimientoPortal';
+export { registrarDocumentoPortal } from './portal/registrarDocumentoPortal';

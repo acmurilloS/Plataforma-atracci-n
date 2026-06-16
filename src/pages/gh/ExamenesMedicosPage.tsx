@@ -20,6 +20,7 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import type { PostulacionDoc } from '../../schemas';
+import { cn } from '../../utils/cn';
 
 /**
  * ExamenesMedicosPage · sistema brand.
@@ -65,6 +66,12 @@ const ESTADO_TONO: Record<string, PillTono> = {
   no_apto: 'danger',
 };
 
+const inputClass = cn(
+  'block w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-[13px]',
+  'text-text-strong placeholder:text-text-subtle focus:bg-white focus:outline-none',
+  'focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 transition-colors',
+);
+
 export default function ExamenesMedicosPage() {
   const { docs, cargando } = useColeccion<ExamenDoc>('examenes_medicos', {
     orden: ['solicitada_en', 'desc'],
@@ -80,6 +87,14 @@ export default function ExamenesMedicosPage() {
   const { actualizar } = useMutacion();
   const [procesando, setProcesando] = useState<string | null>(null);
   const [reenviando, setReenviando] = useState<string | null>(null);
+  // Formularios inline (reemplazan los window.prompt) para enviar la orden y
+  // registrar el concepto médico. Solo uno abierto a la vez.
+  const [accion, setAccion] = useState<{ id: string; tipo: 'enviar' | 'concepto' } | null>(null);
+  const [centroMedico, setCentroMedico] = useState('Colsanitas');
+  const [ordenUrl, setOrdenUrl] = useState('');
+  const [apto, setApto] = useState<boolean | null>(null);
+  const [recomendaciones, setRecomendaciones] = useState('');
+  const [conceptoUrl, setConceptoUrl] = useState('');
 
   /** Reenvía manualmente la orden a los gestores SST (fallo previo o dato que faltaba). */
   async function reenviarGestores(ex: ExamenDoc) {
@@ -122,41 +137,63 @@ export default function ExamenesMedicosPage() {
     };
   }
 
-  async function enviar(ex: ExamenDoc) {
-    const centro = window.prompt('Centro médico:', 'Colsanitas') ?? 'Colsanitas';
-    const url = window.prompt('URL de la orden médica:') ?? '';
-    setProcesando(ex.id);
-    await actualizar('examenes_medicos', ex.id, {
-      centro_medico: centro,
-      orden_url: url,
-      enviada_al_candidato_en: Timestamp.now(),
-      estado: 'enviada',
-    });
-    setProcesando(null);
+  function abrirEnvio(ex: ExamenDoc) {
+    setCentroMedico(ex.centro_medico || 'Colsanitas');
+    setOrdenUrl('');
+    setAccion({ id: ex.id, tipo: 'enviar' });
   }
 
-  async function registrarConcepto(ex: ExamenDoc) {
-    const apto = window.confirm('¿Apto? OK = sí');
-    const recomendaciones = window.prompt('Recomendaciones:') ?? '';
-    const url = window.prompt('URL del concepto:') ?? '';
+  function abrirConcepto(ex: ExamenDoc) {
+    setApto(null);
+    setRecomendaciones(ex.recomendaciones || '');
+    setConceptoUrl(ex.concepto_url || '');
+    setAccion({ id: ex.id, tipo: 'concepto' });
+  }
+
+  function cerrarAccion() {
+    setAccion(null);
+  }
+
+  async function confirmarEnvio(ex: ExamenDoc) {
+    if (!centroMedico.trim()) return;
     setProcesando(ex.id);
-    await actualizar('examenes_medicos', ex.id, {
-      concepto_recibido_en: Timestamp.now(),
-      concepto_url: url,
-      apto,
-      recomendaciones,
-      estado: apto ? 'apto' : 'no_apto',
-    });
-    const ahora = Timestamp.now();
-    await actualizar('postulaciones', ex.postulacion_id, {
-      estado: apto ? 'en_contratacion' : 'descartado_examenes_medicos',
-      ultima_transicion_estado: ahora,
-      [`marcas.${apto ? 'apto_medico_en' : 'descartado_examenes_medicos_en'}`]: ahora,
-    });
-    if (apto) {
-      await actualizar('vacantes', ex.vacante_id, { estado: 'en_contratacion' });
+    try {
+      await actualizar('examenes_medicos', ex.id, {
+        centro_medico: centroMedico.trim(),
+        orden_url: ordenUrl.trim() || null,
+        enviada_al_candidato_en: Timestamp.now(),
+        estado: 'enviada',
+      });
+      setAccion(null);
+    } finally {
+      setProcesando(null);
     }
-    setProcesando(null);
+  }
+
+  async function confirmarConcepto(ex: ExamenDoc) {
+    if (apto === null) return;
+    setProcesando(ex.id);
+    try {
+      await actualizar('examenes_medicos', ex.id, {
+        concepto_recibido_en: Timestamp.now(),
+        concepto_url: conceptoUrl.trim() || null,
+        apto,
+        recomendaciones: recomendaciones.trim(),
+        estado: apto ? 'apto' : 'no_apto',
+      });
+      const ahora = Timestamp.now();
+      await actualizar('postulaciones', ex.postulacion_id, {
+        estado: apto ? 'en_contratacion' : 'descartado_examenes_medicos',
+        ultima_transicion_estado: ahora,
+        [`marcas.${apto ? 'apto_medico_en' : 'descartado_examenes_medicos_en'}`]: ahora,
+      });
+      if (apto) {
+        await actualizar('vacantes', ex.vacante_id, { estado: 'en_contratacion' });
+      }
+      setAccion(null);
+    } finally {
+      setProcesando(null);
+    }
   }
 
   const stats = useMemo(() => {
@@ -313,9 +350,9 @@ export default function ExamenesMedicosPage() {
                     Reenviar a gestores
                   </Button>
                 )}
-                {ex.estado === 'solicitada' && (
+                {ex.estado === 'solicitada' && accion?.id !== ex.id && (
                   <Button
-                    onClick={() => enviar(ex)}
+                    onClick={() => abrirEnvio(ex)}
                     disabled={procesando === ex.id}
                     loading={procesando === ex.id}
                     variant="brand-primary"
@@ -325,9 +362,9 @@ export default function ExamenesMedicosPage() {
                     Enviar al candidato · paso 16
                   </Button>
                 )}
-                {ex.estado === 'enviada' && (
+                {ex.estado === 'enviada' && accion?.id !== ex.id && (
                   <Button
-                    onClick={() => registrarConcepto(ex)}
+                    onClick={() => abrirConcepto(ex)}
                     disabled={procesando === ex.id}
                     loading={procesando === ex.id}
                     variant="brand-primary"
@@ -355,6 +392,129 @@ export default function ExamenesMedicosPage() {
                   </span>
                 )}
               </div>
+
+              {accion?.id === ex.id && accion.tipo === 'enviar' && (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                  <p className="text-[12px] font-semibold text-text-strong">
+                    Enviar orden al candidato · paso 16
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="block text-[11px] font-medium text-text-muted mb-1">
+                        Centro médico
+                      </span>
+                      <input
+                        value={centroMedico}
+                        onChange={(e) => setCentroMedico(e.target.value)}
+                        className={inputClass}
+                        placeholder="Colsanitas"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-medium text-text-muted mb-1">
+                        URL de la orden (opcional)
+                      </span>
+                      <input
+                        value={ordenUrl}
+                        onChange={(e) => setOrdenUrl(e.target.value)}
+                        className={inputClass}
+                        placeholder="https://…"
+                      />
+                    </label>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button onClick={cerrarAccion} variant="neutral-secondary" size="small">
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={() => confirmarEnvio(ex)}
+                      disabled={!centroMedico.trim() || procesando === ex.id}
+                      loading={procesando === ex.id}
+                      variant="brand-primary"
+                      size="small"
+                      icon={<Send size={13} strokeWidth={1.75} />}
+                    >
+                      Confirmar envío
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {accion?.id === ex.id && accion.tipo === 'concepto' && (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                  <p className="text-[12px] font-semibold text-text-strong">
+                    Registrar concepto médico · paso 17
+                  </p>
+                  <div>
+                    <span className="block text-[11px] font-medium text-text-muted mb-1">
+                      Resultado
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setApto(true)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors',
+                          apto === true
+                            ? 'bg-success-600 text-white border-success-600'
+                            : 'bg-white text-text-body border-slate-300 hover:bg-slate-50',
+                        )}
+                      >
+                        Apto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setApto(false)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors',
+                          apto === false
+                            ? 'bg-danger-600 text-white border-danger-600'
+                            : 'bg-white text-text-body border-slate-300 hover:bg-slate-50',
+                        )}
+                      >
+                        No apto
+                      </button>
+                    </div>
+                  </div>
+                  <label className="block">
+                    <span className="block text-[11px] font-medium text-text-muted mb-1">
+                      Recomendaciones (opcional)
+                    </span>
+                    <textarea
+                      value={recomendaciones}
+                      onChange={(e) => setRecomendaciones(e.target.value)}
+                      rows={2}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-[11px] font-medium text-text-muted mb-1">
+                      URL del concepto (opcional)
+                    </span>
+                    <input
+                      value={conceptoUrl}
+                      onChange={(e) => setConceptoUrl(e.target.value)}
+                      className={inputClass}
+                      placeholder="https://…"
+                    />
+                  </label>
+                  <div className="flex gap-2 justify-end">
+                    <Button onClick={cerrarAccion} variant="neutral-secondary" size="small">
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={() => confirmarConcepto(ex)}
+                      disabled={apto === null || procesando === ex.id}
+                      loading={procesando === ex.id}
+                      variant="brand-primary"
+                      size="small"
+                      icon={<Stethoscope size={13} strokeWidth={1.75} />}
+                    >
+                      Guardar concepto
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Card>
           );
         })}

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, MapPin, Ban } from 'lucide-react';
-import { sedeInputSchema, type SedeInput } from '../../schemas';
-import { useEmpresas, useSedesDeEmpresa } from '../../hooks/useCatalogos';
+import { Plus, MapPin, Ban, Pencil, Check, X, RotateCcw } from 'lucide-react';
+import { sedeInputSchema, type SedeInput, type SedeDoc } from '../../schemas';
+import { useEmpresas } from '../../hooks/useCatalogos';
+import { useColeccion } from '../../hooks/useColeccion';
 import { useAdminCatalogos } from '../../hooks/useAdminCatalogos';
 import { Button, Card, Pill } from '../../components/brand';
 import { cn } from '../../utils/cn';
@@ -18,9 +19,20 @@ const inputClass = cn(
 export function SedesTab() {
   const { empresas } = useEmpresas();
   const [empresaFiltro, setEmpresaFiltro] = useState<string>('');
-  const { sedes } = useSedesDeEmpresa(empresaFiltro || null);
+  // Todas las sedes de la empresa (activas + inactivas) para poder reactivar.
+  const { docs: sedesTodas } = useColeccion<SedeDoc>('sedes', {
+    filtros: empresaFiltro ? [['empresa_codigo', '==', empresaFiltro]] : [],
+  });
   const { crearSede, actualizarSede } = useAdminCatalogos();
   const [err, setErr] = useState<string | null>(null);
+
+  const sedesOrdenadas = useMemo(() => {
+    return [...sedesTodas].sort((a, b) => {
+      // Activas primero, luego alfabético.
+      if ((a.activo === false) !== (b.activo === false)) return a.activo === false ? 1 : -1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+  }, [sedesTodas]);
 
   const {
     register,
@@ -49,7 +61,12 @@ export function SedesTab() {
     }
   }
 
-  async function desactivar(s: { id: string; nombre: string }) {
+  async function guardarEdicion(id: string, patch: Partial<SedeInput>) {
+    setErr(null);
+    await actualizarSede(id, patch);
+  }
+
+  async function desactivar(s: SedeDoc) {
     if (
       !window.confirm(
         `¿Desactivar la sede "${s.nombre}"? Dejará de aparecer en los formularios. Se puede reactivar después.`,
@@ -61,6 +78,15 @@ export function SedesTab() {
       await actualizarSede(s.id, { activo: false });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos desactivar la sede.');
+    }
+  }
+
+  async function reactivar(s: SedeDoc) {
+    setErr(null);
+    try {
+      await actualizarSede(s.id, { activo: true });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No pudimos reactivar la sede.');
     }
   }
 
@@ -82,6 +108,12 @@ export function SedesTab() {
           </select>
         </Field>
 
+        {err && (
+          <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3 py-2 text-[12px] text-danger-700">
+            {err}
+          </div>
+        )}
+
         <Card padding="none">
           <div className="overflow-hidden rounded-md">
             <table className="w-full text-[13px]">
@@ -94,10 +126,10 @@ export function SedesTab() {
                     Nombre
                   </th>
                   <th className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
-                    Empresa
+                    Ciudad
                   </th>
                   <th className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
-                    Ciudad
+                    Dirección
                   </th>
                   <th className="px-4 py-2.5 text-right font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
                     Acciones
@@ -105,46 +137,16 @@ export function SedesTab() {
                 </tr>
               </thead>
               <tbody>
-                {sedes.map((s) => (
-                  <tr
+                {sedesOrdenadas.map((s) => (
+                  <FilaSede
                     key={s.id}
-                    className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/40 transition-colors"
-                  >
-                    <td className="px-4 py-3 font-mono text-text-strong">
-                      <div className="flex items-center gap-1.5">
-                        {s.codigo}
-                        {s.es_provisional && (
-                          <span title="Código provisional · pendiente de validar con GH (ATR-21)">
-                            <Pill tono="warning">prov</Pill>
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-text-body">{s.nombre}</td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-text-muted">
-                      {s.empresa_codigo}
-                    </td>
-                    <td className="px-4 py-3 text-text-body inline-flex items-center gap-1.5">
-                      <MapPin
-                        size={11}
-                        strokeWidth={1.5}
-                        className="text-text-subtle shrink-0"
-                      />
-                      {s.ciudad}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => desactivar(s)}
-                        className="inline-flex items-center gap-1 text-[12px] text-danger-700 hover:text-danger-800 hover:underline font-medium"
-                        title="Desactivar · la quita de los formularios"
-                      >
-                        <Ban size={11} strokeWidth={1.75} />
-                        Desactivar
-                      </button>
-                    </td>
-                  </tr>
+                    sede={s}
+                    onGuardar={guardarEdicion}
+                    onDesactivar={desactivar}
+                    onReactivar={reactivar}
+                  />
                 ))}
-                {sedes.length === 0 && (
+                {sedesOrdenadas.length === 0 && (
                   <tr>
                     <td
                       colSpan={5}
@@ -191,11 +193,6 @@ export function SedesTab() {
             <Field label="Dirección">
               <input {...register('direccion')} className={inputClass} />
             </Field>
-            {err && (
-              <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3 py-2 text-[12px] text-danger-700">
-                {err}
-              </div>
-            )}
             <Button
               type="submit"
               variant="brand-primary"
@@ -211,6 +208,142 @@ export function SedesTab() {
         </Card>
       </form>
     </div>
+  );
+}
+
+function FilaSede({
+  sede,
+  onGuardar,
+  onDesactivar,
+  onReactivar,
+}: {
+  sede: SedeDoc;
+  onGuardar: (id: string, patch: Partial<SedeInput>) => Promise<void>;
+  onDesactivar: (s: SedeDoc) => void;
+  onReactivar: (s: SedeDoc) => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [nombre, setNombre] = useState(sede.nombre);
+  const [ciudad, setCiudad] = useState(sede.ciudad);
+  const [direccion, setDireccion] = useState(sede.direccion ?? '');
+  const [guardando, setGuardando] = useState(false);
+  const inactiva = sede.activo === false;
+
+  function cancelar() {
+    setNombre(sede.nombre);
+    setCiudad(sede.ciudad);
+    setDireccion(sede.direccion ?? '');
+    setEditando(false);
+  }
+
+  async function guardar() {
+    setGuardando(true);
+    try {
+      await onGuardar(sede.id, { nombre: nombre.trim(), ciudad: ciudad.trim(), direccion: direccion.trim() });
+      setEditando(false);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  if (editando) {
+    return (
+      <tr className="border-b border-slate-100 last:border-b-0 bg-brand-50/30">
+        <td className="px-4 py-3 font-mono text-text-muted align-top">{sede.codigo}</td>
+        <td className="px-2 py-2 align-top">
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+        </td>
+        <td className="px-2 py-2 align-top">
+          <input value={ciudad} onChange={(e) => setCiudad(e.target.value)} className={inputClass} />
+        </td>
+        <td className="px-2 py-2 align-top">
+          <input
+            value={direccion}
+            onChange={(e) => setDireccion(e.target.value)}
+            className={inputClass}
+            placeholder="Dirección"
+          />
+        </td>
+        <td className="px-4 py-3 text-right align-top whitespace-nowrap">
+          <button
+            onClick={guardar}
+            disabled={guardando || !nombre.trim() || !ciudad.trim()}
+            className="inline-flex items-center gap-1 text-[12px] text-success-700 hover:text-success-800 font-medium disabled:opacity-50"
+          >
+            <Check size={12} strokeWidth={2} />
+            {guardando ? 'Guardando…' : 'Guardar'}
+          </button>
+          <button
+            onClick={cancelar}
+            disabled={guardando}
+            className="ml-3 inline-flex items-center gap-1 text-[12px] text-text-muted hover:text-text-strong"
+          >
+            <X size={12} strokeWidth={2} />
+            Cancelar
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr
+      className={cn(
+        'border-b border-slate-100 last:border-b-0 hover:bg-slate-50/40 transition-colors',
+        inactiva && 'opacity-55',
+      )}
+    >
+      <td className="px-4 py-3 font-mono text-text-strong">
+        <div className="flex items-center gap-1.5">
+          {sede.codigo}
+          {sede.es_provisional && (
+            <span title="Código provisional · pendiente de validar con GH (ATR-21)">
+              <Pill tono="warning">prov</Pill>
+            </span>
+          )}
+          {inactiva && <Pill tono="neutral">inactiva</Pill>}
+        </div>
+      </td>
+      <td className="px-4 py-3 text-text-body">{sede.nombre}</td>
+      <td className="px-4 py-3 text-text-body">
+        <span className="inline-flex items-center gap-1.5">
+          <MapPin size={11} strokeWidth={1.5} className="text-text-subtle shrink-0" />
+          {sede.ciudad}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-text-muted text-[12px]">{sede.direccion || '—'}</td>
+      <td className="px-4 py-3 text-right whitespace-nowrap">
+        {!inactiva ? (
+          <>
+            <button
+              onClick={() => setEditando(true)}
+              className="inline-flex items-center gap-1 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
+              title="Editar nombre / ciudad / dirección"
+            >
+              <Pencil size={11} strokeWidth={1.75} />
+              Editar
+            </button>
+            <button
+              onClick={() => onDesactivar(sede)}
+              className="ml-3 inline-flex items-center gap-1 text-[12px] text-danger-700 hover:text-danger-800 hover:underline font-medium"
+              title="Desactivar · la quita de los formularios"
+            >
+              <Ban size={11} strokeWidth={1.75} />
+              Desactivar
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => onReactivar(sede)}
+            className="inline-flex items-center gap-1 text-[12px] text-success-700 hover:text-success-800 hover:underline font-medium"
+            title="Reactivar · vuelve a aparecer en los formularios"
+          >
+            <RotateCcw size={11} strokeWidth={1.75} />
+            Reactivar
+          </button>
+        )}
+      </td>
+    </tr>
   );
 }
 

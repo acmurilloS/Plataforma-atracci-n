@@ -51,6 +51,15 @@ export function DocumentosTab({ postulacion }: Props) {
   const { docs } = useColeccion<DocumentoCandidatoDoc>('documentos_candidato', {
     filtros: [['postulacion_id', '==', postulacion.id]],
   });
+  // Documentos que el candidato subió desde su portal público.
+  const { docs: docsPortal } = useColeccion<{
+    id: string;
+    nombre_archivo?: string;
+    url?: string;
+    subido_en?: Timestamp;
+  }>('documentos_portal', {
+    filtros: [['postulacion_id', '==', postulacion.id]],
+  });
   const { crear, actualizar } = useMutacion();
   const { user, perfil } = useAuth();
   const [errGlobal, setErrGlobal] = useState<string | null>(null);
@@ -111,6 +120,36 @@ export function DocumentosTab({ postulacion }: Props) {
 
   return (
     <div className="space-y-6">
+      {docsPortal.length > 0 && (
+        <div className="rounded-md bg-info-50/60 border border-info-500/20 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <FolderOpen size={14} strokeWidth={1.75} className="text-info-700" />
+            <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-info-700">
+              Aportados por el candidato · portal ({docsPortal.length})
+            </p>
+          </div>
+          <ul className="space-y-1.5">
+            {docsPortal.map((d) => (
+              <li key={d.id} className="flex items-center gap-2 text-[13px] text-text-body">
+                <FileText size={13} strokeWidth={1.75} className="text-text-subtle shrink-0" />
+                <a
+                  href={d.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-brand-700 hover:underline truncate"
+                >
+                  {d.nombre_archivo || 'documento'}
+                </a>
+                {d.subido_en && (
+                  <span className="text-[11px] text-text-subtle tabular-nums">
+                    {formatearFecha(d.subido_en.toDate())}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {/* Header con progreso */}
       <div className="rounded-md bg-white border border-slate-200 shadow-brand-card p-6">
         <div className="flex items-start justify-between flex-wrap gap-4">

@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
-import { Check, Loader2, ShieldCheck } from 'lucide-react';
-import { auth, functions } from '../../lib/firebase';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { Check, FileText, Loader2, ShieldCheck, Upload } from 'lucide-react';
+import { auth, functions, storage } from '../../lib/firebase';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button } from '../../components/brand';
 import {
@@ -30,6 +31,8 @@ interface PortalData {
   empresa_codigo: string;
   consentimiento_datos_aceptado: boolean;
   consentimiento_imagen_aceptado: boolean;
+  estado: string;
+  documentos: { nombre: string; url: string }[];
 }
 
 type ResolverResp = { encontrado: false } | ({ encontrado: true } & PortalData);
@@ -150,6 +153,8 @@ export default function PortalCandidatoPage() {
           </p>
         </div>
 
+        <EstadoProceso estado={data.estado} />
+
         {ambosAceptados && (
           <div className="rounded-lg border border-success-500/25 bg-success-50 px-4 py-3 flex items-start gap-2.5">
             <Check size={16} strokeWidth={2} className="text-success-700 mt-0.5 shrink-0" />
@@ -176,6 +181,8 @@ export default function PortalCandidatoPage() {
           aceptado={data.consentimiento_imagen_aceptado}
           onAceptar={() => aceptar('imagen')}
         />
+
+        <SubirDocumentos token={token ?? ''} iniciales={data.documentos} />
 
         <footer className="pt-2 text-center text-[11px] text-text-subtle">
           {empresa.nombre} · NIT {empresa.nit} · Plataforma de Atracción
@@ -277,5 +284,148 @@ function Centro({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6 text-center">
       {children}
     </div>
+  );
+}
+
+/** Traduce el estado interno de la postulación a un mensaje amable para el candidato. */
+function estadoAmigable(estado: string): { texto: string; tono: 'success' | 'info' | 'neutral' } {
+  if (estado === 'contratado')
+    return { texto: '¡Felicitaciones! Tu proceso culminó con tu contratación 🎉', tono: 'success' };
+  if (estado === 'en_contratacion')
+    return { texto: 'Estás en proceso de contratación.', tono: 'success' };
+  if (estado === 'en_examenes_medicos')
+    return { texto: 'Estás en la etapa de exámenes médicos.', tono: 'info' };
+  if (estado === 'en_terna' || estado === 'seleccionado_por_lider')
+    return { texto: 'Tu perfil está en revisión final con el líder.', tono: 'info' };
+  if (
+    [
+      'descartado_examenes_medicos',
+      'descartado_por_lider',
+      'filtrado_no_cumple',
+      'pre_entrevistado_no_interesado',
+      'desistio_candidato',
+    ].includes(estado)
+  )
+    return {
+      texto: 'Tu proceso para esta vacante ha finalizado. Gracias por participar.',
+      tono: 'neutral',
+    };
+  if (!estado) return { texto: '', tono: 'neutral' };
+  return {
+    texto: 'Tu proceso está en marcha; el equipo de Atracción avanza con tu selección.',
+    tono: 'info',
+  };
+}
+
+function EstadoProceso({ estado }: { estado: string }) {
+  const { texto, tono } = estadoAmigable(estado);
+  if (!texto) return null;
+  const clases =
+    tono === 'success'
+      ? 'border-success-500/25 bg-success-50 text-success-800'
+      : tono === 'info'
+        ? 'border-info-500/25 bg-info-50 text-info-700'
+        : 'border-slate-200 bg-slate-50 text-text-body';
+  return (
+    <div className={`rounded-lg border px-4 py-3 ${clases}`}>
+      <p className="text-[10px] uppercase tracking-[0.12em] font-semibold opacity-70">
+        Estado de tu proceso
+      </p>
+      <p className="text-[14px] font-medium mt-0.5">{texto}</p>
+    </div>
+  );
+}
+
+function SubirDocumentos({
+  token,
+  iniciales,
+}: {
+  token: string;
+  iniciales: { nombre: string; url: string }[];
+}) {
+  const [docs, setDocs] = useState(iniciales);
+  const [subiendo, setSubiendo] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !token) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setErr('El archivo supera 10 MB. Comprímelo o súbelo en partes.');
+      return;
+    }
+    setSubiendo(true);
+    setErr(null);
+    try {
+      const ts = Date.now();
+      const safe = file.name.replace(/[^\w.\-]+/g, '_');
+      const r = storageRef(storage, `portal_docs/${token}/${ts}_${safe}`);
+      await uploadBytes(r, file);
+      const url = await getDownloadURL(r);
+      const fn = httpsCallable<{ token: string; nombre_archivo: string; url: string }, { ok: true }>(
+        functions,
+        'registrarDocumentoPortal',
+      );
+      await fn({ token, nombre_archivo: file.name, url });
+      setDocs((prev) => [...prev, { nombre: file.name, url }]);
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'No se pudo subir el archivo. Reintenta.');
+    } finally {
+      setSubiendo(false);
+    }
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 shadow-brand-card overflow-hidden">
+      <div className="px-5 sm:px-7 py-4 border-b border-slate-100">
+        <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text-strong">
+          Tus documentos
+        </h2>
+        <p className="text-[12px] text-text-muted mt-0.5">
+          Sube aquí tu cédula, certificados y demás documentos que te pidan (PDF o foto legible).
+        </p>
+      </div>
+      <div className="px-5 sm:px-7 py-5 space-y-3">
+        {docs.length > 0 && (
+          <ul className="space-y-1.5">
+            {docs.map((d, i) => (
+              <li key={i} className="flex items-center gap-2 text-[13px] text-text-body">
+                <FileText size={13} strokeWidth={1.75} className="text-text-subtle shrink-0" />
+                <a
+                  href={d.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-brand-700 hover:underline truncate"
+                >
+                  {d.nombre}
+                </a>
+                <Check size={13} strokeWidth={2} className="text-success-700 shrink-0" />
+              </li>
+            ))}
+          </ul>
+        )}
+        {err && <p className="text-[12px] text-danger-700">{err}</p>}
+        <label
+          className={`inline-flex items-center gap-2 rounded-md border border-dashed border-slate-300 px-4 py-2.5 text-[13px] font-medium cursor-pointer hover:bg-slate-50 ${
+            subiendo ? 'opacity-60 pointer-events-none' : ''
+          }`}
+        >
+          {subiendo ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Upload size={14} strokeWidth={1.75} />
+          )}
+          {subiendo ? 'Subiendo…' : 'Subir un documento'}
+          <input
+            type="file"
+            accept="application/pdf,image/*"
+            onChange={onFile}
+            className="hidden"
+            disabled={subiendo}
+          />
+        </label>
+      </div>
+    </section>
   );
 }

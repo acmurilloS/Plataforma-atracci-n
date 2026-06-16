@@ -4,8 +4,8 @@ import { db } from '../utils/admin';
 
 /**
  * resolverPortalToken · resuelve el token público del portal del candidato a los
- * datos que la página `/portal/{token}` necesita mostrar + el estado de los
- * consentimientos.
+ * datos que la página `/portal/{token}` necesita mostrar: datos del proceso,
+ * estado de los consentimientos, estado del proceso y documentos ya subidos.
  *
  * Callable pública (sin login real): el candidato no tiene cuenta. Si el token
  * no existe o está malformado, devuelve `encontrado: false` sin exponer detalles.
@@ -25,21 +25,44 @@ export const resolverPortalToken = onCall({ region: 'us-central1' }, async (req)
     return { encontrado: false as const };
   }
   const t = snap.data() as Record<string, unknown>;
+  const postulacionId = String(t.postulacion_id ?? '');
 
-  // El estado de los consentimientos vive en la postulación (mutable).
+  // Estado de consentimientos + estado del proceso viven en la postulación.
   let datosAceptado = false;
   let imagenAceptado = false;
+  let estado = '';
   try {
-    if (t.postulacion_id) {
-      const p = await db.collection('postulaciones').doc(String(t.postulacion_id)).get();
+    if (postulacionId) {
+      const p = await db.collection('postulaciones').doc(postulacionId).get();
       if (p.exists) {
         const pd = p.data() ?? {};
         datosAceptado = !!pd.consentimiento_datos_aceptado_en;
         imagenAceptado = !!pd.consentimiento_imagen_aceptado_en;
+        estado = String(pd.estado ?? '');
       }
     }
   } catch (e) {
     logger.warn('[portal] no se pudo leer la postulación', {
+      token,
+      msg: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  // Documentos que el candidato ya subió por el portal.
+  let documentos: { nombre: string; url: string }[] = [];
+  try {
+    if (postulacionId) {
+      const ds = await db
+        .collection('documentos_portal')
+        .where('postulacion_id', '==', postulacionId)
+        .get();
+      documentos = ds.docs
+        .map((d) => d.data() as Record<string, unknown>)
+        .map((d) => ({ nombre: String(d.nombre_archivo ?? ''), url: String(d.url ?? '') }))
+        .filter((d) => d.url);
+    }
+  } catch (e) {
+    logger.warn('[portal] no se pudieron leer documentos', {
       token,
       msg: e instanceof Error ? e.message : String(e),
     });
@@ -51,7 +74,9 @@ export const resolverPortalToken = onCall({ region: 'us-central1' }, async (req)
     documento_numero: String(t.documento_numero ?? ''),
     cargo_nombre: String(t.cargo_nombre ?? ''),
     empresa_codigo: String(t.empresa_codigo ?? 'EQT'),
+    estado,
     consentimiento_datos_aceptado: datosAceptado,
     consentimiento_imagen_aceptado: imagenAceptado,
+    documentos,
   };
 });

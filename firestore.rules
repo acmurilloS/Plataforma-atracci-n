@@ -220,6 +220,12 @@ service cloud.firestore {
     match /portal_candidato_tokens/{token} {
       allow read, write: if false;
     }
+    // Documentos que el candidato sube desde su portal. Los escribe la callable
+    // registrarDocumentoPortal (Admin SDK); el analista/coordinación los leen.
+    match /documentos_portal/{id} {
+      allow read: if staff() || isAnalista();
+      allow write: if false;
+    }
     // Técnicos que pidieron no recibir más invitaciones. Solo admin edita.
     match /referidos_optouts/{cedula} {
       allow read: if signedIn();
