@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -81,6 +81,7 @@ const ESTADO_TONO: Record<string, PillTono> = {
   referencias_validadas: 'success',
   en_terna: 'brand',
   seleccionado_por_lider: 'success',
+  en_examenes_medicos: 'info',
   descartado_por_lider: 'warning',
   descartado_examenes_medicos: 'danger',
   en_contratacion: 'brand',
@@ -666,6 +667,20 @@ function EntrevistasTab({
     activo: boolean;
   }>('sedes', {});
 
+  // Una sola opción por ubicación: las sedes están duplicadas por empresa
+  // (p. ej. Mosquera existe en EQT/CUM/ING/Silap). Se dedupe por ciudad para
+  // el dropdown de la entrevista presencial.
+  const sedesUnicas = useMemo(() => {
+    const porUbicacion = new Map<string, (typeof sedes)[number]>();
+    for (const s of sedes) {
+      if (s.activo === false) continue;
+      const clave = (s.ciudad || s.nombre).trim().toLowerCase();
+      const prev = porUbicacion.get(clave);
+      if (!prev || (!prev.direccion && s.direccion)) porUbicacion.set(clave, s);
+    }
+    return Array.from(porUbicacion.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [sedes]);
+
   async function agendar() {
     if (!fecha || !user || !perfil) return;
     const salaOLink =
@@ -802,9 +817,7 @@ function EntrevistasTab({
                 className={inputClass}
               >
                 <option value="">Selecciona la sede…</option>
-                {sedes
-                  .filter((s) => s.activo !== false)
-                  .map((s) => {
+                {sedesUnicas.map((s) => {
                     const dir = [s.direccion, s.ciudad].filter(Boolean).join(', ');
                     const valor = dir ? `${dir} (${s.nombre})` : `${s.nombre}`;
                     return (
@@ -1078,7 +1091,7 @@ function InformeTab({ postulacion }: SubProps) {
                         className="inline-flex items-center gap-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
                       >
                         <Send size={11} strokeWidth={1.75} />
-                        Enviar al líder · paso 12
+                        Pasar a terna · paso 12
                       </button>
                     )}
                     {i.enviado_al_lider_en && (

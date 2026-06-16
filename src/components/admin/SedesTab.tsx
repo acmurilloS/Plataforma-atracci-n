@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, MapPin } from 'lucide-react';
+import { Plus, MapPin, Ban } from 'lucide-react';
 import { sedeInputSchema, type SedeInput } from '../../schemas';
 import { useEmpresas, useSedesDeEmpresa } from '../../hooks/useCatalogos';
 import { useAdminCatalogos } from '../../hooks/useAdminCatalogos';
@@ -19,7 +19,7 @@ export function SedesTab() {
   const { empresas } = useEmpresas();
   const [empresaFiltro, setEmpresaFiltro] = useState<string>('');
   const { sedes } = useSedesDeEmpresa(empresaFiltro || null);
-  const { crearSede } = useAdminCatalogos();
+  const { crearSede, actualizarSede } = useAdminCatalogos();
   const [err, setErr] = useState<string | null>(null);
 
   const {
@@ -46,6 +46,21 @@ export function SedesTab() {
       reset();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos crear la sede.');
+    }
+  }
+
+  async function desactivar(s: { id: string; nombre: string }) {
+    if (
+      !window.confirm(
+        `¿Desactivar la sede "${s.nombre}"? Dejará de aparecer en los formularios. Se puede reactivar después.`,
+      )
+    )
+      return;
+    setErr(null);
+    try {
+      await actualizarSede(s.id, { activo: false });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No pudimos desactivar la sede.');
     }
   }
 
@@ -84,6 +99,9 @@ export function SedesTab() {
                   <th className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
                     Ciudad
                   </th>
+                  <th className="px-4 py-2.5 text-right font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -114,12 +132,22 @@ export function SedesTab() {
                       />
                       {s.ciudad}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => desactivar(s)}
+                        className="inline-flex items-center gap-1 text-[12px] text-danger-700 hover:text-danger-800 hover:underline font-medium"
+                        title="Desactivar · la quita de los formularios"
+                      >
+                        <Ban size={11} strokeWidth={1.75} />
+                        Desactivar
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {sedes.length === 0 && (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-4 py-10 text-center text-[13px] text-text-muted italic"
                     >
                       {empresaFiltro ? 'Sin sedes para esta empresa.' : 'Selecciona una empresa.'}

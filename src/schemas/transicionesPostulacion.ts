@@ -41,12 +41,16 @@ const T: Record<EstadoPostulacion, readonly EstadoPostulacion[]> = {
   entrevistado_analista: ['referencias_validadas', 'filtrado_no_cumple', 'desistio_candidato'],
   referencias_validadas: ['en_terna', 'filtrado_no_cumple', 'desistio_candidato'],
 
-  en_terna: ['seleccionado_por_lider', 'descartado_por_lider', 'desistio_candidato'],
+  en_terna: ['seleccionado_por_lider', 'en_examenes_medicos', 'descartado_por_lider', 'desistio_candidato'],
   // Loop paso 14: el analista puede reabrir un descartado al pool para considerarlo en
   // una próxima vuelta de terna (sin abrir proceso nuevo).
   descartado_por_lider: ['postulado', 'desistio_candidato'],
 
-  seleccionado_por_lider: ['en_contratacion', 'desistio_candidato'],
+  // Al aprobar al líder, la solicitud de exámenes se dispara de inmediato, así que
+  // el candidato entra directo a "en exámenes médicos" (visible en el embudo).
+  seleccionado_por_lider: ['en_examenes_medicos', 'en_contratacion', 'desistio_candidato'],
+
+  en_examenes_medicos: ['en_contratacion', 'descartado_examenes_medicos', 'desistio_candidato'],
 
   en_contratacion: ['contratado', 'descartado_examenes_medicos', 'desistio_candidato'],
   descartado_examenes_medicos: [],

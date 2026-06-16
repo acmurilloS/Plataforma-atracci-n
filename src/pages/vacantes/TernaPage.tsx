@@ -78,7 +78,12 @@ export default function TernaPage() {
   ];
 
   const enTerna = postulaciones.filter((p) => p.estado === 'en_terna');
-  const seleccionado = postulaciones.find((p) => p.estado === 'seleccionado_por_lider') ?? null;
+  const seleccionado =
+    postulaciones.find((p) =>
+      ['seleccionado_por_lider', 'en_examenes_medicos', 'en_contratacion', 'contratado'].includes(
+        p.estado,
+      ),
+    ) ?? null;
   const descartadosLider = postulaciones.filter((p) => p.estado === 'descartado_por_lider');
   const otras = postulaciones.filter((p) => ESTADOS_AUN_EN_FLUJO.includes(p.estado));
   const decisionTomada = !!seleccionado || vacante?.estado === 'seleccionado';
@@ -118,9 +123,13 @@ export default function TernaPage() {
       });
       const ahora = Timestamp.now();
       await actualizar('postulaciones', p.id, {
-        estado: 'seleccionado_por_lider',
+        // Al aprobar se dispara la solicitud de exámenes, así que el candidato
+        // queda visible como "en exámenes médicos" en el embudo (no solo
+        // "seleccionado por líder"). La decisión queda en `decisiones` + marcas.
+        estado: 'en_examenes_medicos',
         ultima_transicion_estado: ahora,
         'marcas.decidido_en': ahora,
+        'marcas.en_examenes_medicos_en': ahora,
       });
       await actualizar('vacantes', vacante.id, {
         estado: 'seleccionado',

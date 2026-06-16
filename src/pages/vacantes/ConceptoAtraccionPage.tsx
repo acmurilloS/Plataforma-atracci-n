@@ -28,6 +28,7 @@ import { Button, Pill } from '../../components/brand';
 const ESTADOS_AVANZADOS = new Set([
   'en_terna',
   'seleccionado_por_lider',
+  'en_examenes_medicos',
   'descartado_por_lider',
   'en_contratacion',
   'contratado',

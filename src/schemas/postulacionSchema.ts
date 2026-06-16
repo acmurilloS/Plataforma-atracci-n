@@ -56,6 +56,7 @@ export const estadoPostulacion = z.enum([
   'descartado_por_lider',
 
   // Ingreso (pasos 15-19)
+  'en_examenes_medicos',
   'descartado_examenes_medicos',
   'en_contratacion',
   'contratado',

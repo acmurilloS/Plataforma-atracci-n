@@ -775,6 +775,7 @@ function marcaParaEstado(estado: EstadoPostulacion): string | null {
     referencias_validadas: 'referencias_validadas_en',
     en_terna: 'en_terna_en',
     seleccionado_por_lider: 'decidido_en',
+    en_examenes_medicos: 'en_examenes_medicos_en',
     descartado_por_lider: 'descartado_en',
     descartado_examenes_medicos: 'descartado_examenes_medicos_en',
     en_contratacion: 'en_contratacion_en',
