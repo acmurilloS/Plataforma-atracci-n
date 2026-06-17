@@ -104,6 +104,10 @@ export default function PostulacionDetallePage() {
   const [agradecerAbierto, setAgradecerAbierto] = useState(false);
   const [mensajeAgradecimiento, setMensajeAgradecimiento] = useState('');
   const [enviandoAgradecimiento, setEnviandoAgradecimiento] = useState(false);
+  const [condicionesAbierto, setCondicionesAbierto] = useState(false);
+  const [horario, setHorario] = useState('');
+  const [tipoContrato, setTipoContrato] = useState('');
+  const [enviandoCondiciones, setEnviandoCondiciones] = useState(false);
 
   if (!post)
     return (
@@ -171,6 +175,25 @@ export default function PostulacionDetallePage() {
       window.alert('No se pudo enviar: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setEnviandoAgradecimiento(false);
+    }
+  }
+
+  // E · enviar condiciones laborales (tras apto médico = en_contratacion).
+  async function enviarCondiciones() {
+    if (!post) return;
+    setEnviandoCondiciones(true);
+    try {
+      const fn = httpsCallable<
+        { postulacion_id: string; horario: string; tipo_contrato: string },
+        { ok: true; email_destinatario: string }
+      >(functions, 'enviarCondicionesLaborales');
+      const res = await fn({ postulacion_id: post.id, horario, tipo_contrato: tipoContrato });
+      window.alert(`Condiciones laborales enviadas a ${res.data.email_destinatario}.`);
+      setCondicionesAbierto(false);
+    } catch (e) {
+      window.alert('No se pudo enviar: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEnviandoCondiciones(false);
     }
   }
 
@@ -255,6 +278,17 @@ export default function PostulacionDetallePage() {
               {post.agradecimiento_enviado_en ? 'Reenviar agradecimiento' : 'Enviar agradecimiento'}
             </button>
           )}
+          {post.estado === 'en_contratacion' && (
+            <button
+              onClick={() => setCondicionesAbierto(true)}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+            >
+              <Mail size={12} strokeWidth={1.75} />
+              {post.condiciones_enviadas_en
+                ? 'Reenviar condiciones laborales'
+                : 'Enviar condiciones laborales'}
+            </button>
+          )}
           {(post.consentimiento_datos_aceptado_en || post.consentimiento_imagen_aceptado_en) && (
             <p className="text-[11px] text-text-muted leading-[1.5] px-0.5">
               Consentimientos:{' '}
@@ -300,6 +334,56 @@ export default function PostulacionDetallePage() {
             >
               <Mail size={12} strokeWidth={1.75} />
               {enviandoAgradecimiento ? 'Enviando…' : 'Enviar agradecimiento'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {condicionesAbierto && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3 print:hidden">
+          <div>
+            <p className="text-[13px] font-semibold text-text-strong">Enviar condiciones laborales</p>
+            <p className="text-[11px] text-text-muted mt-0.5">
+              Cargo, empresa, unidad y salario salen de la vacante. Completa el horario y el tipo de
+              contrato.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">Horario</span>
+              <input
+                value={horario}
+                onChange={(e) => setHorario(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                placeholder="L–V 8:00–17:00"
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">
+                Tipo de contrato
+              </span>
+              <input
+                value={tipoContrato}
+                onChange={(e) => setTipoContrato(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                placeholder="Término indefinido / fijo…"
+              />
+            </label>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setCondicionesAbierto(false)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={enviarCondiciones}
+              disabled={enviandoCondiciones}
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-[12px] font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              <Mail size={12} strokeWidth={1.75} />
+              {enviandoCondiciones ? 'Enviando…' : 'Enviar condiciones'}
             </button>
           </div>
         </div>

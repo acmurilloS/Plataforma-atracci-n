@@ -31,6 +31,8 @@ export const resolverPortalToken = onCall({ region: 'us-central1' }, async (req)
   let datosAceptado = false;
   let imagenAceptado = false;
   let estado = '';
+  let condiciones: Record<string, string> | null = null;
+  let condicionesAceptadas = false;
   try {
     if (postulacionId) {
       const p = await db.collection('postulaciones').doc(postulacionId).get();
@@ -39,6 +41,10 @@ export const resolverPortalToken = onCall({ region: 'us-central1' }, async (req)
         datosAceptado = !!pd.consentimiento_datos_aceptado_en;
         imagenAceptado = !!pd.consentimiento_imagen_aceptado_en;
         estado = String(pd.estado ?? '');
+        if (pd.condiciones_enviadas_en && pd.condiciones_laborales) {
+          condiciones = pd.condiciones_laborales as Record<string, string>;
+          condicionesAceptadas = !!pd.condiciones_aceptadas_en;
+        }
       }
     }
   } catch (e) {
@@ -77,6 +83,8 @@ export const resolverPortalToken = onCall({ region: 'us-central1' }, async (req)
     estado,
     consentimiento_datos_aceptado: datosAceptado,
     consentimiento_imagen_aceptado: imagenAceptado,
+    condiciones,
+    condiciones_aceptadas: condicionesAceptadas,
     documentos,
   };
 });

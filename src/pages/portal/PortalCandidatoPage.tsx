@@ -34,6 +34,8 @@ interface PortalData {
   consentimiento_datos_aceptado: boolean;
   consentimiento_imagen_aceptado: boolean;
   estado: string;
+  condiciones: Record<string, string> | null;
+  condiciones_aceptadas: boolean;
   documentos: { nombre: string; url: string }[];
 }
 
@@ -186,6 +188,33 @@ export default function PortalCandidatoPage() {
           onAceptar={(url) => aceptar('imagen', url)}
         />
 
+        <FirmaDocumentoCard
+          token={token ?? ''}
+          tipo="datos_basicos"
+          titulo="Datos básicos del integrante"
+          descripcion="Revisa y firma el formato de datos básicos del integrante."
+          nombreCompleto={data.candidato_nombre}
+          documentoNumero={data.documento_numero}
+          empresaNombre={empresa.nombre}
+        />
+        <FirmaDocumentoCard
+          token={token ?? ''}
+          tipo="debida_diligencia"
+          titulo="Debida diligencia · SAGRILAFT"
+          descripcion="Firma la declaración de debida diligencia (SAGRILAFT · F-CAR-01)."
+          nombreCompleto={data.candidato_nombre}
+          documentoNumero={data.documento_numero}
+          empresaNombre={empresa.nombre}
+        />
+
+        {data.condiciones && (
+          <CondicionesCard
+            token={token ?? ''}
+            condiciones={data.condiciones}
+            aceptadas={data.condiciones_aceptadas}
+          />
+        )}
+
         <SubirDocumentos token={token ?? ''} iniciales={data.documentos} />
 
         <footer className="pt-2 text-center text-[11px] text-text-subtle">
@@ -298,6 +327,184 @@ function ConsentimientoCard({
           </Button>
         </div>
       )}
+    </section>
+  );
+}
+
+function FirmaDocumentoCard({
+  token,
+  tipo,
+  titulo,
+  descripcion,
+  nombreCompleto,
+  documentoNumero,
+  empresaNombre,
+}: {
+  token: string;
+  tipo: 'datos_basicos' | 'debida_diligencia';
+  titulo: string;
+  descripcion: string;
+  nombreCompleto: string;
+  documentoNumero: string;
+  empresaNombre: string;
+}) {
+  const [firma, setFirma] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [firmado, setFirmado] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function firmar() {
+    if (!firma || !token) return;
+    setEnviando(true);
+    setErr(null);
+    try {
+      const blob = await generarConstanciaFirma({
+        titulo,
+        nombre: nombreCompleto || 'Candidato',
+        documentoIdentidad: documentoNumero || '—',
+        fechaTexto: new Date().toLocaleDateString('es-CO'),
+        firmaPngDataUrl: firma,
+        empresaNombre,
+      });
+      const r = storageRef(storage, `portal_docs/${token}/firma_${tipo}_${Date.now()}.pdf`);
+      await uploadBytes(r, blob, { contentType: 'application/pdf' });
+      const url = await getDownloadURL(r);
+      const fn = httpsCallable<{ token: string; tipo: string; url: string }, { ok: true }>(
+        functions,
+        'registrarFirmaDocumento',
+      );
+      await fn({ token, tipo, url });
+      setFirmado(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No se pudo registrar. Reintenta.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 shadow-brand-card overflow-hidden">
+      <div className="px-5 sm:px-7 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text-strong">{titulo}</h2>
+          <p className="text-[12px] text-text-muted mt-0.5">{descripcion}</p>
+        </div>
+        {firmado && (
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-success-700 bg-success-50 border border-success-500/25 rounded-full px-2.5 py-1">
+            <Check size={13} strokeWidth={2} />
+            Firmado
+          </span>
+        )}
+      </div>
+      {!firmado && (
+        <div className="px-5 sm:px-7 py-5 space-y-3">
+          <div>
+            <p className="text-[12px] font-medium text-text-body mb-1">Tu firma</p>
+            <FirmaCanvas onChange={setFirma} />
+          </div>
+          {err && <p className="text-[12px] text-danger-700">{err}</p>}
+          <Button
+            onClick={firmar}
+            disabled={!firma || enviando}
+            loading={enviando}
+            variant="brand-primary"
+            icon={<Check size={14} strokeWidth={2} />}
+          >
+            {enviando ? 'Firmando…' : 'Firmar'}
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CondicionesCard({
+  token,
+  condiciones,
+  aceptadas,
+}: {
+  token: string;
+  condiciones: Record<string, string>;
+  aceptadas: boolean;
+}) {
+  const [aceptado, setAceptado] = useState(aceptadas);
+  const [enviando, setEnviando] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const filas: [string, string][] = (
+    [
+      ['Cargo', condiciones.cargo],
+      ['Empresa', condiciones.empresa],
+      ['Unidad', condiciones.unidad],
+      ['Sede', condiciones.sede],
+      ['Salario', condiciones.salario],
+      ['Horario', condiciones.horario],
+      ['Tipo de contrato', condiciones.tipo_contrato],
+    ] as [string, string | undefined][]
+  )
+    .filter((f): f is [string, string] => !!f[1])
+    .map((f) => f);
+
+  async function aceptar() {
+    if (!token) return;
+    setEnviando(true);
+    setErr(null);
+    try {
+      const fn = httpsCallable<{ token: string }, { ok: true }>(
+        functions,
+        'aceptarCondicionesLaborales',
+      );
+      await fn({ token });
+      setAceptado(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No se pudo registrar. Reintenta.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 shadow-brand-card overflow-hidden">
+      <div className="px-5 sm:px-7 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text-strong">
+            Condiciones laborales
+          </h2>
+          <p className="text-[12px] text-text-muted mt-0.5">Revisa tus condiciones y acéptalas.</p>
+        </div>
+        {aceptado && (
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-success-700 bg-success-50 border border-success-500/25 rounded-full px-2.5 py-1">
+            <Check size={13} strokeWidth={2} />
+            Aceptadas
+          </span>
+        )}
+      </div>
+      <div className="px-5 sm:px-7 py-5 space-y-3">
+        <table className="text-[13px]">
+          <tbody>
+            {filas.map(([k, v]) => (
+              <tr key={k}>
+                <td className="py-1 pr-4 font-medium text-text-muted align-top">{k}</td>
+                <td className="py-1 text-text-strong">{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!aceptado && (
+          <>
+            {err && <p className="text-[12px] text-danger-700">{err}</p>}
+            <Button
+              onClick={aceptar}
+              disabled={enviando}
+              loading={enviando}
+              variant="brand-primary"
+              icon={<Check size={14} strokeWidth={2} />}
+            >
+              {enviando ? 'Registrando…' : 'Acepto las condiciones'}
+            </Button>
+          </>
+        )}
+      </div>
     </section>
   );
 }

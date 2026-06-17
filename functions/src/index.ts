@@ -45,6 +45,8 @@ export { enviarListadoDocumentos } from './documentos/enviarListadoDocumentos';
 export { notificarCarpetaListaValidar } from './documentos/notificarCarpetaListaValidar';
 // Correo de agradecimiento al candidato descartado (D.3, 2026-06-16).
 export { enviarAgradecimientoCandidato } from './notificaciones/enviarAgradecimientoCandidato';
+// Correos de plan de conexión/dotación al marcar contratado (F.2, 2026-06-16).
+export { onCandidatoContratado } from './tickets/onCandidatoContratado';
 
 // Portal del candidato (público, sin login): consentimientos digitales (2026-06-13).
 export { enviarPortalCandidato } from './portal/enviarPortalCandidato';
@@ -53,3 +55,8 @@ export { registrarConsentimientoPortal } from './portal/registrarConsentimientoP
 export { registrarDocumentoPortal } from './portal/registrarDocumentoPortal';
 // Aviso al candidato (correo con link al portal) cuando su proceso avanza (D.1, 2026-06-16).
 export { onPostulacionAvance } from './portal/onPostulacionAvance';
+// Firma de documentos del proceso (datos básicos / debida diligencia) en el portal (D.2, 2026-06-16).
+export { registrarFirmaDocumento } from './portal/registrarFirmaDocumento';
+// Condiciones laborales: envío al candidato + aceptación en el portal (E, 2026-06-16).
+export { enviarCondicionesLaborales } from './condiciones/enviarCondicionesLaborales';
+export { aceptarCondicionesLaborales } from './condiciones/aceptarCondicionesLaborales';

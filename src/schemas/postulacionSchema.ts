@@ -172,4 +172,8 @@ export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
   carpeta_lista_validar_notificada_en?: Timestamp | null;
   /** Correo de agradecimiento al candidato descartado (D.3). */
   agradecimiento_enviado_en?: Timestamp | null;
+  /** Condiciones laborales enviadas al candidato y su aceptación en el portal (E). */
+  condiciones_laborales?: Record<string, string> | null;
+  condiciones_enviadas_en?: Timestamp | null;
+  condiciones_aceptadas_en?: Timestamp | null;
 }
