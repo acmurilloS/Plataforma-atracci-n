@@ -52,6 +52,10 @@ export interface EnviarCorreoOpts {
   from: string;
   to: string[];
   cc?: string[];
+  /** Dirección a la que se dirigen las respuestas (Reply-To). Útil cuando el
+   *  FROM es un buzón no monitoreado (Steve) y las respuestas deben ir a una
+   *  persona real (ej. el analista que lleva el proceso). */
+  replyTo?: string;
   subject: string;
   html: string;
   /** Texto plano de respaldo (opcional). Si no se pasa, se deriva del HTML. */
@@ -65,6 +69,7 @@ export async function enviarConGmail(opts: EnviarCorreoOpts): Promise<void> {
       from: opts.from,
       to: opts.to.join(', '),
       cc: opts.cc && opts.cc.length > 0 ? opts.cc.join(', ') : undefined,
+      replyTo: opts.replyTo || undefined,
       subject: opts.subject,
       html: opts.html,
       text: opts.text,

@@ -85,6 +85,7 @@ export async function enviarOrdenAGestores(
   let empresa = String(ex.empresa_nombre ?? '').trim();
   let sede = String(ex.sede_nombre ?? '').trim();
   let analistaUid = '';
+  let analistaNombre = '';
 
   try {
     if (!cc && ex.candidato_id) {
@@ -96,6 +97,7 @@ export async function enviarOrdenAGestores(
       if (v.exists) {
         const vd = v.data() ?? {};
         analistaUid = String(vd.analista_uid ?? '').trim();
+        analistaNombre = String(vd.analista_nombre ?? '').trim();
         if (!unidad) unidad = String(vd.unidad_nombre ?? '').trim();
         if (!empresa) empresa = String(vd.empresa_nombre ?? '').trim();
         if (!sede) sede = String(vd.sede_nombre ?? '').trim();
@@ -110,6 +112,32 @@ export async function enviarOrdenAGestores(
 
   const valores: Record<string, string> = { nombre, cc, cargo, unidad, empresa, sede };
   const faltantes = REQUERIDOS.filter((r) => !valores[r.key]).map((r) => r.label);
+
+  // Reply-to al analista (los gestores no tienen plataforma; si responden, debe
+  // llegarle a quien lleva el proceso) + copia de verificación a analista y
+  // coordinación de que la solicitud SÍ salió (A.1 / A.3).
+  let analistaEmail = '';
+  const coordinadores: { uid: string; email: string }[] = [];
+  try {
+    if (analistaUid) {
+      const u = await db.collection('usuarios').doc(analistaUid).get();
+      if (u.exists) analistaEmail = String(u.data()?.email ?? '').trim();
+    }
+    const cs = await db
+      .collection('usuarios')
+      .where('rol', '==', 'coordinador')
+      .where('activo', '==', true)
+      .get();
+    cs.forEach((c) =>
+      coordinadores.push({ uid: c.id, email: String(c.data()?.email ?? '').trim() }),
+    );
+  } catch (e) {
+    logger.warn('enviarOrdenAGestores · no se pudieron leer correos de copia', {
+      examen_id: examenId,
+      msg: e instanceof Error ? e.message : String(e),
+    });
+  }
+  const ccCopia = [analistaEmail, ...coordinadores.map((c) => c.email)].filter((e) => e);
 
   const filasHtml = REQUERIDOS.map((r) => {
     const v = valores[r.key] || '(pendiente)';
@@ -126,6 +154,12 @@ export async function enviarOrdenAGestores(
       <table style="border-collapse:collapse; font-size:14px; margin:8px 0 16px;">
         ${filasHtml}
       </table>
+      <p style="font-size:13px; color:#333; background:#fff8e1; padding:8px 10px; border-left:3px solid #f0b400;">
+        <strong>Para responder:</strong> si respondes a este correo, tu respuesta llega directamente a
+        ${escapeHtml(analistaNombre || 'el analista que lleva el proceso')}${
+          analistaEmail ? ` (${escapeHtml(analistaEmail)})` : ''
+        }. Los gestores no tienen acceso a la plataforma.
+      </p>
       <p>Cordialmente;</p>
       <p style="font-size:12px; color:#777;">
         Enviado automáticamente por la Plataforma de Atracción · Organización Equitel.
@@ -141,6 +175,8 @@ export async function enviarOrdenAGestores(
     await enviarConGmail({
       from: FROM,
       to: GESTORES,
+      cc: ccCopia.length > 0 ? ccCopia : undefined,
+      replyTo: analistaEmail || undefined,
       subject: `Orden de exámenes médicos · ${nombre || 'candidato'} · ${cargo}`,
       html,
     });
@@ -211,6 +247,22 @@ export async function enviarOrdenAGestores(
         )}. Complétalo(s) en los Datos Básicos del candidato y reenvía desde Exámenes médicos.`,
         link: '/examenes-medicos',
         conCorreo: true,
+      });
+    }
+  }
+
+  // Copia in-app a coordinación (verificación de que la solicitud salió).
+  for (const coord of coordinadores) {
+    if (coord.uid && coord.uid !== destinatarioAcuse) {
+      await crearNotificacion({
+        destinatario_uid: coord.uid,
+        tipo: 'exam_solicitado',
+        titulo: 'Solicitud de exámenes enviada a gestores',
+        mensaje: `Se envió a los gestores SST la orden de exámenes de ${nombre || 'el candidato'}${
+          cargo ? ` (${cargo})` : ''
+        }. Copia de verificación; quedaste en copia del correo.`,
+        link: '/examenes-medicos',
+        conCorreo: false,
       });
     }
   }

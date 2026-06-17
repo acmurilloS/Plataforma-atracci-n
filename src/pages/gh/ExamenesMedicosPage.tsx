@@ -56,6 +56,11 @@ interface ExamenDoc {
   correo_gestor_enviado_en?: Timestamp | null;
   correo_gestor_error?: string | null;
   correo_gestor_datos_faltantes?: string[];
+  // Orden enviada al candidato (paso 16).
+  orden_url?: string | null;
+  orden_direccion?: string | null;
+  orden_instrucciones?: string | null;
+  orden_correo_candidato_en?: Timestamp | null;
   [k: string]: unknown;
 }
 
@@ -92,6 +97,8 @@ export default function ExamenesMedicosPage() {
   const [accion, setAccion] = useState<{ id: string; tipo: 'enviar' | 'concepto' } | null>(null);
   const [centroMedico, setCentroMedico] = useState('Colsanitas');
   const [ordenUrl, setOrdenUrl] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [instrucciones, setInstrucciones] = useState('');
   const [apto, setApto] = useState<boolean | null>(null);
   const [recomendaciones, setRecomendaciones] = useState('');
   const [conceptoUrl, setConceptoUrl] = useState('');
@@ -139,7 +146,9 @@ export default function ExamenesMedicosPage() {
 
   function abrirEnvio(ex: ExamenDoc) {
     setCentroMedico(ex.centro_medico || 'Colsanitas');
-    setOrdenUrl('');
+    setOrdenUrl(ex.orden_url || '');
+    setDireccion(ex.orden_direccion || '');
+    setInstrucciones(ex.orden_instrucciones || '');
     setAccion({ id: ex.id, tipo: 'enviar' });
   }
 
@@ -161,9 +170,17 @@ export default function ExamenesMedicosPage() {
       await actualizar('examenes_medicos', ex.id, {
         centro_medico: centroMedico.trim(),
         orden_url: ordenUrl.trim() || null,
+        orden_direccion: direccion.trim(),
+        orden_instrucciones: instrucciones.trim(),
         enviada_al_candidato_en: Timestamp.now(),
         estado: 'enviada',
       });
+      const fn = httpsCallable<{ examen_id: string }, { ok: true; email_destinatario: string }>(
+        functions,
+        'enviarOrdenExamenCandidato',
+      );
+      const res = await fn({ examen_id: ex.id });
+      window.alert(`Orden enviada al candidato (${res.data.email_destinatario}).`);
       setAccion(null);
     } catch (e) {
       window.alert('No se pudo enviar la orden: ' + (e instanceof Error ? e.message : String(e)));
@@ -428,6 +445,32 @@ export default function ExamenesMedicosPage() {
                       />
                     </label>
                   </div>
+                  <label className="block">
+                    <span className="block text-[11px] font-medium text-text-muted mb-1">
+                      Dirección
+                    </span>
+                    <input
+                      value={direccion}
+                      onChange={(e) => setDireccion(e.target.value)}
+                      className={inputClass}
+                      placeholder="Dirección del centro médico"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-[11px] font-medium text-text-muted mb-1">
+                      Indicaciones para el candidato (opcional)
+                    </span>
+                    <textarea
+                      value={instrucciones}
+                      onChange={(e) => setInstrucciones(e.target.value)}
+                      rows={2}
+                      className={inputClass}
+                      placeholder="Ayuno, horario, qué llevar…"
+                    />
+                  </label>
+                  <p className="text-[11px] text-text-muted">
+                    Al confirmar se le envía el correo al candidato con estos datos.
+                  </p>
                   <div className="flex gap-2 justify-end">
                     <Button onClick={cerrarAccion} variant="neutral-secondary" size="small">
                       Cancelar

@@ -33,6 +33,8 @@ export { enviarPruebaCandidato } from './pruebas/enviarPruebaCandidato';
 export { onExamenMedicoCreate } from './examenes/onExamenMedicoCreate';
 // Reenvío manual de la orden a los gestores SST (botón de GH/analista, 2026-06-13).
 export { reenviarOrdenGestores } from './examenes/reenviarOrdenGestores';
+// Correo de la orden de exámenes al candidato (paso 16, 2026-06-16).
+export { enviarOrdenExamenCandidato } from './examenes/enviarOrdenExamenCandidato';
 
 // Correo al candidato con el agendamiento de su entrevista (pasos 8/13, 2026-06-12).
 export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';
