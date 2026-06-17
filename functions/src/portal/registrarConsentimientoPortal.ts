@@ -25,7 +25,11 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
 
   // URL del PDF firmado (D.2). Opcional para no romper aceptaciones sin firma.
   const firmaUrl = String(req.data?.firma_url ?? '').trim();
-  if (firmaUrl && !/^https:\/\/firebasestorage\.googleapis\.com\//.test(firmaUrl)) {
+  if (
+    firmaUrl &&
+    (!/^https:\/\/firebasestorage\.googleapis\.com\//.test(firmaUrl) ||
+      !firmaUrl.includes(`portal_docs%2F${token}%2F`))
+  ) {
     throw new HttpsError('invalid-argument', 'URL de firma inválida.');
   }
 

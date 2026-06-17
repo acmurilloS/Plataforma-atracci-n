@@ -229,6 +229,9 @@ export default function CarpetasPage() {
   }
 
   async function aprobar(c: CarpetaDoc) {
+    if (procesando) return; // guard anti doble-clic: evita duplicar tickets/cierre/contratado
+    setProcesando(c.id);
+    try {
     const info = resolverInfo(c);
     await actualizar('carpetas_digitales', c.id, {
       estado: 'aprobada',
@@ -267,6 +270,9 @@ export default function CarpetasPage() {
         resuelto_en: null,
         evidencia_url: null,
       });
+    }
+    } finally {
+      setProcesando(null);
     }
   }
 
@@ -641,6 +647,8 @@ export default function CarpetasPage() {
                       </Button>
                       <Button
                         onClick={() => aprobar(c)}
+                        disabled={procesando === c.id}
+                        loading={procesando === c.id}
                         variant="brand-primary"
                         size="medium"
                         icon={<Sparkles size={13} strokeWidth={1.75} />}

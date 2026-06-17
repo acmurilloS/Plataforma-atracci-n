@@ -36,6 +36,8 @@ interface PortalData {
   estado: string;
   condiciones: Record<string, string> | null;
   condiciones_aceptadas: boolean;
+  firma_datos_basicos: boolean;
+  firma_debida_diligencia: boolean;
   documentos: { nombre: string; url: string }[];
 }
 
@@ -196,6 +198,7 @@ export default function PortalCandidatoPage() {
           nombreCompleto={data.candidato_nombre}
           documentoNumero={data.documento_numero}
           empresaNombre={empresa.nombre}
+          firmadoInicial={data.firma_datos_basicos}
         />
         <FirmaDocumentoCard
           token={token ?? ''}
@@ -205,6 +208,7 @@ export default function PortalCandidatoPage() {
           nombreCompleto={data.candidato_nombre}
           documentoNumero={data.documento_numero}
           empresaNombre={empresa.nombre}
+          firmadoInicial={data.firma_debida_diligencia}
         />
 
         {data.condiciones && (
@@ -339,6 +343,7 @@ function FirmaDocumentoCard({
   nombreCompleto,
   documentoNumero,
   empresaNombre,
+  firmadoInicial,
 }: {
   token: string;
   tipo: 'datos_basicos' | 'debida_diligencia';
@@ -347,10 +352,11 @@ function FirmaDocumentoCard({
   nombreCompleto: string;
   documentoNumero: string;
   empresaNombre: string;
+  firmadoInicial: boolean;
 }) {
   const [firma, setFirma] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const [firmado, setFirmado] = useState(false);
+  const [firmado, setFirmado] = useState(firmadoInicial);
   const [err, setErr] = useState<string | null>(null);
 
   async function firmar() {

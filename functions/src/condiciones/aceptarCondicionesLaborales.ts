@@ -19,6 +19,17 @@ export const aceptarCondicionesLaborales = onCall({ region: 'us-central1' }, asy
   const postId = String((tSnap.data() as Record<string, unknown>).postulacion_id ?? '');
   if (!postId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
 
+  const postRef = db.collection('postulaciones').doc(postId);
+  const postSnap = await postRef.get();
+  if (!postSnap.exists) throw new HttpsError('not-found', 'Postulación no existe.');
+  const pd = postSnap.data() as Record<string, unknown>;
+  if (!pd.condiciones_enviadas_en) {
+    throw new HttpsError('failed-precondition', 'Aún no te han enviado las condiciones.');
+  }
+  if (pd.condiciones_aceptadas_en) {
+    return { ok: true as const, yaAceptado: true }; // idempotente: no pisa la aceptación
+  }
+
   const raw = req.rawRequest as unknown as {
     ip?: string;
     headers?: Record<string, string | undefined>;
@@ -26,7 +37,7 @@ export const aceptarCondicionesLaborales = onCall({ region: 'us-central1' }, asy
   const ip = String(raw?.ip ?? '').slice(0, 64);
   const ua = String(raw?.headers?.['user-agent'] ?? '').slice(0, 256);
 
-  await db.collection('postulaciones').doc(postId).update({
+  await postRef.update({
     condiciones_aceptadas_en: FieldValue.serverTimestamp(),
     condiciones_aceptadas_evidencia: { ip, user_agent: ua, via: 'portal_candidato' },
   });

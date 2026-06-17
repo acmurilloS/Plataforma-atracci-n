@@ -24,7 +24,12 @@ export const registrarFirmaDocumento = onCall({ region: 'us-central1' }, async (
   if (!['datos_basicos', 'debida_diligencia'].includes(tipo)) {
     throw new HttpsError('invalid-argument', 'Tipo de documento inválido.');
   }
-  if (!/^https:\/\/firebasestorage\.googleapis\.com\//.test(url)) {
+  // La URL debe ser de Storage Y del propio path del token (portal_docs/{token}/…),
+  // para que un token no pueda registrar el PDF subido bajo otro token.
+  if (
+    !/^https:\/\/firebasestorage\.googleapis\.com\//.test(url) ||
+    !url.includes(`portal_docs%2F${token}%2F`)
+  ) {
     throw new HttpsError('invalid-argument', 'URL de firma inválida.');
   }
 
@@ -74,6 +79,12 @@ export const registrarFirmaDocumento = onCall({ region: 'us-central1' }, async (
       });
     }
   }
+
+  // Flag en la postulación para que el portal no vuelva a mostrarlo como sin firmar
+  // (evita re-firmar y duplicar la constancia).
+  await db.collection('postulaciones').doc(postulacionId).update({
+    [`firma_${tipo}_en`]: FieldValue.serverTimestamp(),
+  });
 
   await db.collection('eventos').add({
     tipo: 'documento_firmado_portal',
