@@ -41,6 +41,8 @@ export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';
 
 // Correo al candidato con el listado de documentos requeridos (paso 10, 2026-06-12).
 export { enviarListadoDocumentos } from './documentos/enviarListadoDocumentos';
+// Aviso a GH cuando la carpeta queda completa para validar (C.1, 2026-06-16).
+export { notificarCarpetaListaValidar } from './documentos/notificarCarpetaListaValidar';
 
 // Portal del candidato (público, sin login): consentimientos digitales (2026-06-13).
 export { enviarPortalCandidato } from './portal/enviarPortalCandidato';

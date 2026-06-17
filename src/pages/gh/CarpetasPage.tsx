@@ -112,8 +112,24 @@ export default function CarpetasPage() {
   }, [todosDocumentos]);
 
   const { crear, actualizar } = useMutacion();
-  const { user } = useAuth();
+  const { user, perfil } = useAuth();
   const [procesando, setProcesando] = useState<string | null>(null);
+  const [verificandoDoc, setVerificandoDoc] = useState<string | null>(null);
+
+  /** C.2 · GH valida el documento sin salir de la carpeta (ni descargar). */
+  async function verificarDoc(docId: string) {
+    setVerificandoDoc(docId);
+    try {
+      await actualizar('documentos_candidato', docId, {
+        estado: 'verificado',
+        verificado_en: Timestamp.now(),
+        verificado_por_uid: user?.uid ?? null,
+        verificado_por_nombre: perfil ? `${perfil.nombre} ${perfil.apellido}` : null,
+      });
+    } finally {
+      setVerificandoDoc(null);
+    }
+  }
   // Por default todas colapsadas; el usuario abre las que quiera revisar.
   // Evita que la página crezca a la altura de 18 docs × N carpetas.
   const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
@@ -535,6 +551,16 @@ export default function CarpetasPage() {
                                     <ExternalLink size={10} strokeWidth={1.75} />
                                     Ver PDF
                                   </a>
+                                )}
+                                {estado === 'entregado' && doc && (
+                                  <button
+                                    onClick={() => verificarDoc(doc.id)}
+                                    disabled={verificandoDoc === doc.id}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-success-700 hover:text-success-800 hover:underline disabled:opacity-50"
+                                  >
+                                    <CheckCircle2 size={11} strokeWidth={1.75} />
+                                    {verificandoDoc === doc.id ? 'Validando…' : 'Validar'}
+                                  </button>
                                 )}
                                 <Pill tono={tonoDoc}>{DOC_ESTADO_LABEL[estado]}</Pill>
                               </li>
