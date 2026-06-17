@@ -253,6 +253,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /solicitudes_integrante/{id} {
+      allow read: if signedIn();
+      allow create: if isAnalista() || staff();
+      allow update: if isAnalista() || staff();
+      allow delete: if false;
+    }
+
     match /conceptos_atraccion/{id} {
       allow read: if signedIn();
       allow create: if isAnalista() || staff();

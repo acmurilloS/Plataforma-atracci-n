@@ -17,6 +17,7 @@ export * from './documentoCarpetaSchema';
 export * from './debidaDiligenciaSchema';
 export * from './datosBasicosIntegranteSchema';
 export * from './conceptoAtraccionSchema';
+export * from './solicitudIntegranteSchema';
 export * from './notificacionSchema';
 export * from './ticketConexionSchema';
 export * from './candidatoSchema';

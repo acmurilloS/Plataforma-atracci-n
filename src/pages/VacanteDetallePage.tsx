@@ -113,6 +113,16 @@ export default function VacanteDetallePage() {
         </Pill>
       </div>
 
+      <div className="flex flex-wrap gap-2 print:hidden">
+        <Link
+          to={`/vacantes/${vac.id}/solicitud-integrante`}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+        >
+          <FileText size={13} strokeWidth={1.75} />
+          Solicitud de Integrantes (VIDA-F-01)
+        </Link>
+      </div>
+
       <PoliticaCriticidadBanner criticidad={vac.criticidad} />
 
       {/* ─── Empresa y cargo ─────────────────────────────────────── */}
