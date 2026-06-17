@@ -29,6 +29,7 @@ interface FormSolicitud {
   cargo_solicitante: string;
   cargo_reporta: string;
   tipo_vinculacion: string;
+  sistemas: string;
   preferible_poseer: string;
   disponibilidad_viajar: string;
   trabajo_en: string;
@@ -45,6 +46,7 @@ const FORM_VACIO: FormSolicitud = {
   cargo_solicitante: '',
   cargo_reporta: '',
   tipo_vinculacion: '',
+  sistemas: '',
   preferible_poseer: '',
   disponibilidad_viajar: '',
   trabajo_en: '',
@@ -84,6 +86,7 @@ export default function SolicitudIntegrantePage() {
       cargo_solicitante: solicitud.cargo_solicitante ?? '',
       cargo_reporta: solicitud.cargo_reporta ?? '',
       tipo_vinculacion: solicitud.tipo_vinculacion ?? '',
+      sistemas: solicitud.sistemas ?? '',
       preferible_poseer: solicitud.preferible_poseer ?? '',
       disponibilidad_viajar: solicitud.disponibilidad_viajar ?? '',
       trabajo_en: solicitud.trabajo_en ?? '',
@@ -250,6 +253,13 @@ export default function SolicitudIntegrantePage() {
               value={form.tipo_vinculacion}
               onChange={(v) => set('tipo_vinculacion', v)}
               placeholder="De planta / temporal"
+            />
+          </Fila>
+          <Fila label="Sistemas (herramientas)">
+            <Entrada
+              value={form.sistemas}
+              onChange={(v) => set('sistemas', v)}
+              placeholder="¿Requiere sistemas/herramientas? Sí / No / cuáles"
             />
           </Fila>
           <Fila label="Motivo de la solicitud">

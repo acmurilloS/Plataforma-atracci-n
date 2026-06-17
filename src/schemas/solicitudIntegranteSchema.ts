@@ -19,6 +19,7 @@ export const solicitudIntegranteInputSchema = z.object({
   // Detalles del cargo
   cargo_reporta: z.string().max(160).default(''),
   tipo_vinculacion: z.string().max(80).default(''), // de planta / temporal / ...
+  sistemas: z.string().max(200).default(''), // ¿requiere herramientas/sistemas? sí / no / cuáles
   preferible_poseer: z.string().max(120).default(''), // vehículo / moto / indiferente
   disponibilidad_viajar: z.string().max(40).default(''), // sí / no
   trabajo_en: z.string().max(80).default(''), // campo / sede / in house
