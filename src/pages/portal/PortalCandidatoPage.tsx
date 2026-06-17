@@ -12,6 +12,8 @@ import {
   empresaConsentimiento,
   tituloConsentimiento,
 } from '../../components/consentimientos/consentimientoLegal';
+import { FirmaCanvas } from '../../components/firma/FirmaCanvas';
+import { generarConstanciaFirma } from '../../utils/pdfFirma';
 
 /**
  * PortalCandidatoPage · portal público del candidato (sin login).
@@ -82,13 +84,13 @@ export default function PortalCandidatoPage() {
     })();
   }, [authReady, token]);
 
-  async function aceptar(tipo: 'datos' | 'imagen') {
+  async function aceptar(tipo: 'datos' | 'imagen', firmaUrl: string) {
     if (!token) return;
-    const fn = httpsCallable<{ token: string; tipo: string }, { ok: true }>(
+    const fn = httpsCallable<{ token: string; tipo: string; firma_url?: string }, { ok: true }>(
       functions,
       'registrarConsentimientoPortal',
     );
-    await fn({ token, tipo });
+    await fn({ token, tipo, firma_url: firmaUrl });
     setData((d) =>
       d
         ? {
@@ -167,19 +169,21 @@ export default function PortalCandidatoPage() {
 
         <ConsentimientoCard
           tipo="datos"
+          token={token ?? ''}
           empresa={empresa}
           nombreCompleto={data.candidato_nombre}
           documentoNumero={data.documento_numero}
           aceptado={data.consentimiento_datos_aceptado}
-          onAceptar={() => aceptar('datos')}
+          onAceptar={(url) => aceptar('datos', url)}
         />
         <ConsentimientoCard
           tipo="imagen"
+          token={token ?? ''}
           empresa={empresa}
           nombreCompleto={data.candidato_nombre}
           documentoNumero={data.documento_numero}
           aceptado={data.consentimiento_imagen_aceptado}
-          onAceptar={() => aceptar('imagen')}
+          onAceptar={(url) => aceptar('imagen', url)}
         />
 
         <SubirDocumentos token={token ?? ''} iniciales={data.documentos} />
@@ -194,6 +198,7 @@ export default function PortalCandidatoPage() {
 
 function ConsentimientoCard({
   tipo,
+  token,
   empresa,
   nombreCompleto,
   documentoNumero,
@@ -201,21 +206,35 @@ function ConsentimientoCard({
   onAceptar,
 }: {
   tipo: 'datos' | 'imagen';
+  token: string;
   empresa: ReturnType<typeof empresaConsentimiento>;
   nombreCompleto: string;
   documentoNumero: string;
   aceptado: boolean;
-  onAceptar: () => Promise<void>;
+  onAceptar: (firmaUrl: string) => Promise<void>;
 }) {
   const [chk, setChk] = useState(false);
+  const [firma, setFirma] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function confirmar() {
+    if (!firma || !token) return;
     setEnviando(true);
     setErr(null);
     try {
-      await onAceptar();
+      const blob = await generarConstanciaFirma({
+        titulo: tituloConsentimiento(tipo),
+        nombre: nombreCompleto || 'Candidato',
+        documentoIdentidad: documentoNumero || '—',
+        fechaTexto: new Date().toLocaleDateString('es-CO'),
+        firmaPngDataUrl: firma,
+        empresaNombre: empresa.nombre,
+      });
+      const r = storageRef(storage, `portal_docs/${token}/firma_${tipo}_${Date.now()}.pdf`);
+      await uploadBytes(r, blob, { contentType: 'application/pdf' });
+      const url = await getDownloadURL(r);
+      await onAceptar(url);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No se pudo registrar. Reintenta.');
     } finally {
@@ -263,15 +282,19 @@ function ConsentimientoCard({
               He leído y <strong>acepto</strong> este documento.
             </span>
           </label>
+          <div>
+            <p className="text-[12px] font-medium text-text-body mb-1">Tu firma</p>
+            <FirmaCanvas onChange={setFirma} />
+          </div>
           {err && <p className="text-[12px] text-danger-700">{err}</p>}
           <Button
             onClick={confirmar}
-            disabled={!chk || enviando}
+            disabled={!chk || !firma || enviando}
             loading={enviando}
             variant="brand-primary"
             icon={<Check size={14} strokeWidth={2} />}
           >
-            {enviando ? 'Registrando…' : 'Aceptar'}
+            {enviando ? 'Firmando…' : 'Aceptar y firmar'}
           </Button>
         </div>
       )}

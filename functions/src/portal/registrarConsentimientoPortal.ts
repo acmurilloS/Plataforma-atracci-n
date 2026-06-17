@@ -23,6 +23,12 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
     throw new HttpsError('not-found', 'Token inválido.');
   }
 
+  // URL del PDF firmado (D.2). Opcional para no romper aceptaciones sin firma.
+  const firmaUrl = String(req.data?.firma_url ?? '').trim();
+  if (firmaUrl && !/^https:\/\/firebasestorage\.googleapis\.com\//.test(firmaUrl)) {
+    throw new HttpsError('invalid-argument', 'URL de firma inválida.');
+  }
+
   const tSnap = await db.collection('portal_candidato_tokens').doc(token).get();
   if (!tSnap.exists) throw new HttpsError('not-found', 'Token no encontrado.');
   const t = tSnap.data() as Record<string, unknown>;
@@ -38,10 +44,30 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
 
   const campo = tipo === 'datos' ? 'consentimiento_datos' : 'consentimiento_imagen';
 
-  await db.collection('postulaciones').doc(postulacionId).update({
+  const update: Record<string, unknown> = {
     [`${campo}_aceptado_en`]: FieldValue.serverTimestamp(),
     [`${campo}_evidencia`]: { ip, user_agent: ua, via: 'portal_candidato' },
-  });
+  };
+  if (firmaUrl) update[`${campo}_firma_url`] = firmaUrl;
+  await db.collection('postulaciones').doc(postulacionId).update(update);
+
+  // El PDF firmado queda visible para el analista en la carpeta (DocumentosTab).
+  if (firmaUrl) {
+    const titulo =
+      tipo === 'datos'
+        ? 'Autorización tratamiento de datos (firmada)'
+        : 'Acuerdo de imagen y voz (firmado)';
+    await db.collection('documentos_portal').add({
+      postulacion_id: postulacionId,
+      candidato_id: t.candidato_id ?? null,
+      nombre_archivo: titulo,
+      url: firmaUrl,
+      via: 'firma_portal',
+      subido_en: FieldValue.serverTimestamp(),
+      creado_en: FieldValue.serverTimestamp(),
+      creado_por: 'candidato_portal',
+    });
+  }
 
   await db.collection('eventos').add({
     tipo: 'consentimiento_aceptado',
