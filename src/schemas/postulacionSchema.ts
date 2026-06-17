@@ -170,4 +170,6 @@ export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
   consentimiento_imagen_aceptado_en?: Timestamp | null;
   /** Aviso a GH "carpeta lista para validar" (C.1) — se setea una sola vez. */
   carpeta_lista_validar_notificada_en?: Timestamp | null;
+  /** Correo de agradecimiento al candidato descartado (D.3). */
+  agradecimiento_enviado_en?: Timestamp | null;
 }

@@ -101,6 +101,9 @@ export default function PostulacionDetallePage() {
   const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
   const [tab, setTab] = useState<Tab>('pruebas');
   const [enviandoPortal, setEnviandoPortal] = useState(false);
+  const [agradecerAbierto, setAgradecerAbierto] = useState(false);
+  const [mensajeAgradecimiento, setMensajeAgradecimiento] = useState('');
+  const [enviandoAgradecimiento, setEnviandoAgradecimiento] = useState(false);
 
   if (!post)
     return (
@@ -125,6 +128,49 @@ export default function PostulacionDetallePage() {
       window.alert('No se pudo enviar el portal: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setEnviandoPortal(false);
+    }
+  }
+
+  // D.3 · agradecimiento al candidato descartado (texto editable, sin causa).
+  const DESCARTES = [
+    'filtrado_no_cumple',
+    'pre_entrevistado_no_interesado',
+    'descartado_por_lider',
+    'descartado_examenes_medicos',
+    'desistio_candidato',
+  ];
+  const esDescartado = DESCARTES.includes(post.estado);
+
+  function abrirAgradecimiento() {
+    if (!post) return;
+    const primer = post.candidato_nombre?.split(' ')[0] || 'candidato/a';
+    setMensajeAgradecimiento(
+      `Hola ${primer},\n\n` +
+        `Te agradecemos sinceramente tu interés y el tiempo que dedicaste a nuestro proceso de ` +
+        `selección${post.cargo_nombre ? ` para el cargo ${post.cargo_nombre}` : ''} en Equitel.\n\n` +
+        `En esta ocasión hemos continuado con otros candidatos. Valoramos mucho tu participación y ` +
+        `conservaremos tu perfil para futuras oportunidades.\n\n` +
+        `Te deseamos muchos éxitos.\n\n` +
+        `Cordialmente,\nEquipo de Atracción · Organización Equitel`,
+    );
+    setAgradecerAbierto(true);
+  }
+
+  async function enviarAgradecimiento() {
+    if (!post) return;
+    setEnviandoAgradecimiento(true);
+    try {
+      const fn = httpsCallable<
+        { postulacion_id: string; mensaje: string },
+        { ok: true; email_destinatario: string }
+      >(functions, 'enviarAgradecimientoCandidato');
+      const res = await fn({ postulacion_id: post.id, mensaje: mensajeAgradecimiento });
+      window.alert(`Mensaje de agradecimiento enviado a ${res.data.email_destinatario}.`);
+      setAgradecerAbierto(false);
+    } catch (e) {
+      window.alert('No se pudo enviar: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEnviandoAgradecimiento(false);
     }
   }
 
@@ -200,6 +246,15 @@ export default function PostulacionDetallePage() {
                 ? 'Reenviar portal al candidato'
                 : 'Enviar portal al candidato'}
           </button>
+          {esDescartado && (
+            <button
+              onClick={abrirAgradecimiento}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+            >
+              <Mail size={12} strokeWidth={1.75} />
+              {post.agradecimiento_enviado_en ? 'Reenviar agradecimiento' : 'Enviar agradecimiento'}
+            </button>
+          )}
           {(post.consentimiento_datos_aceptado_en || post.consentimiento_imagen_aceptado_en) && (
             <p className="text-[11px] text-text-muted leading-[1.5] px-0.5">
               Consentimientos:{' '}
@@ -214,6 +269,41 @@ export default function PostulacionDetallePage() {
           )}
         </div>
       </div>
+
+      {agradecerAbierto && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3 print:hidden">
+          <div>
+            <p className="text-[13px] font-semibold text-text-strong">
+              Mensaje de agradecimiento al candidato
+            </p>
+            <p className="text-[11px] text-text-muted mt-0.5">
+              Edítalo si quieres. <strong>No menciones el motivo del descarte.</strong>
+            </p>
+          </div>
+          <textarea
+            value={mensajeAgradecimiento}
+            onChange={(e) => setMensajeAgradecimiento(e.target.value)}
+            rows={9}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setAgradecerAbierto(false)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={enviarAgradecimiento}
+              disabled={enviandoAgradecimiento || mensajeAgradecimiento.trim().length < 10}
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-[12px] font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              <Mail size={12} strokeWidth={1.75} />
+              {enviandoAgradecimiento ? 'Enviando…' : 'Enviar agradecimiento'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {criticidad && <PoliticaCriticidadBanner criticidad={criticidad} />}
 

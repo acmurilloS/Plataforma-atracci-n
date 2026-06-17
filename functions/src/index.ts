@@ -43,6 +43,8 @@ export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';
 export { enviarListadoDocumentos } from './documentos/enviarListadoDocumentos';
 // Aviso a GH cuando la carpeta queda completa para validar (C.1, 2026-06-16).
 export { notificarCarpetaListaValidar } from './documentos/notificarCarpetaListaValidar';
+// Correo de agradecimiento al candidato descartado (D.3, 2026-06-16).
+export { enviarAgradecimientoCandidato } from './notificaciones/enviarAgradecimientoCandidato';
 
 // Portal del candidato (público, sin login): consentimientos digitales (2026-06-13).
 export { enviarPortalCandidato } from './portal/enviarPortalCandidato';
