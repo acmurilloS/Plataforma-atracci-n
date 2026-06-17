@@ -135,6 +135,26 @@ export default function PostulacionDetallePage() {
     }
   }
 
+  async function revocarPortal() {
+    if (!post) return;
+    if (
+      !window.confirm(
+        '¿Revocar el portal del candidato? El enlace dejará de funcionar. Puedes reabrirlo con "Reenviar portal".',
+      )
+    )
+      return;
+    try {
+      const fn = httpsCallable<{ postulacion_id: string }, { ok: true }>(
+        functions,
+        'revocarPortalCandidato',
+      );
+      await fn({ postulacion_id: post.id });
+      window.alert('Portal revocado. El enlace ya no funciona.');
+    } catch (e) {
+      window.alert('No se pudo revocar: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
   // D.3 · agradecimiento al candidato descartado (texto editable, sin causa).
   const DESCARTES = [
     'filtrado_no_cumple',
@@ -269,6 +289,14 @@ export default function PostulacionDetallePage() {
                 ? 'Reenviar portal al candidato'
                 : 'Enviar portal al candidato'}
           </button>
+          {post.portal_token && !post.portal_revocado_en && (
+            <button
+              onClick={revocarPortal}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-muted hover:bg-slate-50 transition-colors duration-150"
+            >
+              Revocar portal
+            </button>
+          )}
           {esDescartado && (
             <button
               onClick={abrirAgradecimiento}

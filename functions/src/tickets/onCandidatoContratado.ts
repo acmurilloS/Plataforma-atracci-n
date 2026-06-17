@@ -138,20 +138,42 @@ export const onCandidatoContratado = onDocumentUpdated(
     } catch (e) {
       logger.warn('[contratado] no se pudieron leer tickets de dotación', { postId, e: String(e) });
     }
-    if (aplicaDotacion && coordEmails.length) {
+    // Destinatario de dotación: ya está en la plataforma → apoyo de compras + bodega
+    // (usuarios con area_apoyo). Si no hay, cae a coordinación.
+    let dotacionEmails: string[] = [];
+    if (aplicaDotacion) {
+      try {
+        const ap = await db
+          .collection('usuarios')
+          .where('rol', '==', 'apoyo')
+          .where('activo', '==', true)
+          .get();
+        dotacionEmails = ap.docs
+          .filter((d) => ['compras', 'bodega'].includes(String(d.data()?.area_apoyo ?? '')))
+          .map((d) => String(d.data()?.email ?? '').trim())
+          .filter(Boolean);
+      } catch (e) {
+        logger.warn('[contratado] no se pudieron leer responsables de dotación', {
+          postId,
+          e: String(e),
+        });
+      }
+    }
+    const dotacionTo = dotacionEmails.length ? dotacionEmails : coordEmails;
+    if (aplicaDotacion && dotacionTo.length) {
       try {
         await enviarConGmail({
           from: FROM,
-          to: coordEmails, // TODO: destinatario real de dotación pendiente de Karen.
+          to: dotacionTo,
+          cc: dotacionEmails.length && coordEmails.length ? coordEmails : undefined,
           subject: `Solicitud de dotación · ${nombre}`,
           html: `
             <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
               <p>Buen día,</p>
               <p>Se contrató un nuevo integrante cuyo cargo requiere <strong>dotación</strong>.
-                 Solicitamos gestionar la dotación para:</p>
+                 Solicitamos gestionar la dotación (uniforme/EPP) para:</p>
               ${datos}
-              <p style="font-size:12px;color:#777;">Enviado automáticamente al marcar la contratación.
-                 (Destinatario y plantilla de dotación pendientes de confirmar con GH.)</p>
+              <p style="font-size:12px;color:#777;">Enviado automáticamente al marcar la contratación.</p>
             </div>`,
         });
       } catch (e) {

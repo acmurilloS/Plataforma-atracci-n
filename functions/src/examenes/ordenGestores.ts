@@ -210,17 +210,25 @@ export async function enviarOrdenAGestores(
     correo_gestor_error: null,
   });
 
-  await db.collection('eventos').add({
-    tipo: 'examen_medico_solicitado_gestor',
-    examen_id: examenId,
-    postulacion_id: ex.postulacion_id ?? null,
-    vacante_id: ex.vacante_id ?? null,
-    destinatarios: GESTORES,
-    datos_faltantes: faltantes,
-    reenviado: opts.forzar === true,
-    creado_en: FieldValue.serverTimestamp(),
-    creado_por: 'system',
-  });
+  try {
+    await db.collection('eventos').add({
+      tipo: 'examen_medico_solicitado_gestor',
+      examen_id: examenId,
+      postulacion_id: ex.postulacion_id ?? null,
+      vacante_id: ex.vacante_id ?? null,
+      destinatarios: GESTORES,
+      datos_faltantes: faltantes,
+      reenviado: opts.forzar === true,
+      creado_en: FieldValue.serverTimestamp(),
+      creado_por: 'system',
+    });
+  } catch (e) {
+    // El correo ya salió y se marcó enviado; un fallo del log no debe devolver error.
+    logger.warn('enviarOrdenAGestores · no se pudo registrar el evento', {
+      examen_id: examenId,
+      msg: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   // Acuse al analista de que la orden ya salió a los gestores.
   if (destinatarioAcuse) {

@@ -55,6 +55,8 @@ export { registrarConsentimientoPortal } from './portal/registrarConsentimientoP
 export { registrarDocumentoPortal } from './portal/registrarDocumentoPortal';
 // Aviso al candidato (correo con link al portal) cuando su proceso avanza (D.1, 2026-06-16).
 export { onPostulacionAvance } from './portal/onPostulacionAvance';
+// Revocar el portal del candidato (cierra el bearer-token, 2026-06-16).
+export { revocarPortalCandidato } from './portal/revocarPortalCandidato';
 // Firma de documentos del proceso (datos básicos / debida diligencia) en el portal (D.2, 2026-06-16).
 export { registrarFirmaDocumento } from './portal/registrarFirmaDocumento';
 // Condiciones laborales: envío al candidato + aceptación en el portal (E, 2026-06-16).
