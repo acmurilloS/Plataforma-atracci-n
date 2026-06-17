@@ -63,20 +63,18 @@ export const onCandidatoContratado = onDocumentUpdated(
     }
 
     // Coordinación (Karen).
-    const coordEmails: string[] = [];
+    const coords: { uid: string; email: string }[] = [];
     try {
       const cs = await db
         .collection('usuarios')
         .where('rol', '==', 'coordinador')
         .where('activo', '==', true)
         .get();
-      cs.forEach((c) => {
-        const e = String(c.data()?.email ?? '').trim();
-        if (e) coordEmails.push(e);
-      });
+      cs.forEach((c) => coords.push({ uid: c.id, email: String(c.data()?.email ?? '').trim() }));
     } catch (e) {
       logger.warn('[contratado] no se pudieron leer coordinadores', { postId, e: String(e) });
     }
+    const coordEmails = coords.map((c) => c.email).filter(Boolean);
 
     const datos = `
       <table style="border-collapse:collapse; font-size:14px; margin:8px 0 14px;">
@@ -108,6 +106,25 @@ export const onCandidatoContratado = onDocumentUpdated(
       });
     } catch (e) {
       logger.error('[contratado] correo talentos falló', { postId, e: String(e) });
+      // Que no sea un fallo silencioso: avisar a coordinación para enviarlo a mano.
+      for (const c of coords) {
+        if (!c.uid) continue;
+        await db.collection('notificaciones').add({
+          destinatario_uid: c.uid,
+          tipo: 'generica',
+          titulo: 'No se pudo enviar el plan de conexión',
+          mensaje: `No se pudo enviar a José el plan de conexión de talentos de ${nombre}${
+            cargo ? ` (${cargo})` : ''
+          }. Por favor envíaselo manualmente.`,
+          link: '/tickets',
+          leida: false,
+          leida_en: null,
+          creado_en: FieldValue.serverTimestamp(),
+          creado_por: 'system',
+          actualizado_en: FieldValue.serverTimestamp(),
+          actualizado_por: 'system',
+        });
+      }
     }
 
     // 2) Dotación → solo si el cargo aplica (hay tickets de dotación para esta postulación).
