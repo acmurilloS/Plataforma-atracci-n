@@ -51,3 +51,5 @@ export { enviarPortalCandidato } from './portal/enviarPortalCandidato';
 export { resolverPortalToken } from './portal/resolverPortalToken';
 export { registrarConsentimientoPortal } from './portal/registrarConsentimientoPortal';
 export { registrarDocumentoPortal } from './portal/registrarDocumentoPortal';
+// Aviso al candidato (correo con link al portal) cuando su proceso avanza (D.1, 2026-06-16).
+export { onPostulacionAvance } from './portal/onPostulacionAvance';
