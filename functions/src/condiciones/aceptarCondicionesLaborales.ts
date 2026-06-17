@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { tokenVigente } from '../portal/tokenVigente';
 
 /**
  * aceptarCondicionesLaborales · E (lote GH 16-jun).
@@ -16,7 +17,14 @@ export const aceptarCondicionesLaborales = onCall({ region: 'us-central1' }, asy
 
   const tSnap = await db.collection('portal_candidato_tokens').doc(token).get();
   if (!tSnap.exists) throw new HttpsError('not-found', 'Token no encontrado.');
-  const postId = String((tSnap.data() as Record<string, unknown>).postulacion_id ?? '');
+  const t = tSnap.data() as Record<string, unknown>;
+  if (!tokenVigente(t)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'El enlace expiró o fue revocado. Pídele al equipo de Atracción que te reenvíe tu portal.',
+    );
+  }
+  const postId = String(t.postulacion_id ?? '');
   if (!postId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
 
   const postRef = db.collection('postulaciones').doc(postId);

@@ -1,10 +1,11 @@
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { generarSlug } from '../referidos/generarSlug';
+import { DIAS_VIGENCIA_TOKEN } from './tokenVigente';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -90,12 +91,17 @@ export const enviarPortalCandidato = onCall(
         candidato_id: post.candidato_id ?? null,
         vacante_id: post.vacante_id ?? null,
         ...snapshot,
+        revocado: false,
+        expira_en: nuevaCaducidad(),
         creado_en: FieldValue.serverTimestamp(),
         creado_por: req.auth.uid,
       });
     } else {
-      // Mantener el snapshot fresco (la cédula pudo completarse después).
-      await tokensCol.doc(token).set(snapshot, { merge: true });
+      // Mantener el snapshot fresco (la cédula pudo completarse después) y
+      // extender la vigencia + re-habilitar al reenviar.
+      await tokensCol
+        .doc(token)
+        .set({ ...snapshot, revocado: false, expira_en: nuevaCaducidad() }, { merge: true });
     }
 
     const url = `${APP_URL}/portal/${token}`;
@@ -156,6 +162,10 @@ function construirHtml(args: { nombre: string; cargo: string; url: string }): st
       <p style="font-size:13px; color:#555;">Gracias,<br>Equipo de Atracción · Organización Equitel</p>
     </div>
   `.trim();
+}
+
+function nuevaCaducidad(): Timestamp {
+  return Timestamp.fromMillis(Date.now() + DIAS_VIGENCIA_TOKEN * 24 * 60 * 60 * 1000);
 }
 
 function escapeHtml(s: string): string {

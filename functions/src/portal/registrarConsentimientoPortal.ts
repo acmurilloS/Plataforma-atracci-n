@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { tokenVigente } from './tokenVigente';
 
 /**
  * registrarConsentimientoPortal · registra que el candidato ACEPTÓ, desde su
@@ -36,6 +37,12 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
   const tSnap = await db.collection('portal_candidato_tokens').doc(token).get();
   if (!tSnap.exists) throw new HttpsError('not-found', 'Token no encontrado.');
   const t = tSnap.data() as Record<string, unknown>;
+  if (!tokenVigente(t)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'El enlace expiró o fue revocado. Pídele al equipo de Atracción que te reenvíe tu portal.',
+    );
+  }
   const postulacionId = String(t.postulacion_id ?? '');
   if (!postulacionId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
 

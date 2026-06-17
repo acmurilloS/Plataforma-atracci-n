@@ -1,6 +1,7 @@
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { tokenVigente } from './tokenVigente';
 
 /**
  * resolverPortalToken · resuelve el token público del portal del candidato a los
@@ -25,6 +26,10 @@ export const resolverPortalToken = onCall({ region: 'us-central1' }, async (req)
     return { encontrado: false as const };
   }
   const t = snap.data() as Record<string, unknown>;
+  if (!tokenVigente(t)) {
+    logger.info('[portal] token expirado o revocado', { token });
+    return { encontrado: false as const };
+  }
   const postulacionId = String(t.postulacion_id ?? '');
 
   // Estado de consentimientos + estado del proceso viven en la postulación.
