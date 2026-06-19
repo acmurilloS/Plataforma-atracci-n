@@ -4,7 +4,12 @@ import { useDoc } from '../../hooks/useDoc';
 import { formatearFecha } from '../../utils/fechas';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Pill } from '../../components/brand';
-import type { PostulacionDoc, DatosBasicosIntegranteDoc } from '../../schemas';
+import type {
+  PostulacionDoc,
+  DatosBasicosIntegranteDoc,
+  CandidatoDoc,
+  VacanteDoc,
+} from '../../schemas';
 import { useColeccion } from '../../hooks/useColeccion';
 import {
   CuerpoConsentimiento,
@@ -26,6 +31,8 @@ interface PropsTipo {
 export function AutorizacionPage({ tipo }: PropsTipo) {
   const { id } = useParams<{ id: string }>();
   const { doc: postulacion } = useDoc<PostulacionDoc>('postulaciones', id);
+  const { doc: candidato } = useDoc<CandidatoDoc>('candidatos', postulacion?.candidato_id ?? null);
+  const { doc: vacante } = useDoc<VacanteDoc>('vacantes', postulacion?.vacante_id ?? null);
   const { docs: datosBasicos } = useColeccion<DatosBasicosIntegranteDoc>(
     'datos_basicos_integrante',
     {
@@ -41,8 +48,30 @@ export function AutorizacionPage({ tipo }: PropsTipo) {
       <div className="max-w-4xl mx-auto px-6 py-12 text-[13px] text-text-muted">Cargando…</div>
     );
 
-  const empresa = empresaConsentimiento(datos?.empresa_codigo);
+  const empresa = empresaConsentimiento(datos?.empresa_codigo ?? vacante?.empresa_codigo);
   const titulo = tituloConsentimiento(tipo);
+
+  // Auto-relleno: usa la ficha de datos básicos si existe; si no, lo que la
+  // plataforma ya tiene del candidato (registro / postulación).
+  const nombre =
+    [datos?.nombres, datos?.apellidos].filter(Boolean).join(' ') ||
+    [candidato?.nombres, candidato?.apellidos].filter(Boolean).join(' ') ||
+    postulacion.candidato_nombre ||
+    '';
+  const cedula = datos?.documento_numero || candidato?.documento_numero || '';
+  const celular = datos?.celular || candidato?.telefono || postulacion.candidato_telefono || '';
+  const correo =
+    datos?.correo_electronico || candidato?.email || postulacion.candidato_email || '';
+  const ciudad = datos?.documento_ciudad_expedicion ?? '';
+
+  // Firma digital: si el candidato aceptó/firmó este consentimiento en el portal.
+  const p = postulacion as unknown as Record<string, unknown>;
+  const campo = tipo === 'datos' ? 'consentimiento_datos' : 'consentimiento_imagen';
+  const aceptadoEn = p[`${campo}_aceptado_en`] as { toDate?: () => Date } | null | undefined;
+  const firmaImagenUrl = String(p[`${campo}_firma_imagen_url`] ?? '');
+  const firmaPdfUrl = String(p[`${campo}_firma_url`] ?? '');
+  const firmado = !!aceptadoEn;
+  const fechaFirma = aceptadoEn?.toDate ? formatearFecha(aceptadoEn.toDate()) : '';
 
   function imprimir() {
     window.print();
@@ -111,50 +140,76 @@ export function AutorizacionPage({ tipo }: PropsTipo) {
         <CuerpoConsentimiento
           tipo={tipo}
           empresa={empresa}
-          nombreCompleto={[datos?.nombres, datos?.apellidos].filter(Boolean).join(' ')}
-          documentoNumero={datos?.documento_numero ?? ''}
-          documentoCiudad={datos?.documento_ciudad_expedicion ?? ''}
+          nombreCompleto={nombre}
+          documentoNumero={cedula}
+          documentoCiudad={ciudad}
         />
 
-        {/* Bloque de firma */}
+        {/* Bloque de firma · auto-rellenado + firma digital del portal */}
         <div className="mt-12 grid grid-cols-2 gap-8">
           <div>
             <p className="text-[11px] text-text-body font-bold uppercase tracking-wide mb-1">
               Nombre completo
             </p>
-            <p className="border-b border-text-strong pb-1 min-h-[1.5em]">
-              {[datos?.nombres, datos?.apellidos].filter(Boolean).join(' ') || ' '}
-            </p>
+            <p className="border-b border-text-strong pb-1 min-h-[1.5em]">{nombre || ' '}</p>
           </div>
           <div>
             <p className="text-[11px] text-text-body font-bold uppercase tracking-wide mb-1">
               Identificación
             </p>
-            <p className="border-b border-text-strong pb-1 min-h-[1.5em] font-mono">
-              {datos?.documento_numero || ' '}
-            </p>
+            <p className="border-b border-text-strong pb-1 min-h-[1.5em] font-mono">{cedula || ' '}</p>
           </div>
           <div>
             <p className="text-[11px] text-text-body font-bold uppercase tracking-wide mb-1">
               Celular
             </p>
-            <p className="border-b border-text-strong pb-1 min-h-[1.5em] font-mono">
-              {datos?.celular || ' '}
-            </p>
+            <p className="border-b border-text-strong pb-1 min-h-[1.5em] font-mono">{celular || ' '}</p>
           </div>
           <div>
             <p className="text-[11px] text-text-body font-bold uppercase tracking-wide mb-1">
               Correo
             </p>
-            <p className="border-b border-text-strong pb-1 min-h-[1.5em]">
-              {datos?.correo_electronico || ' '}
-            </p>
+            <p className="border-b border-text-strong pb-1 min-h-[1.5em]">{correo || ' '}</p>
           </div>
           <div className="col-span-2 mt-8">
-            <div className="border-b border-text-strong mb-1 min-h-[3em]"></div>
-            <p className="text-[11px] text-text-body font-bold uppercase tracking-wide">
-              Firma del integrante
-            </p>
+            {firmado ? (
+              <>
+                {firmaImagenUrl && (
+                  <img
+                    src={firmaImagenUrl}
+                    alt="Firma del integrante"
+                    className="max-h-24 object-contain mb-1"
+                  />
+                )}
+                <div className="border-b border-text-strong mb-1"></div>
+                <p className="text-[11px] text-text-body font-bold uppercase tracking-wide">
+                  Firma del integrante
+                </p>
+                <p className="text-[11px] text-text-muted mt-1">
+                  ✓ Firmado digitalmente por el candidato{fechaFirma ? ` el ${fechaFirma}` : ''}
+                  {firmaPdfUrl && (
+                    <>
+                      {' · '}
+                      <a
+                        href={firmaPdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline print:no-underline"
+                      >
+                        ver constancia (PDF)
+                      </a>
+                    </>
+                  )}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="border-b border-text-strong mb-1 min-h-[3em]"></div>
+                <p className="text-[11px] text-text-body font-bold uppercase tracking-wide">
+                  Firma del integrante
+                </p>
+              </>
+            )}
           </div>
         </div>
 

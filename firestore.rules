@@ -14,6 +14,17 @@ service cloud.firestore {
     function isApoyo() { return signedIn() && rol() == 'apoyo'; }
     function staff() { return isAdmin() || isCoord() || isGH(); }
 
+    // Registro público (landing) → el candidato entra con Auth anónima. Para ese
+    // origen exigimos consentimiento de tratamiento de datos (Ley 1581 / Habeas
+    // Data); los flujos internos (no anónimos) no se ven afectados.
+    function esAnonimo() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+    function aceptoHabeasData() {
+      return 'habeas_data' in request.resource.data
+        && request.resource.data.habeas_data.aceptado == true;
+    }
+
     function nuevoConAuditoria() {
       return request.resource.data.creado_por == request.auth.uid
         && request.resource.data.actualizado_por == request.auth.uid;
@@ -89,10 +100,19 @@ service cloud.firestore {
       // Para crear postulación sí se requiere signedIn() (anonymous o
       // identificado), pero LEER la vacante no.
       allow get: if true;
-      // list NO tiene resource; cualquier autenticado puede listar,
-      // el cliente debe filtrar (ej. lider por lider_uid).
-      // Cada doc individual sigue pasando por allow get.
-      allow list: if signedIn();
+      // Confidencialidad por propiedad (Eloy, lanzamiento 2026-07-01):
+      // un `lider` SOLO puede listar SUS vacantes (lider_uid == su uid) o el
+      // tablero de vacantes abiertas (publicada / en_proceso, que ya son
+      // visibles internamente). Cualquier otra consulta de un líder (listar
+      // todo, o filtrar por el uid de OTRO líder) queda negada por la base.
+      // El resto de roles (admin, coordinador, gh, analista, apoyo) NO se
+      // tocan: siguen viendo todo como hasta ahora.
+      allow list: if signedIn() && (
+        !isLider()
+        || resource.data.lider_uid == request.auth.uid
+        || resource.data.estado == 'publicada'
+        || resource.data.estado == 'en_proceso'
+      );
       // El aval ya no es obligatorio al crear — el líder puede mandar la
       // solicitud sin él y queda marcada con aval_pendiente=true para que
       // GH/Coord la gestione después. Política tomada 2026-05-26.
@@ -124,15 +144,15 @@ service cloud.firestore {
     }
     match /candidatos/{id} {
       allow read: if signedIn();
-      // Permite que candidatos anónimos creen su registro desde la landing.
-      allow create: if signedIn();
+      // Landing pública (anónimo) DEBE aceptar Habeas Data; flujos internos igual.
+      allow create: if signedIn() && (!esAnonimo() || aceptoHabeasData());
       allow update: if staff() || isAnalista();
       allow delete: if false;
     }
     match /postulaciones/{id} {
       allow read: if signedIn();
-      // Permite postulación desde landing pública.
-      allow create: if signedIn();
+      // Landing pública (anónimo) DEBE aceptar Habeas Data; flujos internos igual.
+      allow create: if signedIn() && (!esAnonimo() || aceptoHabeasData());
       allow update: if staff() || isAnalista();
       allow delete: if false;
     }

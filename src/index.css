@@ -101,6 +101,14 @@
 }
 
 @layer utilities {
+  /* Oculta la barra de scroll (p. ej. la fila de pestañas del portal en móvil). */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
   .animate-pulse-ring {
     animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }

@@ -10,6 +10,7 @@ const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
 const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**
  * onEntrevistaCreate · pasos 8 / 13.
@@ -54,6 +55,11 @@ export const onEntrevistaCreate = onDocumentCreated(
     const email = String(post.candidato_email ?? '').trim();
     const nombreCandidato = String(post.candidato_nombre ?? '').trim() || 'candidato/a';
     const cargo = String(post.cargo_nombre ?? 'la vacante').trim();
+    const portalToken = String(post.portal_token ?? '').trim();
+    const bloquePortal = portalToken
+      ? `<p style="font-size:13px; color:#555;">También puedes seguir tu proceso y ver esta citación en tu portal:
+           <a href="${APP_URL}/portal/${portalToken}" style="color:#be1e0d;">revisa tu portal</a>.</p>`
+      : '';
 
     const tipo = String(ent.tipo ?? 'analista'); // analista | lider
     const modalidad = String(ent.modalidad ?? 'virtual'); // virtual | presencial | telefonica
@@ -134,6 +140,7 @@ export const onEntrevistaCreate = onDocumentCreated(
           </a>
         </p>
         <p style="font-size:13px; color:#555;">Si necesitas reprogramar, responde a este correo.</p>
+        ${bloquePortal}
         <p style="font-size:13px; color:#555;">¡Te esperamos!<br>Equipo de Atracción · Organización Equitel</p>
       </div>
     `.trim();

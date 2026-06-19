@@ -4,6 +4,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { enviarConGmail } from './enviarConGmail';
+import { envolverMarca } from './plantillasMensajes';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -13,12 +14,13 @@ const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
 /**
  * enviarAgradecimientoCandidato · D.3 (lote GH 16-jun).
  *
- * Manda al candidato descartado un correo de agradecimiento. El TEXTO lo redacta
- * (y edita) el analista en la UI — esta callable solo lo envía. Importante: el
- * mensaje NO debe mencionar la causa del descarte (crítico en descartes por
- * exámenes médicos); de eso se encarga la plantilla editable del frontend.
+ * Manda al candidato descartado un correo de agradecimiento (Plantilla 1, con la
+ * pieza de marca de Equitel). El TEXTO lo redacta (y edita) el analista en la UI —
+ * esta callable solo lo envía. Importante: el mensaje NO debe mencionar la causa
+ * del descarte (crítico en descartes por exámenes médicos); de eso se encarga la
+ * plantilla editable del frontend.
  *
- * Reply-to apunta al analista del proceso.
+ * Reply-to apunta al analista del proceso. Sale por la fachada provider-agnostic.
  */
 export const enviarAgradecimientoCandidato = onCall(
   { region: 'us-central1', secrets: [GMAIL_USER, GMAIL_APP_PASSWORD] },
@@ -61,11 +63,12 @@ export const enviarAgradecimientoCandidato = onCall(
       }
     }
 
-    const html = `
-      <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px; font-size:14px; line-height:1.55;">
-        ${escapeHtml(mensaje).replace(/\n/g, '<br>')}
-      </div>
-    `.trim();
+    // El mensaje editable del analista es el cuerpo; lo envolvemos en la pieza de
+    // marca "Buen día" de Equitel (Plantilla 1).
+    const cuerpo = `<div style="white-space:normal;">${escapeHtml(mensaje).replace(/\n/g, '<br>')}</div>`;
+    const html = envolverMarca(cuerpo, {
+      preheader: 'Gracias por tu participación en nuestro proceso.',
+    });
 
     try {
       await enviarConGmail({
@@ -81,7 +84,12 @@ export const enviarAgradecimientoCandidato = onCall(
       throw new HttpsError('internal', 'No se pudo enviar el correo. Reintenta en un momento.');
     }
 
-    await postRef.update({ agradecimiento_enviado_en: FieldValue.serverTimestamp() });
+    // Persistir el texto para que el portal lo muestre en estado finalizado
+    // (F6). NUNCA se expone la causa del descarte; solo este mensaje amable.
+    await postRef.update({
+      agradecimiento_enviado_en: FieldValue.serverTimestamp(),
+      mensaje_portal_descarte: mensaje,
+    });
     await db.collection('eventos').add({
       tipo: 'agradecimiento_candidato_enviado',
       postulacion_id: postulacionId,

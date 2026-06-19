@@ -43,8 +43,12 @@ export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';
 export { enviarListadoDocumentos } from './documentos/enviarListadoDocumentos';
 // Aviso a GH cuando la carpeta queda completa para validar (C.1, 2026-06-16).
 export { notificarCarpetaListaValidar } from './documentos/notificarCarpetaListaValidar';
+// Auto-armado de la carpeta cuando se completan los obligatorios (Portal F5, 2026-06-17).
+export { onCarpetaCompletaCheck } from './documentos/onCarpetaCompletaCheck';
 // Correo de agradecimiento al candidato descartado (D.3, 2026-06-16).
 export { enviarAgradecimientoCandidato } from './notificaciones/enviarAgradecimientoCandidato';
+// Borrador de mensaje al candidato con IA enchufable (categoría segura, confidencialidad).
+export { maquillarMensajeIA } from './notificaciones/maquillarMensaje';
 // Correos de plan de conexión/dotación al marcar contratado (F.2, 2026-06-16).
 export { onCandidatoContratado } from './tickets/onCandidatoContratado';
 
@@ -53,6 +57,8 @@ export { enviarPortalCandidato } from './portal/enviarPortalCandidato';
 export { resolverPortalToken } from './portal/resolverPortalToken';
 export { registrarConsentimientoPortal } from './portal/registrarConsentimientoPortal';
 export { registrarDocumentoPortal } from './portal/registrarDocumentoPortal';
+// Subida del candidato a un slot de su carpeta real documentos_candidato (Portal F4, 2026-06-17).
+export { registrarDocumentoCarpetaPortal } from './portal/registrarDocumentoCarpetaPortal';
 // Aviso al candidato (correo con link al portal) cuando su proceso avanza (D.1, 2026-06-16).
 export { onPostulacionAvance } from './portal/onPostulacionAvance';
 // Revocar el portal del candidato (cierra el bearer-token, 2026-06-16).

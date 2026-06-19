@@ -9,6 +9,7 @@ const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
 const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**
  * enviarOrdenExamenCandidato · paso 16.
@@ -41,12 +42,14 @@ export const enviarOrdenExamenCandidato = onCall(
     const postId = String(ex.postulacion_id ?? '');
     let email = '';
     let nombreCandidato = String(ex.candidato_nombre ?? '').trim();
+    let portalToken = '';
     if (postId) {
       const p = await db.collection('postulaciones').doc(postId).get();
       if (p.exists) {
         const pd = p.data() ?? {};
         email = String(pd.candidato_email ?? '').trim();
         if (!nombreCandidato) nombreCandidato = String(pd.candidato_nombre ?? '').trim();
+        portalToken = String(pd.portal_token ?? '').trim();
       }
     }
     if (!email) {
@@ -103,6 +106,12 @@ export const enviarOrdenExamenCandidato = onCall(
             : ''
         }
         <p style="font-size:13px; color:#555;">Cualquier duda, responde a este correo.</p>
+        ${
+          portalToken
+            ? `<p style="font-size:13px; color:#555;">También puedes seguir tu proceso en tu portal:
+                 <a href="${APP_URL}/portal/${portalToken}" style="color:#be1e0d;">revisa tu portal</a>.</p>`
+            : ''
+        }
         <p style="font-size:13px; color:#555;">Gracias,<br>Equipo de Atracción · Organización Equitel</p>
       </div>
     `.trim();

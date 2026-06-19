@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import {
   Check,
@@ -6,16 +7,20 @@ import {
   ChevronDown,
   IdCard,
   Plus,
+  Printer,
   Trash2,
 } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
+import { useDoc } from '../../hooks/useDoc';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
 import { useEmpresas } from '../../hooks/useCatalogos';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { FirmaDigitalBanner } from '../../components/firma/FirmaDigitalBanner';
 import { cn } from '../../utils/cn';
 import type {
+  CandidatoDoc,
   DatosBasicosIntegranteDoc,
   EstadoCivil,
   EstadoDatosBasicos,
@@ -72,6 +77,7 @@ export function DatosBasicosTab({ postulacion }: Props) {
     filtros: [['postulacion_id', '==', postulacion.id]],
     limit: 1,
   });
+  const { doc: candidato } = useDoc<CandidatoDoc>('candidatos', postulacion.candidato_id ?? null);
   const { crear, actualizar } = useMutacion();
   const { user, perfil, rol } = useAuth();
   const { empresas } = useEmpresas();
@@ -101,11 +107,27 @@ export function DatosBasicosTab({ postulacion }: Props) {
           </div>
         </div>
         {dato && (
-          <Pill tono={ESTADO_TONO[dato.estado]} dot>
-            {ESTADO_LABEL[dato.estado]}
-          </Pill>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/postulaciones/${postulacion.id}/datos-basicos-pdf`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-text-strong hover:bg-slate-50"
+            >
+              <Printer size={12} strokeWidth={1.75} />
+              Imprimir / PDF
+            </Link>
+            <Pill tono={ESTADO_TONO[dato.estado]} dot>
+              {ESTADO_LABEL[dato.estado]}
+            </Pill>
+          </div>
         )}
       </div>
+
+      <FirmaDigitalBanner
+        titulo="Firma del candidato (portal)"
+        imagenUrl={(postulacion as unknown as Record<string, string | undefined>).firma_datos_basicos_imagen_url}
+        fecha={(postulacion as unknown as Record<string, Timestamp | undefined>).firma_datos_basicos_en}
+        pdfUrl={(postulacion as unknown as Record<string, string | undefined>).firma_datos_basicos_url}
+      />
 
       {err && (
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
@@ -116,6 +138,7 @@ export function DatosBasicosTab({ postulacion }: Props) {
       {!dato && (
         <CrearDatosBasicos
           postulacion={postulacion}
+          candidato={candidato}
           empresas={empresas}
           uid={user?.uid ?? ''}
           onError={(m) => setErr(m)}
@@ -161,11 +184,13 @@ export function DatosBasicosTab({ postulacion }: Props) {
 
 function CrearDatosBasicos({
   postulacion,
+  candidato,
   empresas,
   onError,
   crear,
 }: {
   postulacion: PostulacionDoc;
+  candidato: CandidatoDoc | null;
   empresas: { id: string; codigo: string; nombre: string }[];
   uid: string;
   onError: (msg: string) => void;
@@ -181,9 +206,15 @@ function CrearDatosBasicos({
     try {
       const empresa = empresas.find((e) => e.codigo === empresaCodigo);
       const nombreCompleto = postulacion.candidato_nombre ?? '';
+      // Pre-llenado: usa el registro del candidato (más preciso) y cae al
+      // spliteo del nombre completo solo si el candidato no tiene nombres/apellidos.
       const partes = nombreCompleto.trim().split(/\s+/);
-      const nombres = partes.slice(0, Math.max(1, Math.floor(partes.length / 2))).join(' ');
-      const apellidos = partes.slice(Math.max(1, Math.floor(partes.length / 2))).join(' ');
+      const nombres =
+        candidato?.nombres?.trim() ||
+        partes.slice(0, Math.max(1, Math.floor(partes.length / 2))).join(' ');
+      const apellidos =
+        candidato?.apellidos?.trim() ||
+        partes.slice(Math.max(1, Math.floor(partes.length / 2))).join(' ');
 
       await crear('datos_basicos_integrante', {
         postulacion_id: postulacion.id,
@@ -195,15 +226,15 @@ function CrearDatosBasicos({
         empresa_nombre: empresa?.nombre ?? '',
         nombres,
         apellidos,
-        documento_tipo: 'CC',
-        documento_numero: '',
+        documento_tipo: candidato?.documento_tipo || 'CC',
+        documento_numero: candidato?.documento_numero ?? '',
         documento_ciudad_expedicion: '',
         documento_dpto_expedicion: '',
         direccion: '',
         barrio: '',
-        ciudad_domicilio: '',
+        ciudad_domicilio: candidato?.ciudad_residencia ?? '',
         telefono_fijo: '',
-        celular: postulacion.candidato_telefono ?? '',
+        celular: postulacion.candidato_telefono ?? candidato?.telefono ?? '',
         fecha_nacimiento: null,
         lugar_nacimiento: '',
         estado_civil: null,

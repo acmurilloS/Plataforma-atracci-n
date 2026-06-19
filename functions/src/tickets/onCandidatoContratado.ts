@@ -4,6 +4,7 @@ import { logger } from 'firebase-functions/v2';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { envolverMarca, escapeHtml, interpolar, leerPlantillas } from '../notificaciones/plantillasMensajes';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -48,18 +49,52 @@ export const onCandidatoContratado = onDocumentUpdated(
     const nombre = String(after.candidato_nombre ?? 'el candidato').trim();
     const cargo = String(after.cargo_nombre ?? '').trim();
     const consecutivo = String(after.vacante_consecutivo ?? '').trim();
+    const correo = String(after.candidato_email ?? '').trim();
+    const telefono = String(after.candidato_telefono ?? '').trim();
 
+    // Datos de la vacante (empresa, sede, unidad) + analista para la Plantilla 3.
     let empresa = '';
     let sede = '';
+    let unidad = '';
+    let analistaUid = '';
     try {
       if (after.vacante_id) {
         const v = await db.collection('vacantes').doc(String(after.vacante_id)).get();
         const vd = v.data() ?? {};
         empresa = String(vd.empresa_nombre ?? '').trim();
         sede = String(vd.sede_nombre ?? '').trim();
+        unidad = String(vd.unidad_nombre ?? '').trim();
+        analistaUid = String(vd.analista_uid ?? '').trim();
       }
     } catch (e) {
       logger.warn('[contratado] no se pudo leer la vacante', { postId, e: String(e) });
+    }
+
+    // Cédula: vive en candidatos/{id}.
+    let cedula = '';
+    try {
+      if (after.candidato_id) {
+        const c = await db.collection('candidatos').doc(String(after.candidato_id)).get();
+        cedula = String(c.data()?.documento_numero ?? '').trim();
+      }
+    } catch (e) {
+      logger.warn('[contratado] no se pudo leer la cédula', { postId, e: String(e) });
+    }
+
+    // Nombre del analista encargado (para "solicitud realizada por").
+    let analistaNombre = '';
+    let analistaEmail = '';
+    try {
+      if (analistaUid) {
+        const u = await db.collection('usuarios').doc(analistaUid).get();
+        if (u.exists) {
+          const ud = u.data() ?? {};
+          analistaNombre = `${String(ud.nombre ?? '').trim()} ${String(ud.apellido ?? '').trim()}`.trim();
+          analistaEmail = String(ud.email ?? '').trim();
+        }
+      }
+    } catch (e) {
+      logger.warn('[contratado] no se pudo leer el analista', { postId, e: String(e) });
     }
 
     // Coordinación (Karen).
@@ -76,33 +111,31 @@ export const onCandidatoContratado = onDocumentUpdated(
     }
     const coordEmails = coords.map((c) => c.email).filter(Boolean);
 
-    const datos = `
-      <table style="border-collapse:collapse; font-size:14px; margin:8px 0 14px;">
-        <tr><td style="padding:2px 10px 2px 0;font-weight:600;">Integrante:</td><td>${escapeHtml(nombre)}</td></tr>
-        <tr><td style="padding:2px 10px 2px 0;font-weight:600;">Cargo:</td><td>${escapeHtml(cargo || '—')}</td></tr>
-        <tr><td style="padding:2px 10px 2px 0;font-weight:600;">Empresa / Sede:</td><td>${escapeHtml(
-          [empresa, sede].filter(Boolean).join(' / ') || '—',
-        )}</td></tr>
-        <tr><td style="padding:2px 10px 2px 0;font-weight:600;">Consecutivo:</td><td>${escapeHtml(consecutivo || '—')}</td></tr>
-      </table>`;
-
-    // 1) Plan de conexión de talentos → José + coordinación.
+    // 1) Plan de conexión y talentos (Plantilla 3) → José + coordinación (Karen).
+    const { plantillas, footerEmpresas } = await leerPlantillas();
+    const tpl = plantillas.conexion_talentos;
+    const guion = '—';
+    const asuntoVars = { nombre, consecutivo: consecutivo || guion };
+    const cuerpoVars = {
+      consecutivo: escapeHtml(consecutivo || guion),
+      nombre: escapeHtml(nombre),
+      cedula: escapeHtml(cedula || guion),
+      correo: escapeHtml(correo || guion),
+      cargo: escapeHtml(cargo || guion),
+      unidad: escapeHtml(unidad || guion),
+      empresa: escapeHtml(empresa || guion),
+      telefono: escapeHtml(telefono || guion),
+      sede: escapeHtml(sede || guion),
+      analista: escapeHtml(analistaNombre || guion),
+    };
     try {
       await enviarConGmail({
         from: FROM,
         to: [JOSE_TALENTOS],
         cc: coordEmails.length ? coordEmails : undefined,
-        subject: `Solicitud de plan de conexión de talentos · ${nombre}`,
-        html: `
-          <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
-            <p>Buen día,</p>
-            <p>Se contrató un nuevo integrante. Solicitamos amablemente iniciar el
-               <strong>plan de conexión de talentos</strong> (inducción / universidad corporativa)
-               para:</p>
-            ${datos}
-            <p style="font-size:12px;color:#777;">Enviado automáticamente por la Plataforma de Atracción
-               al marcar la contratación. (Plantilla preliminar — pendiente de confirmar con GH.)</p>
-          </div>`,
+        replyTo: analistaEmail || undefined,
+        subject: interpolar(tpl.asunto, asuntoVars),
+        html: envolverMarca(interpolar(tpl.cuerpo, cuerpoVars), { footerEmpresas }),
       });
     } catch (e) {
       logger.error('[contratado] correo talentos falló', { postId, e: String(e) });
@@ -161,20 +194,27 @@ export const onCandidatoContratado = onDocumentUpdated(
     }
     const dotacionTo = dotacionEmails.length ? dotacionEmails : coordEmails;
     if (aplicaDotacion && dotacionTo.length) {
+      const datosDotacion = `<p style="line-height:1.9;">
+        <strong>Integrante:</strong> ${escapeHtml(nombre)}<br>
+        <strong>Cargo:</strong> ${escapeHtml(cargo || guion)}<br>
+        <strong>Empresa / Sede:</strong> ${escapeHtml([empresa, sede].filter(Boolean).join(' / ') || guion)}<br>
+        <strong>Consecutivo:</strong> ${escapeHtml(consecutivo || guion)}
+      </p>`;
       try {
         await enviarConGmail({
           from: FROM,
           to: dotacionTo,
           cc: dotacionEmails.length && coordEmails.length ? coordEmails : undefined,
+          replyTo: analistaEmail || undefined,
           subject: `Solicitud de dotación · ${nombre}`,
-          html: `
-            <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
-              <p>Buen día,</p>
-              <p>Se contrató un nuevo integrante cuyo cargo requiere <strong>dotación</strong>.
-                 Solicitamos gestionar la dotación (uniforme/EPP) para:</p>
-              ${datos}
-              <p style="font-size:12px;color:#777;">Enviado automáticamente al marcar la contratación.</p>
-            </div>`,
+          html: envolverMarca(
+            `<p>Buen día,</p>
+             <p>Se contrató un nuevo integrante cuyo cargo requiere <strong>dotación</strong>.
+                Solicitamos gestionar la dotación (uniforme/EPP) para:</p>
+             ${datosDotacion}
+             <p style="font-size:12px;color:#777;">Enviado automáticamente al marcar la contratación.</p>`,
+            { footerEmpresas },
+          ),
         });
       } catch (e) {
         logger.error('[contratado] correo dotación falló', { postId, e: String(e) });
@@ -194,11 +234,3 @@ export const onCandidatoContratado = onDocumentUpdated(
     logger.info('[contratado] correos de conexión enviados', { postId, aplicaDotacion });
   },
 );
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}

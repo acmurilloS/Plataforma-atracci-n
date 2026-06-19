@@ -2,10 +2,13 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
   ArrowLeft,
   Calendar,
+  Check,
   ClipboardCheck,
+  Copy,
   FileSignature,
   FileText,
   Mail,
@@ -14,7 +17,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { functions } from '../../lib/firebase';
+import { functions, storage } from '../../lib/firebase';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -101,12 +104,15 @@ export default function PostulacionDetallePage() {
   const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
   const [tab, setTab] = useState<Tab>('pruebas');
   const [enviandoPortal, setEnviandoPortal] = useState(false);
+  const [copiadoEnlace, setCopiadoEnlace] = useState(false);
   const [agradecerAbierto, setAgradecerAbierto] = useState(false);
   const [mensajeAgradecimiento, setMensajeAgradecimiento] = useState('');
   const [enviandoAgradecimiento, setEnviandoAgradecimiento] = useState(false);
+  const [maquillando, setMaquillando] = useState(false);
   const [condicionesAbierto, setCondicionesAbierto] = useState(false);
   const [horario, setHorario] = useState('');
   const [tipoContrato, setTipoContrato] = useState('');
+  const [perfilCargo, setPerfilCargo] = useState<File | null>(null);
   const [enviandoCondiciones, setEnviandoCondiciones] = useState(false);
 
   if (!post)
@@ -116,6 +122,33 @@ export default function PostulacionDetallePage() {
 
   const criticidad = vacante?.criticidad ?? null;
   const tono = ESTADO_TONO[post.estado] ?? 'neutral';
+
+  // Enlace al portal del candidato (mismo origen que la plataforma → sirve en
+  // localhost y en producción). La cédula del candidato es su 2º factor.
+  const enlacePortal =
+    post.portal_token && !post.portal_revocado_en
+      ? `${window.location.origin}/portal/${post.portal_token}`
+      : '';
+
+  async function copiarEnlacePortal() {
+    if (!enlacePortal) return;
+    try {
+      await navigator.clipboard.writeText(enlacePortal);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = enlacePortal;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* sin clipboard */
+      }
+      document.body.removeChild(ta);
+    }
+    setCopiadoEnlace(true);
+    window.setTimeout(() => setCopiadoEnlace(false), 1800);
+  }
 
   /** Envía (o reenvía) al candidato el link a su portal público de consentimientos. */
   async function enviarPortal() {
@@ -180,6 +213,25 @@ export default function PostulacionDetallePage() {
     setAgradecerAbierto(true);
   }
 
+  // Borrador con IA (enchufable). La categoría segura la decide el backend según
+  // el estado; para casos confidenciales devuelve lenguaje neutro para revisar.
+  async function maquillarConIA() {
+    if (!post) return;
+    setMaquillando(true);
+    try {
+      const fn = httpsCallable<
+        { postulacion_id: string },
+        { ok: true; mensaje: string; requiere_aprobacion: boolean; via: string }
+      >(functions, 'maquillarMensajeIA');
+      const res = await fn({ postulacion_id: post.id });
+      setMensajeAgradecimiento(res.data.mensaje);
+    } catch (e) {
+      window.alert('No se pudo generar el borrador: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setMaquillando(false);
+    }
+  }
+
   async function enviarAgradecimiento() {
     if (!post) return;
     setEnviandoAgradecimiento(true);
@@ -203,11 +255,26 @@ export default function PostulacionDetallePage() {
     if (!post) return;
     setEnviandoCondiciones(true);
     try {
+      // Sube el perfil de cargo (PDF) a Storage para adjuntarlo al correo.
+      let perfilCargoUrl = '';
+      if (perfilCargo) {
+        if (perfilCargo.type !== 'application/pdf') throw new Error('El perfil de cargo debe ser PDF.');
+        if (perfilCargo.size > 8 * 1024 * 1024) throw new Error('El PDF supera 8 MB.');
+        const safe = perfilCargo.name.replace(/[^\w.\-]+/g, '_');
+        const r = storageRef(storage, `perfiles_cargo/${post.id}/${Date.now()}_${safe}`);
+        await uploadBytes(r, perfilCargo, { contentType: 'application/pdf' });
+        perfilCargoUrl = await getDownloadURL(r);
+      }
       const fn = httpsCallable<
-        { postulacion_id: string; horario: string; tipo_contrato: string },
+        { postulacion_id: string; horario: string; tipo_contrato: string; perfil_cargo_url?: string },
         { ok: true; email_destinatario: string }
       >(functions, 'enviarCondicionesLaborales');
-      const res = await fn({ postulacion_id: post.id, horario, tipo_contrato: tipoContrato });
+      const res = await fn({
+        postulacion_id: post.id,
+        horario,
+        tipo_contrato: tipoContrato,
+        perfil_cargo_url: perfilCargoUrl || undefined,
+      });
       window.alert(`Condiciones laborales enviadas a ${res.data.email_destinatario}.`);
       setCondicionesAbierto(false);
     } catch (e) {
@@ -277,26 +344,65 @@ export default function PostulacionDetallePage() {
             <FileSignature size={12} strokeWidth={1.75} />
             Acuerdo de imagen y voz
           </Link>
-          <button
-            onClick={enviarPortal}
-            disabled={enviandoPortal}
-            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-[12px] font-medium text-white hover:bg-brand-700 disabled:opacity-60 transition-colors duration-150"
-          >
-            <Mail size={12} strokeWidth={1.75} />
-            {enviandoPortal
-              ? 'Enviando…'
-              : post.portal_enviado_en
-                ? 'Reenviar portal al candidato'
-                : 'Enviar portal al candidato'}
-          </button>
-          {post.portal_token && !post.portal_revocado_en && (
+          {/* Portal del candidato: enlace siempre a la mano (copiar + reenviar). */}
+          <div className="rounded-md border border-slate-200 bg-white p-3 space-y-2 w-full sm:w-72">
+            <p className="text-[11px] uppercase tracking-[0.1em] font-semibold text-text-subtle">
+              Portal del candidato
+            </p>
+            {enlacePortal ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    readOnly
+                    value={enlacePortal}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="flex-1 min-w-0 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-text-body"
+                  />
+                  <button
+                    onClick={copiarEnlacePortal}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[11px] font-medium text-text-strong hover:bg-slate-50"
+                  >
+                    {copiadoEnlace ? (
+                      <Check size={12} strokeWidth={2} className="text-success-700" />
+                    ) : (
+                      <Copy size={12} strokeWidth={1.75} />
+                    )}
+                    {copiadoEnlace ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
+                <p className="text-[10.5px] text-text-subtle leading-[1.45]">
+                  Cópialo y compártelo por WhatsApp u otro medio si hace falta. El candidato entra con
+                  su número de cédula.
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] text-text-muted leading-[1.45]">
+                {post.portal_revocado_en
+                  ? 'El portal está revocado. Reenvíalo para reabrir el enlace.'
+                  : 'Aún no hay enlace. Envíalo al candidato para generarlo (le llega por correo).'}
+              </p>
+            )}
             <button
-              onClick={revocarPortal}
-              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-muted hover:bg-slate-50 transition-colors duration-150"
+              onClick={enviarPortal}
+              disabled={enviandoPortal}
+              className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-[12px] font-medium text-white hover:bg-brand-700 disabled:opacity-60 transition-colors duration-150"
             >
-              Revocar portal
+              <Mail size={12} strokeWidth={1.75} />
+              {enviandoPortal
+                ? 'Enviando…'
+                : post.portal_enviado_en
+                  ? 'Reenviar por correo'
+                  : 'Enviar al candidato'}
             </button>
-          )}
+            {post.portal_token && !post.portal_revocado_en && (
+              <button
+                onClick={revocarPortal}
+                className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-muted hover:bg-slate-50 transition-colors duration-150"
+              >
+                Revocar portal
+              </button>
+            )}
+          </div>
           {esDescartado && (
             <button
               onClick={abrirAgradecimiento}
@@ -348,7 +454,15 @@ export default function PostulacionDetallePage() {
             rows={9}
             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
           />
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end items-center">
+            <button
+              onClick={maquillarConIA}
+              disabled={maquillando}
+              className="mr-auto inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-brand-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              <Sparkles size={12} strokeWidth={1.75} />
+              {maquillando ? 'Generando…' : 'Mejorar con IA'}
+            </button>
             <button
               onClick={() => setAgradecerAbierto(false)}
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50"
@@ -398,6 +512,26 @@ export default function PostulacionDetallePage() {
               />
             </label>
           </div>
+          <label className="block">
+            <span className="block text-[11px] font-medium text-text-muted mb-1">
+              Perfil de cargo (PDF, opcional — se adjunta al correo)
+            </span>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setPerfilCargo(e.target.files?.[0] ?? null)}
+              className="block w-full text-[12px] text-text-muted file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-text-strong hover:file:bg-slate-50"
+            />
+            {perfilCargo && (
+              <span className="mt-1 inline-block text-[11px] text-text-subtle">
+                Adjunto: {perfilCargo.name}
+              </span>
+            )}
+          </label>
+          <p className="text-[11px] text-text-subtle">
+            Se envía al candidato con <strong>copia a coordinación</strong> y responder le llega al
+            analista.
+          </p>
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => setCondicionesAbierto(false)}

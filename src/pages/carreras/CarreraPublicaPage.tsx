@@ -41,6 +41,14 @@ const inputClass = cn(
   'focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40',
 );
 
+// Consentimiento de tratamiento de datos (Ley 1581 / Habeas Data). La versión y
+// la URL de la política son CONFIGURABLES sin deploy desde
+// configuracion_global/consentimiento_registro; esto es solo el respaldo.
+const CONSENT_DEFAULT = {
+  version: 'v1-2026-07',
+  politica_url: 'https://equitel.com.co/tratamiento-de-datos-personales',
+};
+
 export default function CarreraPublicaPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -72,6 +80,24 @@ export default function CarreraPublicaPage() {
   const [cv, setCv] = useState<File | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [errSubmit, setErrSubmit] = useState<string | null>(null);
+
+  // Habeas Data: aceptación obligatoria + política configurable.
+  const [habeasAceptado, setHabeasAceptado] = useState(false);
+  const [consent, setConsent] = useState(CONSENT_DEFAULT);
+  useEffect(() => {
+    getDoc(doc(db, 'configuracion_global', 'consentimiento_registro'))
+      .then((s) => {
+        if (!s.exists()) return;
+        const d = s.data() as Record<string, unknown>;
+        setConsent({
+          version: String(d.version ?? CONSENT_DEFAULT.version),
+          politica_url: String(d.politica_url ?? CONSENT_DEFAULT.politica_url),
+        });
+      })
+      .catch(() => {
+        /* usa el respaldo */
+      });
+  }, []);
 
   // Referencias laborales: el candidato registra 2 contactos de empleos
   // anteriores, o marca "no aplica" si no tiene experiencia.
@@ -207,6 +233,10 @@ export default function CarreraPublicaPage() {
         return;
       }
     }
+    if (!habeasAceptado) {
+      setErrSubmit('Debes autorizar el tratamiento de tus datos personales para continuar.');
+      return;
+    }
     setEnviando(true);
     setErrSubmit(null);
     try {
@@ -222,7 +252,16 @@ export default function CarreraPublicaPage() {
 
       const uid = auth.currentUser.uid;
       const aniosNum = form.anios_experiencia ? parseInt(form.anios_experiencia, 10) : null;
+      // Evidencia auditable del consentimiento Habeas Data: versión + política
+      // aceptada + fecha de servidor + id de sesión (el uid anónimo = creado_por).
+      const habeasData = {
+        aceptado: true,
+        version: consent.version,
+        politica_url: consent.politica_url,
+        aceptado_en: serverTimestamp(),
+      };
       const candRef = await addDoc(collection(db, 'candidatos'), {
+        habeas_data: habeasData,
         nombres: form.nombres,
         apellidos: form.apellidos,
         email: form.email,
@@ -261,6 +300,7 @@ export default function CarreraPublicaPage() {
       const nombreCompleto = `${form.nombres} ${form.apellidos}`.trim();
       const ahora = Timestamp.now();
       const postRef = await addDoc(collection(db, 'postulaciones'), {
+        habeas_data: habeasData,
         candidato_id: candRef.id,
         proceso_id: vacante.proceso_activo_id,
         vacante_id: vacante.id,
@@ -708,20 +748,38 @@ export default function CarreraPublicaPage() {
                 </div>
               )}
 
+              <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={habeasAceptado}
+                  onChange={(e) => setHabeasAceptado(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-[11.5px] text-text-muted leading-[1.5]">
+                  Autorizo de manera libre y expresa el tratamiento de mis datos personales por la
+                  Organización Equitel, conforme a la{' '}
+                  <a
+                    href={consent.politica_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-700 underline hover:text-brand-800"
+                  >
+                    Política de Tratamiento de Datos Personales
+                  </a>{' '}
+                  (Ley 1581 de 2012). <span className="text-danger-600">*</span>
+                </span>
+              </label>
+
               <Button
                 type="submit"
                 variant="brand-primary"
                 size="large"
                 fullWidth
                 loading={enviando}
-                disabled={enviando}
+                disabled={enviando || !habeasAceptado}
               >
                 {enviando ? 'Enviando…' : 'Enviar postulación'}
               </Button>
-              <p className="text-[10px] text-text-subtle text-center leading-[1.5] pt-1">
-                Al enviar aceptas que tus datos sean tratados por Gestión Humana de EQUITEL con
-                fines de selección.
-              </p>
             </form>
           </Card>
         </aside>

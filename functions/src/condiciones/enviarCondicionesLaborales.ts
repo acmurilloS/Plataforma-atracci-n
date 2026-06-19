@@ -3,7 +3,8 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
-import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { enviarConGmail, type AdjuntoCorreo } from '../notificaciones/enviarConGmail';
+import { envolverMarca, escapeHtml, interpolar, leerPlantillas } from '../notificaciones/plantillasMensajes';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -12,14 +13,14 @@ const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**
- * enviarCondicionesLaborales · E (lote GH 16-jun).
+ * enviarCondicionesLaborales · E (lote GH 16-jun) + lote mensajería.
  *
- * Tras aprobar exámenes (candidato en 'en_contratacion'), el analista le envía al
- * candidato sus condiciones laborales: cargo, empresa, unidad, salario, horario y
- * tipo de contrato. El candidato las acepta en su portal (esa aceptación se guarda).
+ * Tras aprobar exámenes (candidato en 'en_contratacion'), el analista le envía sus
+ * condiciones laborales (Plantilla 2). Va al candidato con COPIA a coordinación
+ * (responsables) y reply-to al analista; adjunta el PDF de perfil de cargo si se
+ * proporciona. El candidato confirma/acepta en su portal (se guarda la aceptación).
  *
- * Guarda las condiciones en la postulación para que el portal las muestre.
- * TODO: plantilla/wording final y "perfil del cargo en PDF" pendientes de Karen.
+ * Sale por la fachada provider-agnostic (Gmail hoy / SendGrid mañana).
  */
 export const enviarCondicionesLaborales = onCall(
   { region: 'us-central1', secrets: [GMAIL_USER, GMAIL_APP_PASSWORD] },
@@ -33,6 +34,7 @@ export const enviarCondicionesLaborales = onCall(
     const postulacionId = String(req.data?.postulacion_id ?? '').trim();
     const horario = String(req.data?.horario ?? '').trim().slice(0, 200);
     const tipoContrato = String(req.data?.tipo_contrato ?? '').trim().slice(0, 120);
+    const perfilCargoUrl = String(req.data?.perfil_cargo_url ?? '').trim();
     if (!postulacionId) throw new HttpsError('invalid-argument', 'Falta postulacion_id.');
 
     const postRef = db.collection('postulaciones').doc(postulacionId);
@@ -72,48 +74,70 @@ export const enviarCondicionesLaborales = onCall(
       logger.warn('[condiciones] no se pudo leer la vacante', { postulacionId, e: String(e) });
     }
 
+    // Copia a coordinación (responsables del proceso).
+    let coordEmails: string[] = [];
+    try {
+      const cs = await db
+        .collection('usuarios')
+        .where('rol', '==', 'coordinador')
+        .where('activo', '==', true)
+        .get();
+      coordEmails = cs.docs.map((c) => String(c.data()?.email ?? '').trim()).filter(Boolean);
+    } catch (e) {
+      logger.warn('[condiciones] no se pudieron leer coordinadores', { postulacionId, e: String(e) });
+    }
+
     const primer = String(post.candidato_nombre ?? '').trim().split(' ')[0] || 'candidato/a';
     const portalLink = token ? `${APP_URL}/portal/${token}` : '';
-    const filas: [string, string][] = [
-      ['Cargo', cargo || '—'],
-      ['Empresa', empresa || '—'],
-      ['Unidad', unidad || '—'],
-      ['Sede', sede || '—'],
-      ['Salario', salario || '—'],
-      ['Horario', horario || '—'],
-      ['Tipo de contrato', tipoContrato || '—'],
-    ];
-    const filasHtml = filas
-      .map(
-        ([k, v]) =>
-          `<tr><td style="padding:2px 12px 2px 0;font-weight:600;">${k}:</td><td>${escapeHtml(v)}</td></tr>`,
-      )
-      .join('');
+    const guion = '—';
 
-    const html = `
-      <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
-        <p>Hola ${escapeHtml(primer)},</p>
-        <p>¡Felicitaciones! Estas son las <strong>condiciones laborales</strong> de tu vinculación
-           con Equitel:</p>
-        <table style="border-collapse:collapse; font-size:14px; margin:8px 0 16px;">${filasHtml}</table>
-        ${
-          portalLink
-            ? `<p style="margin:16px 0;"><a href="${escapeAttr(
-                portalLink,
-              )}" style="display:inline-block;background:#be1e0d;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600;">Revisar y aceptar en mi portal →</a></p>`
-            : '<p>Para aceptarlas, ingresa a tu portal del candidato.</p>'
+    // Plantilla 2 (configurable) + botón al portal + envoltorio de marca.
+    const { plantillas, footerEmpresas } = await leerPlantillas();
+    const tpl = plantillas.condiciones;
+    const cuerpoVars = {
+      nombre: escapeHtml(primer),
+      cargo: escapeHtml(cargo || guion),
+      empresa: escapeHtml(empresa || guion),
+      unidad: escapeHtml(unidad || guion),
+      tipo_contrato: escapeHtml(tipoContrato || guion),
+      horario: escapeHtml(horario || guion),
+    };
+    const boton = portalLink
+      ? `<p style="margin:16px 0;"><a href="${escapeAttr(
+          portalLink,
+        )}" style="display:inline-block;background:#be1e0d;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600;">Revisar y aceptar en mi portal →</a></p>`
+      : '';
+    const html = envolverMarca(interpolar(tpl.cuerpo, cuerpoVars) + boton, { footerEmpresas });
+    const subject = interpolar(tpl.asunto, { cargoSufijo: cargo ? ` · ${cargo}` : '' });
+
+    // Adjuntar el PDF de perfil de cargo si se proporcionó (best-effort).
+    const attachments: AdjuntoCorreo[] = [];
+    if (perfilCargoUrl) {
+      try {
+        const r = await fetch(perfilCargoUrl, { signal: AbortSignal.timeout(10000) });
+        if (r.ok) {
+          attachments.push({
+            filename: `Perfil de cargo${cargo ? ` - ${cargo}` : ''}.pdf`,
+            content: Buffer.from(await r.arrayBuffer()),
+            contentType: 'application/pdf',
+          });
+        } else {
+          logger.warn('[condiciones] perfil de cargo no descargable', { status: r.status });
         }
-        <p style="font-size:13px; color:#555;">Cualquier duda, responde a este correo.</p>
-        <p style="font-size:13px; color:#555;">Equipo de Atracción · Organización Equitel</p>
-      </div>`.trim();
+      } catch (e) {
+        logger.warn('[condiciones] no se pudo adjuntar el perfil', { e: String(e) });
+      }
+    }
 
     try {
       await enviarConGmail({
         from: FROM,
         to: [email],
+        cc: coordEmails.length ? coordEmails : undefined,
         replyTo: analistaEmail || undefined,
-        subject: `Tus condiciones laborales · ${cargo} · Equitel`,
+        subject,
         html,
+        attachments: attachments.length ? attachments : undefined,
       });
     } catch (e) {
       logger.error('[condiciones] correo falló', { postulacionId, e: String(e) });
@@ -130,11 +154,14 @@ export const enviarCondicionesLaborales = onCall(
         horario,
         tipo_contrato: tipoContrato,
       },
+      perfil_cargo_url: perfilCargoUrl || null,
       condiciones_enviadas_en: FieldValue.serverTimestamp(),
     });
     await db.collection('eventos').add({
       tipo: 'condiciones_laborales_enviadas',
       postulacion_id: postulacionId,
+      con_adjunto: attachments.length > 0,
+      copia_a: coordEmails.length,
       analista_uid: req.auth.uid,
       creado_en: FieldValue.serverTimestamp(),
       creado_por: req.auth.uid,
@@ -144,9 +171,6 @@ export const enviarCondicionesLaborales = onCall(
   },
 );
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 function escapeAttr(s: string): string {
   return escapeHtml(s).replace(/'/g, '&#39;');
 }

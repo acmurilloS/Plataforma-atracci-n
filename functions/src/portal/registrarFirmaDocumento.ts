@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { urlPortalDocValida } from './urlPortalDocValida';
 
 /**
  * registrarFirmaDocumento · D.2 (slices 2-3, lote GH 16-jun).
@@ -19,6 +20,7 @@ export const registrarFirmaDocumento = onCall({ region: 'us-central1' }, async (
   const token = String(req.data?.token ?? '').trim();
   const tipo = String(req.data?.tipo ?? '').trim();
   const url = String(req.data?.url ?? '').trim();
+  const firmaImagenUrl = String(req.data?.firma_imagen_url ?? '').trim();
 
   if (!token) throw new HttpsError('invalid-argument', 'Falta token.');
   if (!/^[A-Za-z0-9]{8,12}$/.test(token)) throw new HttpsError('not-found', 'Token inválido.');
@@ -27,11 +29,11 @@ export const registrarFirmaDocumento = onCall({ region: 'us-central1' }, async (
   }
   // La URL debe ser de Storage Y del propio path del token (portal_docs/{token}/…),
   // para que un token no pueda registrar el PDF subido bajo otro token.
-  if (
-    !/^https:\/\/firebasestorage\.googleapis\.com\//.test(url) ||
-    !url.includes(`portal_docs%2F${token}%2F`)
-  ) {
+  if (!urlPortalDocValida(url, token)) {
     throw new HttpsError('invalid-argument', 'URL de firma inválida.');
+  }
+  if (firmaImagenUrl && !urlPortalDocValida(firmaImagenUrl, token)) {
+    throw new HttpsError('invalid-argument', 'URL de firma (imagen) inválida.');
   }
 
   const tSnap = await db.collection('portal_candidato_tokens').doc(token).get();
@@ -87,11 +89,14 @@ export const registrarFirmaDocumento = onCall({ region: 'us-central1' }, async (
     }
   }
 
-  // Flag en la postulación para que el portal no vuelva a mostrarlo como sin firmar
-  // (evita re-firmar y duplicar la constancia).
-  await db.collection('postulaciones').doc(postulacionId).update({
+  // Flag + artefactos de la firma en la postulación (para que el portal no
+  // re-muestre como sin firmar y para que el staff vea la firma + el PDF).
+  const updatePost: Record<string, unknown> = {
     [`firma_${tipo}_en`]: FieldValue.serverTimestamp(),
-  });
+    [`firma_${tipo}_url`]: url,
+  };
+  if (firmaImagenUrl) updatePost[`firma_${tipo}_imagen_url`] = firmaImagenUrl;
+  await db.collection('postulaciones').doc(postulacionId).update(updatePost);
 
   await db.collection('eventos').add({
     tipo: 'documento_firmado_portal',

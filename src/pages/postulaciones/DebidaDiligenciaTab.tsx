@@ -1,19 +1,24 @@
 import { useState, useEffect, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import {
   Check,
   CheckCircle2,
   ChevronDown,
+  Printer,
   ShieldCheck,
 } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
+import { useDoc } from '../../hooks/useDoc';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
 import { useEmpresas } from '../../hooks/useCatalogos';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { FirmaDigitalBanner } from '../../components/firma/FirmaDigitalBanner';
 import { cn } from '../../utils/cn';
 import type {
+  CandidatoDoc,
   DebidaDiligenciaDoc,
   EstadoDebidaDiligencia,
   PostulacionDoc,
@@ -70,6 +75,7 @@ export function DebidaDiligenciaTab({ postulacion }: Props) {
     filtros: [['postulacion_id', '==', postulacion.id]],
     limit: 1,
   });
+  const { doc: candidato } = useDoc<CandidatoDoc>('candidatos', postulacion.candidato_id ?? null);
   const { crear, actualizar } = useMutacion();
   const { user, perfil, rol } = useAuth();
   const { empresas } = useEmpresas();
@@ -99,11 +105,27 @@ export function DebidaDiligenciaTab({ postulacion }: Props) {
           </div>
         </div>
         {dd && (
-          <Pill tono={ESTADO_TONO[dd.estado]} dot>
-            {ESTADO_LABEL[dd.estado]}
-          </Pill>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/postulaciones/${postulacion.id}/diligencia-pdf`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-text-strong hover:bg-slate-50"
+            >
+              <Printer size={12} strokeWidth={1.75} />
+              Imprimir / PDF
+            </Link>
+            <Pill tono={ESTADO_TONO[dd.estado]} dot>
+              {ESTADO_LABEL[dd.estado]}
+            </Pill>
+          </div>
         )}
       </div>
+
+      <FirmaDigitalBanner
+        titulo="Firma del candidato (portal)"
+        imagenUrl={(postulacion as unknown as Record<string, string | undefined>).firma_debida_diligencia_imagen_url}
+        fecha={(postulacion as unknown as Record<string, Timestamp | undefined>).firma_debida_diligencia_en}
+        pdfUrl={(postulacion as unknown as Record<string, string | undefined>).firma_debida_diligencia_url}
+      />
 
       {err && (
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
@@ -114,6 +136,7 @@ export function DebidaDiligenciaTab({ postulacion }: Props) {
       {!dd && (
         <CrearDebidaDiligencia
           postulacion={postulacion}
+          candidato={candidato}
           empresas={empresas}
           uid={user?.uid ?? ''}
           onError={(m) => setErr(m)}
@@ -160,11 +183,13 @@ export function DebidaDiligenciaTab({ postulacion }: Props) {
 
 function CrearDebidaDiligencia({
   postulacion,
+  candidato,
   empresas,
   onError,
   crear,
 }: {
   postulacion: PostulacionDoc;
+  candidato: CandidatoDoc | null;
   empresas: { id: string; codigo: string; nombre: string }[];
   uid: string;
   onError: (msg: string) => void;
@@ -181,6 +206,11 @@ function CrearDebidaDiligencia({
     try {
       const empresa = empresas.find((e) => e.codigo === empresaCodigo);
       const ahora = Timestamp.now();
+      // Pre-llenado desde el registro del candidato.
+      const apes = (candidato?.apellidos ?? '').trim().split(/\s+/).filter(Boolean);
+      const primerApellido = apes[0] ?? '';
+      const segundoApellido = apes.slice(1).join(' ');
+      const nombresPre = candidato?.nombres?.trim() || postulacion.candidato_nombre;
       await crear('debida_diligencia', {
         postulacion_id: postulacion.id,
         candidato_id: postulacion.candidato_id,
@@ -190,24 +220,24 @@ function CrearDebidaDiligencia({
         empresa_nombre: empresa?.nombre ?? '',
         tipo_registro: 'nuevo_integrante',
         departamento: '',
-        ciudad_municipio: '',
+        ciudad_municipio: candidato?.ciudad_residencia ?? '',
         fecha_diligenciamiento: ahora,
         fecha_ingreso: null,
         cargo,
         tipo_vinculacion: tipoVinc,
-        primer_apellido: '',
-        segundo_apellido: '',
-        nombres: postulacion.candidato_nombre,
-        identificacion: '',
-        tipo_documento: 'CC',
+        primer_apellido: primerApellido,
+        segundo_apellido: segundoApellido,
+        nombres: nombresPre,
+        identificacion: candidato?.documento_numero ?? '',
+        tipo_documento: ((candidato?.documento_tipo as TipoDocumentoIdentidad) ?? 'CC'),
         tipo_documento_otro: '',
         fecha_nacimiento: null,
-        celular: postulacion.candidato_telefono ?? '',
+        celular: postulacion.candidato_telefono ?? candidato?.telefono ?? '',
         pais: 'Colombia',
         fecha_expedicion_documento: null,
         lugar_expedicion: '',
         direccion_residencial: '',
-        correo_electronico: postulacion.candidato_email ?? '',
+        correo_electronico: postulacion.candidato_email ?? candidato?.email ?? '',
         tiene_familiar_empresa: false,
         nombre_apellidos_familiar: '',
         parentesco_familiar: '',

@@ -47,6 +47,14 @@ function getTransporter(): Transporter {
   return cachedTransporter;
 }
 
+/** Adjunto de correo (p. ej. el PDF del perfil del cargo). */
+export interface AdjuntoCorreo {
+  filename: string;
+  /** Contenido binario del adjunto. */
+  content: Buffer | Uint8Array;
+  contentType?: string;
+}
+
 export interface EnviarCorreoOpts {
   /** Display name + dirección. Ej: 'Plataforma de Atracción Equitel <steve@equitel.com.co>'. */
   from: string;
@@ -60,6 +68,8 @@ export interface EnviarCorreoOpts {
   html: string;
   /** Texto plano de respaldo (opcional). Si no se pasa, se deriva del HTML. */
   text?: string;
+  /** Adjuntos opcionales (p. ej. perfil del cargo en PDF). */
+  attachments?: AdjuntoCorreo[];
 }
 
 export async function enviarConGmail(opts: EnviarCorreoOpts): Promise<void> {
@@ -73,6 +83,14 @@ export async function enviarConGmail(opts: EnviarCorreoOpts): Promise<void> {
       subject: opts.subject,
       html: opts.html,
       text: opts.text,
+      attachments:
+        opts.attachments && opts.attachments.length > 0
+          ? opts.attachments.map((a) => ({
+              filename: a.filename,
+              content: Buffer.isBuffer(a.content) ? a.content : Buffer.from(a.content),
+              contentType: a.contentType,
+            }))
+          : undefined,
     });
   } catch (e) {
     logger.error('[enviarConGmail] fallo en sendMail', {

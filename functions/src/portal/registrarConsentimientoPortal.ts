@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { urlPortalDocValida } from './urlPortalDocValida';
 
 /**
  * registrarConsentimientoPortal · registra que el candidato ACEPTÓ, desde su
@@ -26,12 +27,13 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
 
   // URL del PDF firmado (D.2). Opcional para no romper aceptaciones sin firma.
   const firmaUrl = String(req.data?.firma_url ?? '').trim();
-  if (
-    firmaUrl &&
-    (!/^https:\/\/firebasestorage\.googleapis\.com\//.test(firmaUrl) ||
-      !firmaUrl.includes(`portal_docs%2F${token}%2F`))
-  ) {
+  if (firmaUrl && !urlPortalDocValida(firmaUrl, token)) {
     throw new HttpsError('invalid-argument', 'URL de firma inválida.');
+  }
+  // Imagen (PNG) de la firma, para incrustarla en el documento del staff.
+  const firmaImagenUrl = String(req.data?.firma_imagen_url ?? '').trim();
+  if (firmaImagenUrl && !urlPortalDocValida(firmaImagenUrl, token)) {
+    throw new HttpsError('invalid-argument', 'URL de firma (imagen) inválida.');
   }
 
   const tSnap = await db.collection('portal_candidato_tokens').doc(token).get();
@@ -60,6 +62,7 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
     [`${campo}_evidencia`]: { ip, user_agent: ua, via: 'portal_candidato' },
   };
   if (firmaUrl) update[`${campo}_firma_url`] = firmaUrl;
+  if (firmaImagenUrl) update[`${campo}_firma_imagen_url`] = firmaImagenUrl;
   await db.collection('postulaciones').doc(postulacionId).update(update);
 
   // El PDF firmado queda visible para el analista en la carpeta (DocumentosTab).

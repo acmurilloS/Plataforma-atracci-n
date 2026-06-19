@@ -16,7 +16,7 @@ import { motivoDescarte } from './enums';
  *   también marcas no-de-estado como `decidido_en`, `apto_medico_en`, etc.
  *   `ultima_transicion_estado` es solo conveniencia para queries.
  *
- * Este enum tiene 16 estados (vs 14 del legado) para capturar finos del flujo:
+ * Este enum tiene 18 estados (vs 14 del legado) para capturar finos del flujo:
  *  - pre_entrevistado en pendiente/ok/no_interesado (el candidato puede no responder)
  *  - pruebas en enviadas/completadas (Magneto envía, candidato puede no completar)
  *  - filtrado_no_cumple como descarte temprano (Dolor #5)
@@ -173,6 +173,13 @@ export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
   carpeta_lista_validar_notificada_en?: Timestamp | null;
   /** Correo de agradecimiento al candidato descartado (D.3). */
   agradecimiento_enviado_en?: Timestamp | null;
+  /**
+   * Mensaje respetuoso y editable que ve el candidato en el portal cuando su
+   * proceso finaliza sin continuar. NUNCA revela la causa del descarte
+   * (`motivo_descarte` / `razon_descarte` jamás se exponen al candidato).
+   * Lo persiste `enviarAgradecimientoCandidato` (D.3 / F6).
+   */
+  mensaje_portal_descarte?: string | null;
   /** Condiciones laborales enviadas al candidato y su aceptación en el portal (E). */
   condiciones_laborales?: Record<string, string> | null;
   condiciones_enviadas_en?: Timestamp | null;
