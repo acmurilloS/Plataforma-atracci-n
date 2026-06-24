@@ -133,6 +133,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Bitácora de reprocesos y novedades de la vacante (petición Karen
+    // 2026-06-24). Log append-only: el equipo de Atracción registra, pero
+    // nadie edita ni borra → trazabilidad inmutable de por qué un proceso se
+    // reprocesa o cambia de estado.
+    match /vacante_novedades/{id} {
+      allow read: if signedIn();
+      allow create: if (staff() || isAnalista()) && nuevoConAuditoria();
+      allow update, delete: if false;
+    }
+
     // ===== Procesos y colecciones derivadas =====
     match /procesos/{id} {
       allow read: if signedIn();

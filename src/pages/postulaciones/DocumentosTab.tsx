@@ -12,6 +12,7 @@ import {
   CATALOGO_DOCUMENTOS_CARPETA,
   SECCIONES_LABEL,
   totalObligatorios,
+  type ArchivoCarpeta,
   type DocumentoCandidatoDoc,
   type DocumentoCarpetaCatalogo,
   type EstadoDocumento,
@@ -110,7 +111,10 @@ export function DocumentosTab({ postulacion }: Props) {
   const verificadosObligatorios = useMemo(
     () =>
       CATALOGO_DOCUMENTOS_CARPETA.filter(
-        (cat) => !cat.opcional && docsPorClave.get(cat.clave)?.estado === 'verificado',
+        (cat) =>
+          !cat.opcional &&
+          !cat.gestionado_por_gh &&
+          docsPorClave.get(cat.clave)?.estado === 'verificado',
       ).length,
     [docsPorClave],
   );
@@ -120,10 +124,12 @@ export function DocumentosTab({ postulacion }: Props) {
   // avisar a GH que la carpeta está lista para validar. Backend idempotente.
   const todosCargados = useMemo(
     () =>
-      CATALOGO_DOCUMENTOS_CARPETA.filter((cat) => !cat.opcional).every((cat) => {
-        const e = docsPorClave.get(cat.clave)?.estado;
-        return e === 'entregado' || e === 'verificado' || e === 'no_aplica';
-      }),
+      CATALOGO_DOCUMENTOS_CARPETA.filter((cat) => !cat.opcional && !cat.gestionado_por_gh).every(
+        (cat) => {
+          const e = docsPorClave.get(cat.clave)?.estado;
+          return e === 'entregado' || e === 'verificado' || e === 'no_aplica';
+        },
+      ),
     [docsPorClave],
   );
   useEffect(() => {
@@ -267,9 +273,11 @@ export function DocumentosTab({ postulacion }: Props) {
       {secciones.map((seccion) => {
         const itemsSeccion = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => c.seccion === seccion);
         const verifSeccion = itemsSeccion.filter(
-          (c) => docsPorClave.get(c.clave)?.estado === 'verificado',
+          (c) => !c.gestionado_por_gh && docsPorClave.get(c.clave)?.estado === 'verificado',
         ).length;
-        const obligatoriosSeccion = itemsSeccion.filter((c) => !c.opcional).length;
+        const obligatoriosSeccion = itemsSeccion.filter(
+          (c) => !c.opcional && !c.gestionado_por_gh,
+        ).length;
 
         return (
           <section
@@ -329,6 +337,13 @@ function DocumentoRow({
   onError,
 }: RowProps) {
   const estado: EstadoDocumento = doc?.estado ?? 'pendiente';
+  const esMultiple = !!catalogo.multiple;
+  const esGH = !!catalogo.gestionado_por_gh;
+  // Lista de archivos: usa `archivos` si existe; si no, deriva del archivo único
+  // (compatibilidad con documentos viejos o subidos desde el portal).
+  const archivos: ArchivoCarpeta[] =
+    doc?.archivos ??
+    (doc?.archivo_url ? [{ url: doc.archivo_url, nombre: doc.nombre_archivo ?? 'archivo' }] : []);
   const [subiendo, setSubiendo] = useState(false);
   const [progreso, setProgreso] = useState(0);
 
@@ -361,15 +376,25 @@ function DocumentoRow({
 
       const url = await getDownloadURL(task.snapshot.ref);
       const ahora = Timestamp.now();
+      const nuevo: ArchivoCarpeta = {
+        url,
+        nombre: file.name,
+        tamano_bytes: file.size,
+        subido_en: ahora,
+      };
+      // Múltiple → agrega a la lista; único → reemplaza.
+      const lista = esMultiple ? [...archivos, nuevo] : [nuevo];
+      const comun = {
+        archivos: lista,
+        archivo_url: lista[0].url,
+        nombre_archivo: lista[0].nombre,
+        tamano_bytes: lista[0].tamano_bytes ?? null,
+        estado: 'entregado' as EstadoDocumento,
+        fecha_entrega: ahora,
+      };
 
       if (doc) {
-        await actualizar('documentos_candidato', doc.id, {
-          archivo_url: url,
-          nombre_archivo: file.name,
-          tamano_bytes: file.size,
-          estado: 'entregado',
-          fecha_entrega: ahora,
-        });
+        await actualizar('documentos_candidato', doc.id, comun);
       } else {
         await crear('documentos_candidato', {
           postulacion_id: postulacion.id,
@@ -378,15 +403,11 @@ function DocumentoRow({
           clave: catalogo.clave,
           seccion: catalogo.seccion,
           nombre: catalogo.nombre,
-          estado: 'entregado',
-          archivo_url: url,
-          nombre_archivo: file.name,
-          tamano_bytes: file.size,
           observaciones: '',
-          fecha_entrega: ahora,
           verificado_en: null,
           verificado_por_uid: null,
           verificado_por_nombre: null,
+          ...comun,
         });
       }
     } catch (err) {
@@ -395,6 +416,22 @@ function DocumentoRow({
       setSubiendo(false);
       setProgreso(0);
       e.target.value = '';
+    }
+  }
+
+  async function quitarArchivo(idx: number) {
+    if (!doc) return;
+    const lista = archivos.filter((_, i) => i !== idx);
+    try {
+      await actualizar('documentos_candidato', doc.id, {
+        archivos: lista,
+        archivo_url: lista[0]?.url ?? null,
+        nombre_archivo: lista[0]?.nombre ?? null,
+        tamano_bytes: lista[0]?.tamano_bytes ?? null,
+        estado: lista.length ? 'entregado' : 'pendiente',
+      });
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'No pudimos quitar el archivo.');
     }
   }
 
@@ -483,23 +520,67 @@ function DocumentoRow({
               Si aplica
             </span>
           )}
-          <Pill tono={ESTADO_TONO[estado]} dot>
-            {ESTADO_LABEL[estado]}
-          </Pill>
+          {esMultiple && (
+            <span className="text-[10px] uppercase tracking-[0.06em] text-info-700 font-bold">
+              Varios archivos
+            </span>
+          )}
+          {esGH && estado === 'pendiente' ? (
+            <Pill tono="neutral" dot>
+              Gestión de GH
+            </Pill>
+          ) : (
+            <Pill tono={ESTADO_TONO[estado]} dot>
+              {ESTADO_LABEL[estado]}
+            </Pill>
+          )}
         </div>
+        {esGH && estado === 'pendiente' && (
+          <p className="text-[11px] text-warning-700 mt-1">
+            Omitir — este documento lo gestiona directamente Gestión Humana.
+          </p>
+        )}
         {catalogo.ayuda && (
           <p className="text-[11px] text-text-muted mt-1">{catalogo.ayuda}</p>
         )}
-        {doc?.archivo_url && (
-          <a
-            href={doc.archivo_url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 mt-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
-          >
-            <FileText size={11} strokeWidth={1.5} />
-            {doc.nombre_archivo ?? 'Ver archivo'}
-          </a>
+        {/* Archivo(s) */}
+        {esMultiple ? (
+          archivos.length > 0 && (
+            <ul className="mt-1.5 space-y-1">
+              {archivos.map((a, i) => (
+                <li key={i} className="flex items-center gap-2 text-[12px]">
+                  <a
+                    href={a.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-brand-700 hover:text-brand-800 hover:underline font-medium truncate"
+                  >
+                    <FileText size={11} strokeWidth={1.5} className="shrink-0" />
+                    {a.nombre}
+                  </a>
+                  <button
+                    onClick={() => quitarArchivo(i)}
+                    className="text-text-subtle hover:text-danger-700 shrink-0"
+                    title="Quitar archivo"
+                  >
+                    <X size={12} strokeWidth={1.75} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : (
+          doc?.archivo_url && (
+            <a
+              href={doc.archivo_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 mt-1.5 text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
+            >
+              <FileText size={11} strokeWidth={1.5} />
+              {doc.nombre_archivo ?? 'Ver archivo'}
+            </a>
+          )
         )}
         {doc?.observaciones && (
           <p className="text-[12px] text-text-muted mt-1 italic">"{doc.observaciones}"</p>
@@ -522,14 +603,19 @@ function DocumentoRow({
       </div>
 
       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-        {estado === 'pendiente' && (
+        {(estado === 'pendiente' || esMultiple) && (
           <>
             <label
               htmlFor={inputId}
-              className="cursor-pointer inline-flex items-center gap-1.5 rounded-md bg-brand-600 text-white px-3 py-1.5 text-[12px] font-semibold hover:bg-brand-500 transition-colors duration-150"
+              className={cn(
+                'cursor-pointer inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors duration-150',
+                esGH && estado === 'pendiente'
+                  ? 'border border-slate-300 bg-white text-text-muted hover:bg-slate-50'
+                  : 'bg-brand-600 text-white hover:bg-brand-500',
+              )}
             >
               <Upload size={11} strokeWidth={1.75} />
-              Subir
+              {esMultiple ? 'Agregar archivo' : esGH ? 'Subir (opcional)' : 'Subir'}
             </label>
             <input
               id={inputId}
@@ -538,7 +624,7 @@ function DocumentoRow({
               onChange={subirArchivo}
               accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
             />
-            {catalogo.opcional && (
+            {catalogo.opcional && estado === 'pendiente' && (
               <button
                 onClick={marcarNoAplica}
                 className="text-[11px] text-text-muted hover:text-text-strong hover:underline"
@@ -557,19 +643,23 @@ function DocumentoRow({
               <Check size={11} strokeWidth={1.75} />
               Verificar
             </button>
-            <label
-              htmlFor={inputId}
-              className="cursor-pointer text-[11px] text-text-muted hover:text-text-strong hover:underline"
-            >
-              Reemplazar
-            </label>
-            <input
-              id={inputId}
-              type="file"
-              className="hidden"
-              onChange={subirArchivo}
-              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-            />
+            {!esMultiple && (
+              <>
+                <label
+                  htmlFor={inputId}
+                  className="cursor-pointer text-[11px] text-text-muted hover:text-text-strong hover:underline"
+                >
+                  Reemplazar
+                </label>
+                <input
+                  id={inputId}
+                  type="file"
+                  className="hidden"
+                  onChange={subirArchivo}
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                />
+              </>
+            )}
           </>
         )}
         {estado === 'verificado' && (

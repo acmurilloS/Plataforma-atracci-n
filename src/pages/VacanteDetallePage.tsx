@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { FlujogramaTimeline } from '../components/FlujogramaTimeline';
 import { PoliticaCriticidadBanner } from '../components/vacantes/PoliticaCriticidadBanner';
+import { BitacoraReprocesos } from '../components/vacantes/BitacoraReprocesos';
 import { Card, Pill, type PillTono } from '../components/brand';
 import { useVacantes } from '../hooks/useVacantes';
 import { formatearFecha } from '../utils/fechas';
@@ -236,6 +237,9 @@ export default function VacanteDetallePage() {
           </Card>
         </section>
       )}
+
+      {/* ─── Reprocesos y novedades (bitácora) ───────────────────── */}
+      <BitacoraReprocesos vacante={vac} />
 
       {/* ─── Flujograma ──────────────────────────────────────────── */}
       <section>

@@ -34,6 +34,14 @@ export interface DocumentoCarpetaCatalogo {
    * van en false. Se usa para el correo "envío de listado al candidato".
    */
   aporta_candidato?: boolean;
+  /**
+   * True si lo gestiona directamente Gestión Humana (contrato, afiliaciones).
+   * No lo sube el candidato ni Atracción → NO cuenta como obligatorio de la
+   * carpeta de Atracción; se muestra con la nota "Omitir — gestión de GH".
+   */
+  gestionado_por_gh?: boolean;
+  /** True si el ítem admite VARIOS archivos (p. ej. antecedentes judiciales). */
+  multiple?: boolean;
 }
 
 /**
@@ -55,6 +63,7 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'generales',
     nombre: 'Contrato de Trabajo',
     opcional: false,
+    gestionado_por_gh: true,
   },
   {
     clave: 'solicitud_integrantes',
@@ -69,18 +78,21 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'seguridad_social',
     nombre: 'Afiliación ARL',
     opcional: false,
+    gestionado_por_gh: true,
   },
   {
     clave: 'afiliacion_eps',
     seccion: 'seguridad_social',
     nombre: 'Afiliación EPS',
     opcional: false,
+    gestionado_por_gh: true,
   },
   {
     clave: 'afiliacion_caja',
     seccion: 'seguridad_social',
     nombre: 'Afiliación Caja de Compensación',
     opcional: false,
+    gestionado_por_gh: true,
   },
   {
     clave: 'certificacion_eps',
@@ -118,9 +130,11 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
   {
     clave: 'certificado_judicial',
     seccion: 'hoja_vida',
-    nombre: 'Fotocopia Certificado Judicial Vigente (1)',
+    nombre: 'Certificado Judicial Vigente y antecedentes',
     opcional: false,
     aporta_candidato: true,
+    multiple: true,
+    ayuda: 'Admite varios archivos: antecedentes de Policía e Informa Colombia y, si hubo novedad, el concepto de Jurídica (trazabilidad de la validación).',
   },
   {
     clave: 'certificados_laborales',
@@ -141,6 +155,8 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'hoja_vida',
     nombre: 'Certificado médico de aptitud laboral',
     opcional: false,
+    multiple: true,
+    ayuda: 'Admite varios archivos: el concepto de aptitud y, si el candidato ingresa con recomendaciones médicas, el documento firmado de aceptación.',
   },
   {
     clave: 'hoja_vida',
@@ -161,6 +177,14 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'hoja_vida',
     nombre: 'Informe de Evaluación Psicológica',
     opcional: false,
+  },
+  {
+    clave: 'resultado_pruebas_psicologicas',
+    seccion: 'hoja_vida',
+    nombre: 'Resultado de pruebas psicológicas del candidato',
+    opcional: false,
+    multiple: true,
+    ayuda: 'Admite varios archivos: los resultados de las pruebas psicológicas aplicadas al candidato.',
   },
   {
     clave: 'pruebas_tecnicas',
@@ -184,12 +208,23 @@ export const SECCIONES_LABEL: Record<SeccionDocumento, string> = {
   hoja_vida: 'Documentos Hoja de Vida',
 };
 
-/** Helper: cuenta cuántos del checklist son obligatorios (no opcionales). */
+/**
+ * Helper: cuántos del checklist son obligatorios para ATRACCIÓN (no opcionales
+ * y no gestionados por GH). Los de GH no bloquean la completitud de la carpeta.
+ */
 export function totalObligatorios(): number {
-  return CATALOGO_DOCUMENTOS_CARPETA.filter((d) => !d.opcional).length;
+  return CATALOGO_DOCUMENTOS_CARPETA.filter((d) => !d.opcional && !d.gestionado_por_gh).length;
 }
 
 // ─── Documento individual del candidato (un row por ítem del checklist) ───
+
+/** Un archivo dentro de un ítem que admite varios (catalogo.multiple). */
+export interface ArchivoCarpeta {
+  url: string;
+  nombre: string;
+  tamano_bytes?: number | null;
+  subido_en?: Timestamp | null;
+}
 
 export interface DocumentoCandidatoDoc extends CamposAuditoria {
   id: string;
@@ -204,10 +239,14 @@ export interface DocumentoCandidatoDoc extends CamposAuditoria {
 
   estado: EstadoDocumento;
 
-  // Archivo subido (cuando estado != 'pendiente' y != 'no_aplica')
+  // Archivo subido (cuando estado != 'pendiente' y != 'no_aplica').
+  // En ítems `multiple`, archivo_url/nombre_archivo apuntan al PRIMER archivo y
+  // la lista completa vive en `archivos`.
   archivo_url: string | null;
   nombre_archivo: string | null;
   tamano_bytes: number | null;
+  /** Lista de archivos cuando el ítem admite varios (catalogo.multiple). */
+  archivos?: ArchivoCarpeta[];
 
   observaciones: string;
 

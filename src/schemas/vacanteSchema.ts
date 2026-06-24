@@ -88,6 +88,12 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
   id: string;
   consecutivo: string;
   estado: z.infer<typeof estadoVacante>;
+  /**
+   * Estado que tenía la vacante justo antes de suspenderse (estado = 'pausada').
+   * Lo usa la bitácora de reprocesos para devolverla a su estado previo al
+   * reactivarla. null cuando no está suspendida.
+   */
+  estado_previo_pausa?: z.infer<typeof estadoVacante> | null;
   fecha_entrevista_propuesta: Timestamp;
   fecha_entrevista_pactada: Timestamp | null;
   aval_aprobado_por: string | null;
@@ -109,6 +115,15 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
   recordatorio_48h_enviado_en: Timestamp | null;
   recordatorio_24h_enviado_en: Timestamp | null;
   recordatorio_expirado_en: Timestamp | null;
+  /**
+   * Aviso automático a Cultura y Desarrollo (Diego) para validar las condiciones
+   * de la solicitud. Lo escribe el trigger onVacanteCreate (Admin SDK). null
+   * mientras no se haya enviado.
+   */
+  correo_cultura_enviado_en?: Timestamp | null;
+  correo_cultura_destinatario?: string | null;
+  correo_cultura_error?: string | null;
+  correo_cultura_error_en?: Timestamp | null;
 }
 
 export { estadoVacante };
