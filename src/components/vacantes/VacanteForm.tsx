@@ -543,13 +543,14 @@ export function VacanteForm() {
           {errors.aval_url && (
             <p className="text-[11px] text-danger-700">{errors.aval_url.message}</p>
           )}
-          {/* El envío requiere el aval adjunto: el botón se habilita al subir el PDF. */}
+          {/* Aval opcional al crear: si no lo tiene, igual puede enviar (aval_pendiente). */}
           {!avalUrl && (
             <div className="mt-3 rounded-md border border-warning-500/30 bg-warning-50/40 px-3.5 py-2.5">
               <p className="text-[12px] text-warning-700 leading-[1.55]">
-                <span className="font-semibold">Adjunta el aval.</span> Para enviar la solicitud
-                necesitas subir el PDF del aval firmado. Mientras no lo subas, el botón “Enviar
-                solicitud” permanece deshabilitado.
+                <span className="font-semibold">Aval pendiente.</span> Si aún no tienes el aval
+                firmado, puedes enviar la solicitud igual — quedará marcada como{' '}
+                <span className="font-medium">pendiente de aval</span> y GH/coordinación lo gestiona
+                en el paso 2. Tu vacante no se bloquea por esto.
               </p>
             </div>
           )}
@@ -597,7 +598,7 @@ export function VacanteForm() {
             type="submit"
             variant="brand-primary"
             size="large"
-            disabled={enviando || !avalUrl}
+            disabled={enviando}
             loading={enviando}
           >
             {enviando ? 'Enviando…' : 'Enviar solicitud'}

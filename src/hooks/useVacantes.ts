@@ -92,7 +92,8 @@ export function useVacantes() {
     try {
       const uid = auth.currentUser?.uid;
       if (!uid) throw new Error('Debes iniciar sesión para crear una vacante.');
-      if (!input.aval_url) throw new Error('El aval es obligatorio antes de crear la vacante.');
+      // El aval NO es obligatorio al crear: si falta, la vacante queda con
+      // aval_pendiente=true (lo setea el form) y GH/coordinación lo gestiona.
       const payload = {
         ...input,
         fecha_entrevista_propuesta: Timestamp.fromDate(input.fecha_entrevista_propuesta),
