@@ -335,40 +335,19 @@ export default function PortalCandidatoPage() {
         )}
 
         {tab === 'autorizaciones' && (
-          <div className="space-y-6">
-            <ConsentimientoCard
-              tipo="datos"
-              token={token ?? ''}
-              empresa={empresa}
-              empresaCodigo={data.empresa_codigo}
-              cargo={data.cargo_nombre}
-              nombreCompleto={data.candidato_nombre}
-              documentoNumero={data.documento_numero}
-              aceptado={data.consentimiento_datos_aceptado}
-              onAceptar={(url, img) => aceptar('datos', url, img)}
-            />
-            <ConsentimientoCard
-              tipo="imagen"
-              token={token ?? ''}
-              empresa={empresa}
-              empresaCodigo={data.empresa_codigo}
-              cargo={data.cargo_nombre}
-              nombreCompleto={data.candidato_nombre}
-              documentoNumero={data.documento_numero}
-              aceptado={data.consentimiento_imagen_aceptado}
-              onAceptar={(url, img) => aceptar('imagen', url, img)}
-            />
-            {/* Datos básicos (DGH-F-05) y Debida diligencia (SAGRILAFT F-CAR-01)
-                ya NO se firman aquí con un layout inventado: se diligencian sobre
-                el FORMATO OFICIAL y se suben firmados a la carpeta (servir+subir). */}
-            {data.condiciones && (
-              <CondicionesCard
-                token={token ?? ''}
-                condiciones={data.condiciones}
-                aceptadas={data.condiciones_aceptadas}
-              />
-            )}
-          </div>
+          <AutorizacionesTab
+            token={token ?? ''}
+            empresa={empresa}
+            empresaCodigo={data.empresa_codigo}
+            cargo={data.cargo_nombre}
+            nombreCompleto={data.candidato_nombre}
+            documentoNumero={data.documento_numero}
+            datosAceptado={data.consentimiento_datos_aceptado}
+            imagenAceptado={data.consentimiento_imagen_aceptado}
+            condiciones={data.condiciones}
+            condicionesAceptadas={data.condiciones_aceptadas}
+            aceptar={aceptar}
+          />
         )}
 
         {tab === 'ayuda' && (
@@ -552,6 +531,133 @@ function CedulaGate({
   );
 }
 
+/**
+ * AutorizacionesTab · pide al integrante los datos que el formato oficial
+ * necesita y NO tenemos (ciudad de expedición de la cédula, celular, correo) —
+ * los escribe él, son los suyos reales, no se inventan. Con eso habilita la firma
+ * de los dos consentimientos sobre el PDF oficial.
+ */
+function AutorizacionesTab({
+  token,
+  empresa,
+  empresaCodigo,
+  cargo,
+  nombreCompleto,
+  documentoNumero,
+  datosAceptado,
+  imagenAceptado,
+  condiciones,
+  condicionesAceptadas,
+  aceptar,
+}: {
+  token: string;
+  empresa: ReturnType<typeof empresaConsentimiento>;
+  empresaCodigo: string;
+  cargo: string;
+  nombreCompleto: string;
+  documentoNumero: string;
+  datosAceptado: boolean;
+  imagenAceptado: boolean;
+  condiciones?: Record<string, string> | null;
+  condicionesAceptadas: boolean;
+  aceptar: (tipo: 'datos' | 'imagen', url: string, img: string) => Promise<void>;
+}) {
+  const [ciudadExpedicion, setCiudadExpedicion] = useState('');
+  const [celular, setCelular] = useState('');
+  const [correo, setCorreo] = useState('');
+  const completo = !!(ciudadExpedicion.trim() && celular.trim() && correo.trim());
+  const inputCls =
+    'mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] ' +
+    'text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-brand-400 ' +
+    'focus:ring-2 focus:ring-brand-300/40';
+
+  return (
+    <div className="space-y-6">
+      <section className="bg-white rounded-xl border border-slate-200 shadow-brand-card overflow-hidden">
+        <div className="px-5 sm:px-7 py-4 border-b border-slate-100">
+          <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text-strong">
+            Tus datos para las autorizaciones
+          </h2>
+          <p className="text-[12px] text-text-muted mt-0.5">
+            Los usamos para diligenciar tus formatos oficiales. Escribe los tuyos reales.
+          </p>
+        </div>
+        <div className="px-5 sm:px-7 py-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="block">
+            <span className="text-[12px] font-medium text-text-body">
+              Ciudad de expedición de tu cédula
+            </span>
+            <input
+              value={ciudadExpedicion}
+              onChange={(e) => setCiudadExpedicion(e.target.value)}
+              placeholder="Ej: Bogotá"
+              className={inputCls}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[12px] font-medium text-text-body">Tu celular</span>
+            <input
+              value={celular}
+              onChange={(e) => setCelular(e.target.value)}
+              inputMode="tel"
+              placeholder="Ej: 3001234567"
+              className={inputCls}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[12px] font-medium text-text-body">Tu correo</span>
+            <input
+              value={correo}
+              onChange={(e) => setCorreo(e.target.value)}
+              inputMode="email"
+              placeholder="tucorreo@correo.com"
+              className={inputCls}
+            />
+          </label>
+        </div>
+      </section>
+
+      <ConsentimientoCard
+        tipo="datos"
+        token={token}
+        empresa={empresa}
+        empresaCodigo={empresaCodigo}
+        cargo={cargo}
+        nombreCompleto={nombreCompleto}
+        documentoNumero={documentoNumero}
+        ciudad={ciudadExpedicion}
+        celular={celular}
+        correo={correo}
+        bloqueado={!completo}
+        aceptado={datosAceptado}
+        onAceptar={(url, img) => aceptar('datos', url, img)}
+      />
+      <ConsentimientoCard
+        tipo="imagen"
+        token={token}
+        empresa={empresa}
+        empresaCodigo={empresaCodigo}
+        cargo={cargo}
+        nombreCompleto={nombreCompleto}
+        documentoNumero={documentoNumero}
+        ciudad={ciudadExpedicion}
+        celular={celular}
+        correo={correo}
+        bloqueado={!completo}
+        aceptado={imagenAceptado}
+        onAceptar={(url, img) => aceptar('imagen', url, img)}
+      />
+      {condiciones && (
+        <CondicionesCard
+          token={token}
+          condiciones={condiciones}
+          aceptadas={condicionesAceptadas}
+        />
+      )}
+    </div>
+  );
+}
+
 function ConsentimientoCard({
   tipo,
   token,
@@ -560,6 +666,10 @@ function ConsentimientoCard({
   cargo,
   nombreCompleto,
   documentoNumero,
+  ciudad,
+  celular,
+  correo,
+  bloqueado,
   aceptado,
   onAceptar,
 }: {
@@ -570,6 +680,10 @@ function ConsentimientoCard({
   cargo: string;
   nombreCompleto: string;
   documentoNumero: string;
+  ciudad: string;
+  celular: string;
+  correo: string;
+  bloqueado: boolean;
   aceptado: boolean;
   onAceptar: (firmaUrl: string, firmaImagenUrl: string) => Promise<void>;
 }) {
@@ -593,6 +707,9 @@ function ConsentimientoCard({
           nombre: nombreCompleto || 'Candidato',
           cedula: documentoNumero || '',
           cargo: cargo || '',
+          ciudad: ciudad || undefined,
+          celular: celular || undefined,
+          correo: correo || undefined,
           fechaTexto: new Date().toLocaleDateString('es-CO'),
         },
         firma,
@@ -642,6 +759,11 @@ function ConsentimientoCard({
 
       {!aceptado && (
         <div className="px-5 sm:px-7 py-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
+          {bloqueado && (
+            <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              Primero completa tus datos arriba (ciudad de expedición, celular y correo) para poder firmar.
+            </p>
+          )}
           <label className="flex items-start gap-2.5 cursor-pointer">
             <input
               type="checkbox"
@@ -660,7 +782,7 @@ function ConsentimientoCard({
           {err && <p className="text-[12px] text-danger-700">{err}</p>}
           <Button
             onClick={confirmar}
-            disabled={!chk || !firma || enviando}
+            disabled={!chk || !firma || enviando || bloqueado}
             loading={enviando}
             variant="brand-primary"
             icon={<Check size={14} strokeWidth={2} />}

@@ -35,6 +35,8 @@ interface CampoEstampado {
   x: number;
   yTop: number;
   size?: number;
+  /** Ancho disponible (pt). Si el texto no cabe, se reduce la fuente (hasta 5pt). */
+  maxAncho?: number;
   valor: keyof DatosEstampado | ((d: DatosEstampado) => string);
 }
 
@@ -106,14 +108,14 @@ const DATOS: Record<string, MapaFormato> = {
     { pagina: 1, x: 162, yTop: 664, valor: 'correo' },
   ] },
   CUM: { campos: [
-    { pagina: 0, x: 100, yTop: 204, valor: 'fechaTexto' },
-    { pagina: 0, x: 205, yTop: 233, valor: 'nombre' },
-    { pagina: 0, x: 215, yTop: 251, valor: 'cedula' },
-    { pagina: 0, x: 475, yTop: 251, valor: 'ciudad' },
+    { pagina: 0, x: 102, yTop: 206, valor: 'fechaTexto' },
+    { pagina: 0, x: 222, yTop: 235, valor: 'nombre' },
+    { pagina: 0, x: 207, yTop: 252, valor: 'cedula' },
+    { pagina: 0, x: 380, yTop: 252, maxAncho: 110, valor: 'ciudad' },
     { pagina: 1, x: 105, yTop: 540, valor: 'nombre' },
     { pagina: 1, x: 140, yTop: 564, valor: 'cedula' },
     { pagina: 1, x: 105, yTop: 589, valor: 'celular' },
-    { pagina: 1, x: 140, yTop: 614, valor: 'correo' },
+    { pagina: 1, x: 140, yTop: 614, maxAncho: 220, valor: 'correo' },
   ] },
 };
 
@@ -124,28 +126,28 @@ const DATOS: Record<string, MapaFormato> = {
 const IMAGEN: Record<string, MapaFormato> = {
   EQT: { campos: [
     { pagina: 0, x: 425, yTop: 145, valor: 'nombre' },
-    { pagina: 0, x: 235, yTop: 173, valor: 'cargo' },
+    { pagina: 0, x: 235, yTop: 173, maxAncho: 54, valor: 'cargo' },
     { pagina: 1, x: 445, yTop: 448, valor: 'ciudad' },
     { pagina: 1, x: 75, yTop: 462, valor: diaDe },
     { pagina: 1, x: 136, yTop: 462, valor: mesDe },
   ], firma: { pagina: 1, x: 355, yTop: 465, ancho: 135, altoMax: 42 } },
   CUM: { campos: [
     { pagina: 0, x: 367, yTop: 145, valor: 'nombre' },
-    { pagina: 0, x: 200, yTop: 173, valor: 'cargo' },
+    { pagina: 0, x: 200, yTop: 173, maxAncho: 54, valor: 'cargo' },
     { pagina: 1, x: 448, yTop: 404, valor: 'ciudad' },
     { pagina: 1, x: 75, yTop: 418, valor: diaDe },
     { pagina: 1, x: 136, yTop: 418, valor: mesDe },
   ], firma: { pagina: 1, x: 355, yTop: 421, ancho: 135, altoMax: 42 } },
   ING: { campos: [
     { pagina: 0, x: 425, yTop: 145, valor: 'nombre' },
-    { pagina: 0, x: 235, yTop: 173, valor: 'cargo' },
+    { pagina: 0, x: 235, yTop: 173, maxAncho: 54, valor: 'cargo' },
     { pagina: 1, x: 448, yTop: 419, valor: 'ciudad' },
     { pagina: 1, x: 75, yTop: 433, valor: diaDe },
     { pagina: 1, x: 136, yTop: 433, valor: mesDe },
   ], firma: { pagina: 1, x: 355, yTop: 436, ancho: 135, altoMax: 42 } },
   SLP: { campos: [
     { pagina: 0, x: 423, yTop: 145, valor: 'nombre' },
-    { pagina: 0, x: 235, yTop: 173, valor: 'cargo' },
+    { pagina: 0, x: 235, yTop: 173, maxAncho: 54, valor: 'cargo' },
     { pagina: 1, x: 445, yTop: 448, valor: 'ciudad' },
     { pagina: 1, x: 75, yTop: 462, valor: diaDe },
     { pagina: 1, x: 136, yTop: 462, valor: mesDe },
@@ -190,11 +192,20 @@ export async function estamparFormatoOficial(
     if (!page) continue;
     const valor = typeof c.valor === 'function' ? c.valor(datos) : datos[c.valor];
     if (!valor) continue;
+    const texto = String(valor);
     const { height } = page.getSize();
-    page.drawText(String(valor), {
+    // Si hay ancho máximo (blanco corto, p.ej. el cargo), reduce la fuente
+    // hasta que quepa — así un cargo largo no se monta sobre el texto siguiente.
+    let size = c.size ?? 10;
+    if (c.maxAncho) {
+      while (size > 4.5 && font.widthOfTextAtSize(texto, size) > c.maxAncho) {
+        size -= 0.5;
+      }
+    }
+    page.drawText(texto, {
       x: c.x,
       y: height - c.yTop,
-      size: c.size ?? 10,
+      size,
       font,
       color: rgb(0.05, 0.05, 0.1),
     });
