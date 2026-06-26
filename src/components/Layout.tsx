@@ -37,6 +37,7 @@ const ITEMS: ItemNav[] = [
     label: 'Vacantes abiertas',
     roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin'],
   },
+  { to: '/admin/usuarios', label: 'Usuarios', roles: ['admin', 'coordinador'] },
   { to: '/admin/catalogos', label: 'Catálogos', roles: ['admin'] },
 ];
 

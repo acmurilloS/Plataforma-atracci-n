@@ -84,6 +84,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Pre-asignaciones de rol por correo (gh, apoyo) que hace el staff. Solo se
+    // escriben vía callable (preasignarRoles, Admin SDK); el staff las lee en
+    // /admin/usuarios. El rol se aplica al primer login (autoasignarRol).
+    match /preasignaciones_rol/{email} {
+      allow read: if staff();
+      allow write: if false;
+    }
+
     // ===== Contadores (sólo Admin SDK) =====
     match /contadores/{id} {
       allow read: if isAdmin();

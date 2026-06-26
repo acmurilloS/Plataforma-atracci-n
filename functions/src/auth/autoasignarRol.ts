@@ -5,24 +5,26 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 
 /**
- * autoasignarRol · onboarding de AUTOSERVICIO en el primer ingreso.
+ * autoasignarRol · resuelve el rol del usuario en su PRIMER ingreso.
  *
- * Cuando una persona entra por primera vez con su cuenta de Google y aún no
- * tiene rol, elige su rol desde la pantalla de onboarding y esta función:
- *  - valida que sea un correo @equitel.com.co,
- *  - que sea la PRIMERA vez (no tenga ya rol → no puede auto-escalar después),
- *  - que el rol pedido NO sea admin,
- *  - setea el custom claim (lo que usan las reglas Firestore) y crea su doc
- *    `usuarios/{uid}` (lo que usa la UI).
+ * Dos caminos, en este orden:
+ *  1. PRE-ASIGNACIÓN del staff: si su correo fue marcado en `preasignaciones_rol`
+ *     (p.ej. GH), se le aplica ESE rol automáticamente — no ve pantalla de
+ *     selección. Roles sensibles (gh, apoyo) van solo por aquí.
+ *  2. AUTOSERVICIO: si no hay pre-asignación, solo puede elegir `lider` o
+ *     `analista`. Cualquier otro rol (gh, coordinador, apoyo, admin) se rechaza
+ *     en el servidor — no por la UI.
  *
- * Tras esto el cliente refresca su token (getIdToken(true)) para que el claim
- * surta efecto. Para CAMBIAR un rol ya asignado, lo hace un admin
- * (setearRolUsuario) — esta función solo aplica a cuentas sin rol.
+ * Validaciones: correo @equitel.com.co; solo PRIMERA vez (con rol ya asignado no
+ * se puede auto-cambiar → lo hace un admin con setearRolUsuario). Tras asignar,
+ * el cliente refresca el token (getIdToken(true)) para que el claim surta efecto.
  */
 
 const DOMINIO = '@equitel.com.co';
-const ROLES_AUTOSERVICIO = ['lider', 'analista', 'coordinador', 'gh', 'apoyo'];
-const AREAS_APOYO = ['it', 'compras', 'bodega', 'contabilidad', 'administrativo', 'talentos'];
+/** Lo único que un usuario puede ELEGIR por sí mismo en el primer ingreso. */
+const ROLES_AUTOSERVICIO = ['lider', 'analista'];
+/** Roles válidos que el staff puede dejar PRE-ASIGNADOS (se honran al ingresar). */
+const ROLES_PREASIGNABLES = ['gh', 'apoyo'];
 
 export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
@@ -32,7 +34,7 @@ export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
   const email = String(token.email ?? '').trim().toLowerCase();
   const nombreGoogle = String(token.name ?? '').trim();
 
-  // 1) Dominio corporativo (el hint `hd` del login no es garantía → se valida aquí).
+  // Dominio corporativo (el hint `hd` del login no es garantía → se valida aquí).
   if (!email.endsWith(DOMINIO)) {
     throw new HttpsError(
       'permission-denied',
@@ -40,7 +42,7 @@ export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
     );
   }
 
-  // 2) Primera vez: si ya tiene rol (claim o doc), no puede auto-reasignarse.
+  // Primera vez: si ya tiene rol (claim o doc), no puede auto-reasignarse.
   const yaTieneClaim = typeof token.rol === 'string' && (token.rol as string).length > 0;
   const docRef = db.collection('usuarios').doc(uid);
   const snap = await docRef.get();
@@ -52,64 +54,80 @@ export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
     );
   }
 
-  // 3) Rol válido y NUNCA admin por autoservicio.
-  const rol = String(req.data?.rol ?? '').trim();
-  if (rol === 'admin') {
-    throw new HttpsError('permission-denied', 'El rol de administrador no se puede autoasignar.');
-  }
-  if (!ROLES_AUTOSERVICIO.includes(rol)) {
-    throw new HttpsError('invalid-argument', 'Selecciona un rol válido.');
-  }
-
-  // 4) Área obligatoria solo si es apoyo.
-  let areaApoyo: string | null = null;
-  if (rol === 'apoyo') {
-    areaApoyo = String(req.data?.area_apoyo ?? '').trim();
-    if (!AREAS_APOYO.includes(areaApoyo)) {
-      throw new HttpsError('invalid-argument', 'Para el rol de apoyo debes elegir tu área.');
-    }
-  }
-
-  // 5) Nombre/apellido desde el displayName de Google si no vienen.
+  // Nombre/apellido del displayName de Google (si no vienen).
   const partes = nombreGoogle.split(/\s+/).filter(Boolean);
   const nombre = String(req.data?.nombre ?? '').trim() || partes[0] || email.split('@')[0];
   const apellido = String(req.data?.apellido ?? '').trim() || partes.slice(1).join(' ') || '—';
 
-  // 6) Custom claim (reglas) + doc usuarios (UI).
-  const claims: Record<string, unknown> = { rol };
-  if (areaApoyo) claims.area_apoyo = areaApoyo;
-  await getAuth().setCustomUserClaims(uid, claims);
-
-  await docRef.set(
-    {
-      id: uid,
+  async function asignar(
+    rol: string,
+    areaApoyo: string | null,
+    fuente: 'preasignado' | 'autoservicio',
+    asignadoPor: string | null,
+  ) {
+    const claims: Record<string, unknown> = { rol };
+    if (areaApoyo) claims.area_apoyo = areaApoyo;
+    await getAuth().setCustomUserClaims(uid, claims);
+    await docRef.set(
+      {
+        id: uid,
+        email,
+        nombre,
+        apellido,
+        rol,
+        area_apoyo: areaApoyo,
+        empresa_codigo: null,
+        sede_codigo: null,
+        unidad_id: null,
+        activo: true,
+        fuente_rol: fuente,
+        asignado_por: asignadoPor,
+        creado_en: FieldValue.serverTimestamp(),
+        creado_por: asignadoPor ?? uid,
+        actualizado_en: FieldValue.serverTimestamp(),
+        actualizado_por: asignadoPor ?? uid,
+      },
+      { merge: true },
+    );
+    await db.collection('eventos').add({
+      tipo: 'usuario_rol_asignado',
+      uid,
       email,
-      nombre,
-      apellido,
       rol,
       area_apoyo: areaApoyo,
-      empresa_codigo: null,
-      sede_codigo: null,
-      unidad_id: null,
-      activo: true,
+      fuente,
+      asignado_por: asignadoPor,
       creado_en: FieldValue.serverTimestamp(),
-      creado_por: uid,
-      actualizado_en: FieldValue.serverTimestamp(),
-      actualizado_por: uid,
-    },
-    { merge: true },
-  );
+      creado_por: asignadoPor ?? uid,
+    });
+    logger.info('autoasignarRol · asignado', { uid, email, rol, areaApoyo, fuente });
+  }
 
-  await db.collection('eventos').add({
-    tipo: 'usuario_autoasigno_rol',
-    uid,
-    email,
-    rol,
-    area_apoyo: areaApoyo,
-    creado_en: FieldValue.serverTimestamp(),
-    creado_por: uid,
-  });
+  // 1) PRE-ASIGNACIÓN del staff (p.ej. GH). Gana sobre cualquier elección.
+  const preRef = db.collection('preasignaciones_rol').doc(email);
+  const preSnap = await preRef.get();
+  if (preSnap.exists) {
+    const pre = preSnap.data() ?? {};
+    const rolPre = String(pre.rol ?? '').trim();
+    const areaPre = pre.area_apoyo ? String(pre.area_apoyo) : null;
+    if (ROLES_PREASIGNABLES.includes(rolPre)) {
+      await asignar(rolPre, areaPre, 'preasignado', String(pre.creado_por ?? '') || null);
+      await preRef.update({ usado_en: FieldValue.serverTimestamp(), usado_por_uid: uid });
+      return { ok: true as const, rol: rolPre, fuente: 'preasignado' as const };
+    }
+  }
 
-  logger.info('autoasignarRol', { uid, email, rol, areaApoyo });
-  return { ok: true as const, rol, area_apoyo: areaApoyo };
+  // 2) AUTOSERVICIO: solo lider/analista. Sin elección → pedir selección.
+  const rol = String(req.data?.rol ?? '').trim();
+  if (!rol) {
+    return { ok: false as const, requiere_seleccion: true as const };
+  }
+  if (!ROLES_AUTOSERVICIO.includes(rol)) {
+    throw new HttpsError(
+      'permission-denied',
+      'Ese rol no se puede autoasignar; lo asigna el equipo de Gestión Humana o un administrador.',
+    );
+  }
+  await asignar(rol, null, 'autoservicio', null);
+  return { ok: true as const, rol, fuente: 'autoservicio' as const };
 });

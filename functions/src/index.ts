@@ -5,6 +5,8 @@ export { crearUsuarioCorporativo } from './auth/crearUsuarioCorporativo';
 export { setearRolUsuario } from './auth/setearRolUsuario';
 // Onboarding de autoservicio: el usuario elige su rol en el primer ingreso.
 export { autoasignarRol } from './auth/autoasignarRol';
+// El staff pre-asigna roles sensibles (gh, apoyo) por correo, en lote.
+export { preasignarRoles } from './auth/preasignarRoles';
 
 // Subir PDFs (avales, CVs, docs) a la Shared Drive corporativa de Equitel.
 export { subirArchivoADrive } from './drive/subirArchivoADrive';

@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import CatalogosAdminPage from './pages/admin/CatalogosAdminPage';
 import PanelAdminPage from './pages/admin/PanelAdminPage';
+import UsuariosRolesPage from './pages/admin/UsuariosRolesPage';
 import TicketsPage from './pages/apoyo/TicketsPage';
 import CarreraPublicaPage from './pages/carreras/CarreraPublicaPage';
 import PortalCandidatoPage from './pages/portal/PortalCandidatoPage';
@@ -155,6 +156,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={['admin']}>
                   <CatalogosAdminPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/usuarios"
+              element={
+                <ProtectedRoute roles={['admin', 'coordinador']}>
+                  <UsuariosRolesPage />
                 </ProtectedRoute>
               }
             />

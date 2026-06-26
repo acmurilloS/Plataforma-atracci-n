@@ -1,13 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import {
-  Briefcase,
-  Building2,
-  ClipboardList,
-  HeartHandshake,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react';
+import { Briefcase, ClipboardList, type LucideIcon } from 'lucide-react';
 import { auth, functions } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/brand';
@@ -15,16 +8,16 @@ import { EquitelLogo } from '../components/EquitelLogo';
 import { cn } from '../utils/cn';
 
 /**
- * OnboardingRolPage · selección de rol en el PRIMER ingreso (autoservicio).
+ * OnboardingRolPage · primer ingreso (sin rol).
  *
- * Se muestra cuando el usuario entró con Google pero aún no tiene rol. Elige su
- * rol (todos menos admin; si es apoyo, también su área) → la callable
- * `autoasignarRol` setea el claim + crea su doc → se refresca el token y se
- * recarga para entrar ya con su perfil. Cambiar un rol asignado lo hace un admin.
+ * Al montar consulta `autoasignarRol`: si el correo fue PRE-ASIGNADO por el staff
+ * (p.ej. GH), se aplica ese rol solo y entra directo. Si no, muestra la selección
+ * de AUTOSERVICIO, que solo permite `lider` o `analista`. Los roles sensibles
+ * (gh, coordinador, apoyo, admin) NO se ofrecen aquí — los asigna el staff.
  */
 
 interface OpcionRol {
-  rol: 'lider' | 'analista' | 'coordinador' | 'gh' | 'apoyo';
+  rol: 'lider' | 'analista';
   titulo: string;
   descripcion: string;
   icono: LucideIcon;
@@ -43,53 +36,47 @@ const ROLES: OpcionRol[] = [
     descripcion: 'Solicito vacantes de mi equipo y decido en las entrevistas.',
     icono: Briefcase,
   },
-  {
-    rol: 'coordinador',
-    titulo: 'Coordinación de atracción',
-    descripcion: 'Superviso el holding: dashboard, ANS y aprobaciones.',
-    icono: Building2,
-  },
-  {
-    rol: 'gh',
-    titulo: 'Gestión Humana',
-    descripcion: 'Valido avales, exámenes médicos y armo las carpetas de vinculación.',
-    icono: HeartHandshake,
-  },
-  {
-    rol: 'apoyo',
-    titulo: 'Apoyo / áreas de servicio',
-    descripcion: 'Atiendo los tickets de conexión de mi área.',
-    icono: Wrench,
-  },
-];
-
-const AREAS: { area: string; label: string }[] = [
-  { area: 'it', label: 'Sistemas / IT' },
-  { area: 'compras', label: 'Compras' },
-  { area: 'bodega', label: 'Bodega' },
-  { area: 'contabilidad', label: 'Contabilidad' },
-  { area: 'administrativo', label: 'Administrativo' },
-  { area: 'talentos', label: 'Conexión / Talentos' },
 ];
 
 export default function OnboardingRolPage() {
   const { user } = useAuth();
   const [rol, setRol] = useState<OpcionRol['rol'] | ''>('');
-  const [area, setArea] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [verificando, setVerificando] = useState(true);
   const [error, setError] = useState('');
+  const yaVerifico = useRef(false);
 
   const primerNombre = (user?.displayName ?? '').split(/\s+/)[0] || '';
 
-  const puedeContinuar = rol !== '' && (rol !== 'apoyo' || area !== '');
+  // Al montar: ¿este correo tiene un rol PRE-ASIGNADO por el staff (p.ej. GH)?
+  // Si sí, se aplica solo y entra directo; si no, se muestra la selección.
+  useEffect(() => {
+    if (yaVerifico.current) return;
+    yaVerifico.current = true;
+    (async () => {
+      try {
+        const fn = httpsCallable(functions, 'autoasignarRol');
+        const res = (await fn({})) as { data?: { rol?: string } };
+        if (res.data?.rol) {
+          await auth.currentUser?.getIdToken(true);
+          window.location.reload();
+          return;
+        }
+        setVerificando(false);
+      } catch {
+        // Si algo falla (p.ej. ya tenía rol), mostramos la selección igualmente.
+        setVerificando(false);
+      }
+    })();
+  }, []);
 
   async function continuar() {
-    if (!puedeContinuar) return;
+    if (!rol) return;
     setError('');
     setGuardando(true);
     try {
       const fn = httpsCallable(functions, 'autoasignarRol');
-      await fn({ rol, area_apoyo: rol === 'apoyo' ? area : undefined });
+      await fn({ rol });
       // Refrescar el token para que el nuevo claim (rol) surta efecto en las
       // reglas Firestore, y recargar para entrar ya con el perfil.
       await auth.currentUser?.getIdToken(true);
@@ -99,6 +86,17 @@ export default function OnboardingRolPage() {
       setError(msg.replace(/^.*?:\s*/, ''));
       setGuardando(false);
     }
+  }
+
+  if (verificando) {
+    return (
+      <div className="brand-page font-brand min-h-screen flex items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-3 text-text-muted">
+          <EquitelLogo size={30} />
+          <p className="text-[13px]">Preparando tu acceso…</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -124,10 +122,7 @@ export default function OnboardingRolPage() {
                 <button
                   key={o.rol}
                   type="button"
-                  onClick={() => {
-                    setRol(o.rol);
-                    if (o.rol !== 'apoyo') setArea('');
-                  }}
+                  onClick={() => setRol(o.rol)}
                   className={cn(
                     'w-full text-left rounded-xl border p-3.5 flex items-start gap-3 transition-colors',
                     'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500',
@@ -157,30 +152,6 @@ export default function OnboardingRolPage() {
             })}
           </div>
 
-          {rol === 'apoyo' && (
-            <div className="mt-4">
-              <p className="text-[12px] font-medium text-text-muted mb-1.5">¿Cuál es tu área?</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {AREAS.map((a) => (
-                  <button
-                    key={a.area}
-                    type="button"
-                    onClick={() => setArea(a.area)}
-                    className={cn(
-                      'rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors',
-                      'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500',
-                      area === a.area
-                        ? 'border-brand-500 bg-brand-50 text-brand-700'
-                        : 'border-slate-200 text-text-body hover:bg-slate-50',
-                    )}
-                  >
-                    {a.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {error && <p className="mt-4 text-[12.5px] text-danger-700">{error}</p>}
 
           <div className="mt-6">
@@ -189,14 +160,14 @@ export default function OnboardingRolPage() {
               size="large"
               fullWidth
               onClick={continuar}
-              disabled={!puedeContinuar}
+              disabled={rol === ''}
               loading={guardando}
             >
               Continuar
             </Button>
             <p className="mt-3 text-[11.5px] text-text-subtle text-center leading-[1.5]">
-              Si te equivocas de rol, un administrador podrá ajustarlo. El rol de administrador no
-              se asigna por aquí.
+              ¿Eres de Gestión Humana, coordinación o un área de apoyo? Tu perfil lo crea el equipo;
+              escríbele a tu contacto para que te habilite.
             </p>
           </div>
         </div>
