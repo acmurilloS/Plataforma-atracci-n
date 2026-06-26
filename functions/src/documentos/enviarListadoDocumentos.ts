@@ -4,6 +4,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { emailAnalistaDePostulacion } from '../notificaciones/emailAnalista';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -78,10 +79,13 @@ export const enviarListadoDocumentos = onCall(
       </div>
     `.trim();
 
+    const correoAnalista = await emailAnalistaDePostulacion(postulacionId);
+
     try {
       await enviarConGmail({
         from: FROM,
         to: [email],
+        replyTo: correoAnalista || undefined,
         subject: `Documentos requeridos para tu vinculación · ${cargo}`,
         html,
       });

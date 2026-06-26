@@ -3,6 +3,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { emailAnalistaDePostulacion } from '../notificaciones/emailAnalista';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -71,10 +72,13 @@ export const onPostulacionAvance = onDocumentUpdated(
       </div>
     `.trim();
 
+    const correoAnalista = await emailAnalistaDePostulacion(event.params.id);
+
     try {
       await enviarConGmail({
         from: FROM,
         to: [email],
+        replyTo: correoAnalista || undefined,
         subject: 'Novedad en tu proceso · Equitel',
         html,
       });

@@ -1,10 +1,14 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, BarChart3, Building2 } from 'lucide-react';
+import { Activity, BarChart3, Building2, Clock } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
+import { useFestivosTodos } from '../../hooks/useCatalogos';
 import { Card, Pill, type PillTono } from '../../components/brand';
+import { ReportesDescarga } from '../../components/dashboard/ReportesDescarga';
+import { SemaforoANS } from '../../components/ui/SemaforoANS';
 import { cn } from '../../utils/cn';
-import type { VacanteDoc } from '../../schemas';
+import { diasTranscurridos, esVacanteCerrada } from '../../utils/reportesVacantes';
+import type { PostulacionDoc, VacanteDoc } from '../../schemas';
 
 /**
  * DashboardCoordPage · sistema brand.
@@ -40,6 +44,24 @@ export default function DashboardCoordPage() {
     orden: ['creado_en', 'desc'],
     limit: 500,
   });
+  const { docs: postulaciones } = useColeccion<PostulacionDoc>('postulaciones', {
+    orden: ['fecha_postulacion', 'desc'],
+    limit: 5000,
+  });
+
+  // Festivos colombianos completos → días hábiles correctos para cualquier
+  // antigüedad de vacante (el ANS puede abarcar fechas de varios años).
+  const festivos = useFestivosTodos();
+
+  // Vacantes activas ordenadas por días hábiles transcurridos (mayor riesgo arriba).
+  const activasAns = useMemo(() => {
+    const hoy = new Date();
+    return vacantes
+      .filter((v) => !esVacanteCerrada(v.estado))
+      .map((v) => ({ v, dias: diasTranscurridos(v, festivos, hoy) ?? 0 }))
+      .sort((a, b) => b.dias - a.dias)
+      .slice(0, 15);
+  }, [vacantes, festivos]);
 
   const stats = useMemo(() => {
     const porEstado: Record<string, number> = {};
@@ -74,6 +96,9 @@ export default function DashboardCoordPage() {
           identificar dónde está el cuello de botella en tiempo real.
         </p>
       </div>
+
+      {/* Descarga de reportes (Excel) + filtros */}
+      <ReportesDescarga vacantes={vacantes} postulaciones={postulaciones} festivos={festivos} />
 
       {/* Hero numbers */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -118,13 +143,13 @@ export default function DashboardCoordPage() {
         />
       </div>
 
-      {/* Últimas activas */}
+      {/* Activas · ANS (días hábiles transcurridos, mayor riesgo arriba) */}
       <Card padding="lg">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <Activity size={14} strokeWidth={1.75} className="text-text-muted" />
+            <Clock size={14} strokeWidth={1.75} className="text-text-muted" />
             <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-              Vacantes activas · últimas 10
+              Vacantes activas · ANS (mayor tiempo primero)
             </p>
           </div>
           <Link
@@ -134,32 +159,38 @@ export default function DashboardCoordPage() {
             Ver todas →
           </Link>
         </div>
+        <p className="text-[12px] text-text-subtle mb-4">
+          Días hábiles desde la apertura. Semáforo de terna: verde ≤10 · amarillo ≤15 · rojo &gt;15.
+        </p>
+        {activasAns.length === 0 && (
+          <p className="text-[13px] text-text-subtle italic py-2">No hay vacantes activas.</p>
+        )}
         <ul className="divide-y divide-slate-100">
-          {vacantes
-            .filter((v) => !['cerrada', 'desierta', 'cancelada'].includes(v.estado))
-            .slice(0, 10)
-            .map((v) => (
-              <li
-                key={v.id}
-                className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/40 -mx-2 px-2 rounded-md transition-colors"
-              >
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={`/vacantes/${v.id}`}
-                    className="text-[14px] font-medium text-text-strong hover:text-brand-700 transition-colors"
-                  >
-                    {v.cargo_nombre}
-                  </Link>
-                  <p className="text-[11px] text-text-subtle mt-0.5">
-                    <span className="font-mono">{v.consecutivo}</span> · {v.empresa_codigo}/
-                    {v.sede_codigo}
-                  </p>
-                </div>
+          {activasAns.map(({ v, dias }) => (
+            <li
+              key={v.id}
+              className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/40 -mx-2 px-2 rounded-md transition-colors"
+            >
+              <div className="min-w-0 flex-1">
+                <Link
+                  to={`/vacantes/${v.id}`}
+                  className="text-[14px] font-medium text-text-strong hover:text-brand-700 transition-colors"
+                >
+                  {v.cargo_nombre}
+                </Link>
+                <p className="text-[11px] text-text-subtle mt-0.5">
+                  <span className="font-mono">{v.consecutivo}</span> · {v.empresa_codigo}/
+                  {v.sede_codigo}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <SemaforoANS dias={dias} umbralAmbar={10} umbralCritico={15} etiqueta="Días hábiles desde la apertura" />
                 <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
                   {v.estado.replace(/_/g, ' ')}
                 </Pill>
-              </li>
-            ))}
+              </div>
+            </li>
+          ))}
         </ul>
       </Card>
     </div>

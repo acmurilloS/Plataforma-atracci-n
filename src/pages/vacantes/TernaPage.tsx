@@ -135,34 +135,9 @@ export default function TernaPage() {
         estado: 'seleccionado',
         terna_respondida_en: ahora,
       });
-      await crear('examenes_medicos', {
-        postulacion_id: p.id,
-        candidato_id: p.candidato_id,
-        vacante_id: vacante.id,
-        proceso_id: vacante.proceso_activo_id,
-        // Denormalizado para que ExamenesMedicosPage muestre nombre del
-        // candidato + cargo sin tener que joinear con postulaciones.
-        candidato_nombre: p.candidato_nombre,
-        cargo_nombre: vacante.cargo_nombre,
-        vacante_consecutivo: vacante.consecutivo,
-        empresa_codigo: vacante.empresa_codigo,
-        // Snapshot autosuficiente para el correo a gestores SST: así no depende
-        // de joins en vivo a la vacante (nombre de empresa/unidad/sede).
-        empresa_nombre: vacante.empresa_nombre,
-        unidad_nombre: vacante.unidad_nombre,
-        sede_codigo: vacante.sede_codigo,
-        sede_nombre: vacante.sede_nombre,
-        solicitada_en: Timestamp.now(),
-        solicitada_por_uid: user.uid,
-        orden_url: null,
-        enviada_al_candidato_en: null,
-        centro_medico: null,
-        concepto_recibido_en: null,
-        concepto_url: null,
-        apto: null,
-        recomendaciones: null,
-        estado: 'solicitada',
-      });
+      // La solicitud de exámenes (examenes_medicos/examen_{post}) la crea ahora el
+      // trigger onPostulacionEnExamenes al detectar el estado en_examenes_medicos,
+      // así también se cubre el camino de cambio de estado manual (no solo terna).
       await crearTicketsConexion({
         vacante,
         postulacion: p,
@@ -242,12 +217,12 @@ export default function TernaPage() {
   async function cerrarTerna() {
     if (!vacante) return;
     if (enTerna.length === 0) {
-      setErr('No hay candidatos en terna para enviar al líder.');
+      setErr('No hay integrantes en terna para enviar al líder.');
       return;
     }
     if (
       !window.confirm(
-        `¿Cerrar la terna con ${enTerna.length} candidato(s) y enviar al líder ${vacante.lider_nombre}?\n\n` +
+        `¿Cerrar la terna con ${enTerna.length} integrante(s) y enviar al líder ${vacante.lider_nombre}?\n\n` +
           'Arranca un reloj de 48h. A las 24h le mandamos recordatorio; a las 48h sin respuesta, la vacante se pausa.',
       )
     )
@@ -279,7 +254,7 @@ export default function TernaPage() {
             destinatario_uid: vacante.lider_uid,
             tipo: 'terna_lista',
             titulo: 'Terna lista para tu revisión',
-            mensaje: `${analista} te envió la terna de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${enTerna.length} candidato(s)${lista}. Revísala y decide desde la plataforma — tienes 48 horas.`,
+            mensaje: `${analista} te envió la terna de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${enTerna.length} integrante(s)${lista}. Revísala y decide desde la plataforma — tienes 48 horas.`,
             link: `/vacantes/${vacante.id}/terna`,
             leida: false,
             leida_en: null,
@@ -351,7 +326,7 @@ export default function TernaPage() {
         <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
           {vacante.cargo_nombre} · {vacante.empresa_nombre} · {vacante.sede_nombre}.{' '}
           <span className="tabular-nums font-semibold text-text-body">
-            {enTerna.length} {enTerna.length === 1 ? 'candidato finalista' : 'candidatos finalistas'}
+            {enTerna.length} {enTerna.length === 1 ? 'integrante finalista' : 'integrantes finalistas'}
           </span>
           {minCandidatos > 0 && (
             <>
@@ -416,7 +391,7 @@ export default function TernaPage() {
                 to={`/postulaciones/${seleccionado.id}`}
                 className="inline-flex items-center justify-end gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
               >
-                Ver ficha del candidato
+                Ver ficha del integrante
                 <ArrowRight size={11} strokeWidth={1.75} />
               </Link>
             </div>
@@ -514,7 +489,7 @@ export default function TernaPage() {
                   <span className="tabular-nums font-medium text-text-body">
                     {enTerna.length}
                   </span>{' '}
-                  candidato(s) listos.{' '}
+                  integrante(s) listos.{' '}
                   {faltanCandidatos ? (
                     <span className="text-warning-700 font-medium">
                       Política de criticidad {vacante.criticidad} exige mínimo {minCandidatos}.
@@ -552,16 +527,16 @@ export default function TernaPage() {
         <div className="flex items-center gap-2 mb-4">
           <Users size={14} strokeWidth={1.75} className="text-text-muted" />
           <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-            Candidatos en terna ·{' '}
+            Integrantes en terna ·{' '}
             <span className="tabular-nums text-text-strong">{enTerna.length}</span>
           </p>
         </div>
         {enTerna.length === 0 ? (
           <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
-            <p className="text-[14px] font-medium text-text-strong">Aún no hay candidatos en terna</p>
+            <p className="text-[14px] font-medium text-text-strong">Aún no hay integrantes en terna</p>
             <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
               En la pestaña "Informe" de cada postulación, presionar "Enviar al líder · paso 12"
-              mueve al candidato aquí.
+              mueve al integrante aquí.
             </p>
           </div>
         ) : (
@@ -631,7 +606,7 @@ export default function TernaPage() {
             </div>
             {puedeReabrir && (
               <p className="text-[11px] text-text-subtle italic max-w-md text-right">
-                Si la terna queda desierta, puedes reabrir un candidato al pool y considerarlo en la
+                Si la terna queda desierta, puedes reabrir un integrante al pool y considerarlo en la
                 próxima vuelta sin abrir proceso nuevo.
               </p>
             )}
@@ -641,7 +616,7 @@ export default function TernaPage() {
               <thead className="bg-danger-50/40 text-danger-700">
                 <tr>
                   <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
-                    Candidato
+                    Integrante
                   </th>
                   <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
                     Motivo
@@ -711,7 +686,7 @@ export default function TernaPage() {
           <div className="flex items-center gap-2 mb-3">
             <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
             <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-              Otros candidatos activos ·{' '}
+              Otros integrantes activos ·{' '}
               <span className="tabular-nums text-text-strong">{otras.length}</span>
             </p>
           </div>
@@ -720,7 +695,7 @@ export default function TernaPage() {
               <thead className="bg-slate-50 text-text-muted">
                 <tr>
                   <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
-                    Candidato
+                    Integrante
                   </th>
                   <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
                     Estado
@@ -759,7 +734,7 @@ export default function TernaPage() {
       )}
 
       <p className="text-[11px] text-text-subtle italic">
-        Al aprobar un candidato, la plataforma crea automáticamente la solicitud de exámenes
+        Al aprobar un integrante, la plataforma crea automáticamente la solicitud de exámenes
         médicos (paso 15), dispara los{' '}
         <Link to="/tickets" className="text-brand-700 hover:text-brand-800 hover:underline">
           tickets de conexión

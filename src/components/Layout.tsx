@@ -26,7 +26,7 @@ const ITEMS: ItemNav[] = [
   { to: '/seguimiento', label: 'Seguimiento', roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin'] },
   { to: '/mis-vacantes', label: 'Mis vacantes', roles: ['lider'] },
   { to: '/vacantes/nueva', label: 'Nueva', roles: ['lider', 'coordinador', 'admin'] },
-  { to: '/dashboard', label: 'Dashboard', roles: ['coordinador', 'admin'] },
+  { to: '/dashboard', label: 'Dashboard', roles: ['coordinador', 'admin', 'gh'] },
   { to: '/aprobaciones-aval', label: 'Aprobaciones', roles: ['gh', 'coordinador', 'admin'] },
   { to: '/examenes-medicos', label: 'Exámenes', roles: ['gh', 'coordinador', 'admin'] },
   { to: '/carpetas', label: 'Carpetas', roles: ['gh', 'analista', 'coordinador', 'admin'] },

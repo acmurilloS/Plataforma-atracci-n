@@ -5,6 +5,10 @@ import { logger } from 'firebase-functions/v2';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import {
+  emailAnalistaDePostulacion,
+  emailAnalistaDeVacante,
+} from '../notificaciones/emailAnalista';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -51,6 +55,13 @@ export const onEntrevistaCreate = onDocumentCreated(
     const postSnap = await db.collection('postulaciones').doc(postId).get();
     if (!postSnap.exists) return;
     const post = postSnap.data() as Record<string, unknown>;
+
+    // Reply-to del analista del proceso: el FROM es Steve (no-reply), pero las
+    // respuestas deben llegar al analista, nunca a Steve. Se resuelve una vez y
+    // se reutiliza en los dos envíos (candidato y líder).
+    const correoAnalista =
+      (await emailAnalistaDePostulacion(postId)) ||
+      (await emailAnalistaDeVacante(String(ent.vacante_id ?? '')));
 
     const email = String(post.candidato_email ?? '').trim();
     const nombreCandidato = String(post.candidato_nombre ?? '').trim() || 'candidato/a';
@@ -153,6 +164,7 @@ export const onEntrevistaCreate = onDocumentCreated(
           to: [email],
           subject: `Agendamiento de tu entrevista · ${cargo}`,
           html,
+          replyTo: correoAnalista || undefined,
         });
       } catch (e) {
         logger.error('onEntrevistaCreate · correo candidato falló', {
@@ -224,6 +236,7 @@ export const onEntrevistaCreate = onDocumentCreated(
               to: [liderEmail],
               subject: `Entrevista agendada con ${nombreCandidato} · ${cargo}`,
               html: htmlLider,
+              replyTo: correoAnalista || undefined,
             });
           } catch (e) {
             logger.error('onEntrevistaCreate · correo líder falló', {

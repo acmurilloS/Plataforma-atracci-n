@@ -332,7 +332,7 @@ export default function TicketsPage() {
                 </th>
               )}
               <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
-                Candidato / vacante
+                Integrante / vacante
               </th>
               <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
                 Criticidad
@@ -400,7 +400,7 @@ export default function TicketsPage() {
                   )}
                   <td className="px-4 py-3 text-[12px]">
                     {esPreaviso ? (
-                      <span className="italic text-warning-700">Sin candidato aún</span>
+                      <span className="italic text-warning-700">Sin integrante aún</span>
                     ) : (
                       <span className="text-text-strong font-medium">
                         {t.candidato_nombre || '—'}

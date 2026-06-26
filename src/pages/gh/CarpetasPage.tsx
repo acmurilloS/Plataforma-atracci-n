@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import {
   AlertTriangle,
   ArrowRight,
@@ -10,10 +11,12 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  RefreshCw,
   Send,
   Sparkles,
   User,
 } from 'lucide-react';
+import { functions } from '../../lib/firebase';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
@@ -58,6 +61,9 @@ interface CarpetaDoc {
   entregada_en: Timestamp | null;
   aprobada_en: Timestamp | null;
   observaciones_gh: string | null;
+  drive_sincronizada_en?: Timestamp | null;
+  drive_error?: string | null;
+  drive_carpeta_id?: string | null;
   [k: string]: unknown;
 }
 
@@ -111,6 +117,17 @@ export default function CarpetasPage() {
     return m;
   }, [todosDocumentos]);
 
+  // BUG 3 · 1 contratado por vacante: vacante_id → postulacion_id ya contratada.
+  // Sirve para deshabilitar "Aprobar" en las otras carpetas de la misma vacante
+  // (defensa en UI; el server lo refuerza en la callable + reglas).
+  const contratadoPorVacante = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of todasPostulaciones) {
+      if (p.estado === 'contratado') m.set(p.vacante_id, p.id);
+    }
+    return m;
+  }, [todasPostulaciones]);
+
   const { crear, actualizar } = useMutacion();
   const { user, perfil } = useAuth();
   const [procesando, setProcesando] = useState<string | null>(null);
@@ -162,18 +179,25 @@ export default function CarpetasPage() {
   function calcularCompletitud(postulacionId: string) {
     const docs = docsPorPostulacion.get(postulacionId) ?? [];
     const docsPorClave = new Map(docs.map((d) => [d.clave, d]));
-    const obligatorios = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional);
-    const verificadosObligatorios = obligatorios.filter((cat) => {
+    const verif = (cat: { clave: string }) => {
       const d = docsPorClave.get(cat.clave);
       return d?.estado === 'verificado' || d?.estado === 'no_aplica';
-    }).length;
+    };
+    const pct = (v: number, t: number) => (t > 0 ? Math.round((v / t) * 100) : 100);
+    // BUG 2 · completitud en DOS niveles. La parte de CyD (Atracción) gobierna la
+    // entrega/aprobación; la de GH (contrato, afiliaciones) se muestra aparte y NO
+    // la bloquea — antes los 4 docs de GH dejaban la carpeta topada en ~69%.
+    const oblCyD = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional && c.responsable !== 'gh');
+    const oblGH = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional && c.responsable === 'gh');
+    const verifCyD = oblCyD.filter(verif).length;
+    const verifGH = oblGH.filter(verif).length;
     return {
-      verificados: verificadosObligatorios,
-      total: obligatorios.length,
-      porcentaje:
-        obligatorios.length > 0
-          ? Math.round((verificadosObligatorios / obligatorios.length) * 100)
-          : 0,
+      // Compat: `verificados/total/porcentaje` = parte de CyD (gobierna los gates).
+      verificados: verifCyD,
+      total: oblCyD.length,
+      porcentaje: pct(verifCyD, oblCyD.length),
+      gh: { verificados: verifGH, total: oblGH.length, porcentaje: pct(verifGH, oblGH.length) },
+      pendientesGH: oblGH.filter((c) => !verif(c)).map((c) => c.nombre),
       docsPorClave,
     };
   }
@@ -228,49 +252,45 @@ export default function CarpetasPage() {
     });
   }
 
+  /**
+   * Aprobar = contratar + cerrar vacante + tickets (paso 20). Toda la lógica
+   * crítica vive en la Cloud Function `aprobarCarpeta` (transaccional): valida
+   * server-side que solo haya UN contratado por vacante (BUG 3) y cierra la
+   * vacante de forma atómica (BUG 4). La UI solo invoca y refleja el resultado.
+   */
   async function aprobar(c: CarpetaDoc) {
-    if (procesando) return; // guard anti doble-clic: evita duplicar tickets/cierre/contratado
+    if (procesando) return; // guard anti doble-clic
     setProcesando(c.id);
     try {
-    const info = resolverInfo(c);
-    await actualizar('carpetas_digitales', c.id, {
-      estado: 'aprobada',
-      aprobada_en: Timestamp.now(),
-    });
-    await actualizar('postulaciones', c.postulacion_id, {
-      estado: 'contratado',
-      ultima_transicion_estado: Timestamp.now(),
-      'marcas.contratado_en': Timestamp.now(),
-    });
-    await actualizar('vacantes', c.vacante_id, {
-      estado: 'cerrada',
-      cerrada_en: Timestamp.now(),
-    });
-    const areas = ['it', 'compras', 'bodega', 'contabilidad', 'talentos'];
-    for (const area of areas) {
-      await crear('tickets_conexion', {
-        postulacion_id: c.postulacion_id,
-        candidato_id: c.candidato_id,
-        candidato_nombre: info.candidato,
-        vacante_id: c.vacante_id,
-        vacante_consecutivo: info.consecutivo ?? '',
-        cargo_nombre: info.cargo ?? '',
-        area,
-        sub_area_detalle: null,
-        tipo_disparo: 'final',
-        titulo: `Ingreso ${info.candidato} - ${area}`,
-        descripcion: `Ticket automático al cierre de carpeta para el área ${area}.`,
-        requisitos: {},
-        estado: 'abierto',
-        asignado_a_uid: null,
-        asignado_a_nombre: null,
-        bloqueado_motivo: null,
-        ans_horas_habiles: 24,
-        ans_expira_en: Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
-        resuelto_en: null,
-        evidencia_url: null,
-      });
+      const fn = httpsCallable<
+        { carpeta_id: string },
+        { ok: true; yaContratado: boolean; tickets: number }
+      >(functions, 'aprobarCarpeta');
+      await fn({ carpeta_id: c.id });
+    } catch (e) {
+      window.alert(
+        e instanceof Error ? e.message : 'No se pudo aprobar la carpeta. Intenta de nuevo.',
+      );
+    } finally {
+      setProcesando(null);
     }
+  }
+
+  /** Reintento manual del depósito a Drive (cuando la sync automática falló). */
+  async function reintentarDrive(c: CarpetaDoc) {
+    if (procesando) return;
+    setProcesando(c.id);
+    try {
+      const fn = httpsCallable<{ carpeta_id: string }, { ok: true; subidos: number }>(
+        functions,
+        'sincronizarCarpetaDrive',
+      );
+      const res = await fn({ carpeta_id: c.id });
+      window.alert(`Carpeta depositada en la Unidad Compartida (${res.data.subidos} archivo(s)).`);
+    } catch (e) {
+      window.alert(
+        e instanceof Error ? e.message : 'No se pudo sincronizar a Drive. Intenta de nuevo.',
+      );
     } finally {
       setProcesando(null);
     }
@@ -294,7 +314,7 @@ export default function CarpetasPage() {
           Carpetas digitales
         </h1>
         <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          Vista consolidada de los documentos del candidato apto médico. Los archivos viven en
+          Vista consolidada de los documentos del integrante apto médico. Los archivos viven en
           la postulación (tab Documentos, paso 10) — aquí GH solo valida que todo esté completo
           antes de cerrar la vacante y disparar los tickets del paso 20.
         </p>
@@ -310,14 +330,14 @@ export default function CarpetasPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-[15px] font-semibold text-text-strong">
-                  Candidatos aptos sin carpeta
+                  Integrantes aptos sin carpeta
                 </h2>
                 <Pill tono="info">
                   <span className="tabular-nums">{postSinCarpeta.length}</span>
                 </Pill>
               </div>
               <p className="text-[12px] text-text-muted mt-1">
-                Estos candidatos ya pasaron exámenes médicos. Abre la carpeta para validar
+                Estos integrantes ya pasaron exámenes médicos. Abre la carpeta para validar
                 documentos y avanzar al paso 19.
               </p>
               <ul className="mt-4 divide-y divide-info-500/15">
@@ -365,7 +385,7 @@ export default function CarpetasPage() {
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
           <p className="text-[14px] font-medium text-text-strong">Sin carpetas en proceso</p>
           <p className="text-[12px] text-text-muted mt-1">
-            Cuando aparezca un candidato apto médico, podrás armar su carpeta acá.
+            Cuando aparezca un integrante apto médico, podrás armar su carpeta acá.
           </p>
         </div>
       )}
@@ -375,7 +395,22 @@ export default function CarpetasPage() {
           const tono = ESTADO_TONO[c.estado] ?? 'neutral';
           const info = resolverInfo(c);
           const completitud = calcularCompletitud(c.postulacion_id);
+          const post = postPorId.get(c.postulacion_id) as unknown as Record<string, unknown> | undefined;
+          const consentimientosFirmados = [
+            {
+              etiqueta: 'Acuerdo de uso de imagen y voz',
+              url: String(post?.consentimiento_imagen_firma_url ?? ''),
+            },
+            {
+              etiqueta: 'Autorización de tratamiento de datos',
+              url: String(post?.consentimiento_datos_firma_url ?? ''),
+            },
+          ].filter((x) => x.url);
           const abierta = expandidas.has(c.id);
+          // BUG 3 · ya hay otro contratado en esta vacante → no se puede aprobar.
+          const contratadoOtro = contratadoPorVacante.get(c.vacante_id);
+          const bloqueadoPorContratado =
+            !!contratadoOtro && contratadoOtro !== c.postulacion_id;
 
           return (
             <Card key={c.id} padding="lg">
@@ -432,33 +467,28 @@ export default function CarpetasPage() {
                 </Pill>
               </div>
 
-              {/* Progreso · calculado de documentos_candidato reales */}
-              <div className="mb-5">
-                <div className="flex items-center justify-between mb-2 text-[12px]">
-                  <span className="text-text-muted tabular-nums">
-                    <span className="font-semibold text-text-strong">
-                      {completitud.verificados}
-                    </span>{' '}
-                    de {completitud.total} obligatorios verificados
-                  </span>
-                  <span
-                    className={cn(
-                      'font-bold tabular-nums',
-                      completitud.porcentaje === 100 ? 'text-success-700' : 'text-brand-700',
-                    )}
-                  >
-                    {completitud.porcentaje}%
-                  </span>
-                </div>
-                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                  <div
-                    className={cn(
-                      'h-full transition-all duration-300 ease-cult',
-                      completitud.porcentaje === 100 ? 'bg-success-500' : 'bg-brand-600',
-                    )}
-                    style={{ width: `${completitud.porcentaje}%` }}
-                  />
-                </div>
+              {/* Progreso · dos niveles (BUG 2): CyD (Atracción) gobierna; GH aparte */}
+              <div className="mb-5 space-y-3">
+                <BarraCompletitud
+                  etiqueta="Cultura y Desarrollo"
+                  verificados={completitud.verificados}
+                  total={completitud.total}
+                  porcentaje={completitud.porcentaje}
+                />
+                <BarraCompletitud
+                  etiqueta="Gestión Humana"
+                  verificados={completitud.gh.verificados}
+                  total={completitud.gh.total}
+                  porcentaje={completitud.gh.porcentaje}
+                  tenue
+                />
+                {completitud.porcentaje === 100 && completitud.pendientesGH.length > 0 && (
+                  <div className="rounded-md border border-warning-500/30 bg-warning-50/60 px-3 py-2 text-[11px] text-warning-800">
+                    <span className="font-semibold">Pendiente de Gestión Humana:</span>{' '}
+                    {completitud.pendientesGH.join(', ')}. GH ya recibió el aviso para
+                    cargarlos/validarlos.
+                  </div>
+                )}
               </div>
 
               {/* Toggle expandir/colapsar el detalle de documentos */}
@@ -576,6 +606,39 @@ export default function CarpetasPage() {
                       </div>
                     );
                   })}
+                  {consentimientosFirmados.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted mb-2">
+                        Consentimientos firmados · portal
+                      </p>
+                      <ul className="rounded-md border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                        {consentimientosFirmados.map((cs) => (
+                          <li
+                            key={cs.etiqueta}
+                            className="px-3.5 py-2.5 flex items-center gap-3 bg-white hover:bg-slate-50/40 transition-colors"
+                          >
+                            <FileText
+                              size={13}
+                              strokeWidth={1.5}
+                              className="shrink-0 text-success-600"
+                            />
+                            <p className="min-w-0 flex-1 text-[13px] text-text-body">
+                              {cs.etiqueta}
+                            </p>
+                            <a
+                              href={cs.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+                            >
+                              <ExternalLink size={10} strokeWidth={1.75} />
+                              Ver PDF
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -589,6 +652,31 @@ export default function CarpetasPage() {
                     {c.observaciones_gh}
                   </p>
                 </div>
+              )}
+
+              {/* Depósito en la Unidad Compartida de GH (Drive) */}
+              {c.drive_sincronizada_en ? (
+                <p className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-success-700">
+                  <CheckCircle2 size={12} strokeWidth={1.75} />
+                  Depositada en la Unidad Compartida de GH
+                </p>
+              ) : (
+                c.drive_error && (
+                  <div className="mt-3 rounded-md border border-rose-300 bg-rose-50 px-3.5 py-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-rose-700">
+                      No se pudo depositar en Drive
+                    </p>
+                    <p className="text-[12px] text-rose-700 mt-1">{String(c.drive_error)}</p>
+                    <button
+                      onClick={() => reintentarDrive(c)}
+                      disabled={!!procesando}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-rose-300 bg-white px-3 py-1.5 text-[12px] font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                    >
+                      <RefreshCw size={12} strokeWidth={1.75} />
+                      Reintentar Drive
+                    </button>
+                  </div>
+                )
               )}
 
               {/* Acciones según estado */}
@@ -645,16 +733,23 @@ export default function CarpetasPage() {
                       >
                         Observar
                       </Button>
-                      <Button
-                        onClick={() => aprobar(c)}
-                        disabled={procesando === c.id}
-                        loading={procesando === c.id}
-                        variant="brand-primary"
-                        size="medium"
-                        icon={<Sparkles size={13} strokeWidth={1.75} />}
-                      >
-                        Aprobar y disparar tickets · paso 20
-                      </Button>
+                      {bloqueadoPorContratado ? (
+                        <span className="inline-flex items-center gap-1.5 text-[12px] text-warning-700 font-medium">
+                          <AlertTriangle size={13} strokeWidth={1.75} />
+                          Ya hay un contratado en esta vacante
+                        </span>
+                      ) : (
+                        <Button
+                          onClick={() => aprobar(c)}
+                          disabled={procesando === c.id}
+                          loading={procesando === c.id}
+                          variant="brand-primary"
+                          size="medium"
+                          icon={<Sparkles size={13} strokeWidth={1.75} />}
+                        >
+                          Aprobar y cerrar el proceso · paso 20
+                        </Button>
+                      )}
                     </>
                   )}
                   {c.estado === 'aprobada' && (
@@ -668,6 +763,51 @@ export default function CarpetasPage() {
             </Card>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/** Barra de completitud por responsable (CyD / GH) — BUG 2. */
+function BarraCompletitud({
+  etiqueta,
+  verificados,
+  total,
+  porcentaje,
+  tenue,
+}: {
+  etiqueta: string;
+  verificados: number;
+  total: number;
+  porcentaje: number;
+  tenue?: boolean;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5 text-[12px]">
+        <span className="text-text-muted">
+          <span className="font-semibold text-text-strong">{etiqueta}</span>{' '}
+          <span className="tabular-nums">
+            · {verificados}/{total} verificados
+          </span>
+        </span>
+        <span
+          className={cn(
+            'font-bold tabular-nums',
+            porcentaje === 100 ? 'text-success-700' : tenue ? 'text-text-muted' : 'text-brand-700',
+          )}
+        >
+          {porcentaje}%
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div
+          className={cn(
+            'h-full transition-all duration-300 ease-cult',
+            porcentaje === 100 ? 'bg-success-500' : tenue ? 'bg-slate-400' : 'bg-brand-600',
+          )}
+          style={{ width: `${porcentaje}%` }}
+        />
       </div>
     </div>
   );

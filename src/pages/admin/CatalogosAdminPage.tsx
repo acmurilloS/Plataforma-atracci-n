@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Building2, MapPin, Layers, Briefcase, Database, Users2 } from 'lucide-react';
+import { Building2, MapPin, Layers, Briefcase, Database, Users2, Cloud } from 'lucide-react';
 import { EmpresasTab } from '../../components/admin/EmpresasTab';
 import { SedesTab } from '../../components/admin/SedesTab';
 import { UnidadesTab } from '../../components/admin/UnidadesTab';
 import { CargosTab } from '../../components/admin/CargosTab';
 import { SeedTab } from '../../components/admin/SeedTab';
 import { ReferidosTab } from '../../components/admin/ReferidosTab';
+import { IntegracionesTab } from '../../components/admin/IntegracionesTab';
 import { Pill } from '../../components/brand';
 import { cn } from '../../utils/cn';
 
@@ -22,6 +23,7 @@ const TABS = [
   { key: 'unidades', label: 'Unidades', icono: Layers },
   { key: 'cargos', label: 'Cargos', icono: Briefcase },
   { key: 'referidos', label: 'Referidos', icono: Users2 },
+  { key: 'integraciones', label: 'Integraciones', icono: Cloud },
   { key: 'seed', label: 'Seed', icono: Database },
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
@@ -77,6 +79,7 @@ export default function CatalogosAdminPage() {
         {tab === 'unidades' && <UnidadesTab />}
         {tab === 'cargos' && <CargosTab />}
         {tab === 'referidos' && <ReferidosTab />}
+        {tab === 'integraciones' && <IntegracionesTab />}
         {tab === 'seed' && <SeedTab />}
       </div>
     </div>

@@ -65,7 +65,7 @@ export default function ReferenciasPdfPage() {
           className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-text-strong transition-colors"
         >
           <ArrowLeft size={13} strokeWidth={1.75} />
-          Volver al candidato
+          Volver al integrante
         </Link>
         <div className="mt-6 flex items-start justify-between flex-wrap gap-6">
           <div>
@@ -80,7 +80,7 @@ export default function ReferenciasPdfPage() {
             </h1>
             <p className="mt-3 text-[14px] text-text-muted leading-[1.55] max-w-xl">
               Formato oficial VIDA-F-12 v2. Exporta a PDF para anexarlo al expediente del
-              candidato.
+              integrante.
             </p>
           </div>
           <Button
@@ -96,7 +96,7 @@ export default function ReferenciasPdfPage() {
       {referencias.length === 0 && (
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center print:hidden">
           <p className="text-[13px] text-text-muted">
-            Este candidato aún no tiene referencias registradas. Agrégalas en la pestaña
+            Este integrante aún no tiene referencias registradas. Agrégalas en la pestaña
             Referencias antes de exportar.
           </p>
         </div>
@@ -139,7 +139,7 @@ export default function ReferenciasPdfPage() {
 
           {/* Datos del candidato */}
           <div className="border-x border-b border-text-strong grid grid-cols-1 sm:grid-cols-2 text-[12px]">
-            <FilaDato label="Candidato" valor={postulacion.candidato_nombre} />
+            <FilaDato label="Integrante" valor={postulacion.candidato_nombre} />
             <FilaDato label="Cargo" valor={postulacion.cargo_nombre} />
             <FilaDato label="Consecutivo vacante" valor={postulacion.vacante_consecutivo} />
             <FilaDato

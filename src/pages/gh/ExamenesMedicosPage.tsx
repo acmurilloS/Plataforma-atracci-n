@@ -117,7 +117,7 @@ export default function ExamenesMedicosPage() {
         window.alert(
           `Orden reenviada a los ${res.data.destinatarios} gestores SST.\n\n` +
             `Ojo: todavía faltó ${faltantes.join(', ')}. Complétalo en los Datos Básicos del ` +
-            `candidato y vuelve a reenviar para que les llegue completo.`,
+            `integrante y vuelve a reenviar para que les llegue completo.`,
         );
       } else {
         window.alert(
@@ -136,7 +136,7 @@ export default function ExamenesMedicosPage() {
   function resolverInfo(ex: ExamenDoc) {
     const post = postulacionPorId.get(ex.postulacion_id);
     return {
-      candidato: ex.candidato_nombre ?? post?.candidato_nombre ?? 'Candidato sin nombre',
+      candidato: ex.candidato_nombre ?? post?.candidato_nombre ?? 'Integrante sin nombre',
       cargo: ex.cargo_nombre ?? post?.cargo_nombre ?? null,
       consecutivo: ex.vacante_consecutivo ?? post?.vacante_consecutivo ?? null,
       empresa: ex.empresa_codigo ?? null,
@@ -180,7 +180,7 @@ export default function ExamenesMedicosPage() {
         'enviarOrdenExamenCandidato',
       );
       const res = await fn({ examen_id: ex.id });
-      window.alert(`Orden enviada al candidato (${res.data.email_destinatario}).`);
+      window.alert(`Orden enviada al integrante (${res.data.email_destinatario}).`);
       setAccion(null);
     } catch (e) {
       window.alert('No se pudo enviar la orden: ' + (e instanceof Error ? e.message : String(e)));
@@ -243,7 +243,7 @@ export default function ExamenesMedicosPage() {
           Exámenes médicos
         </h1>
         <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          Cuando el líder aprueba un candidato, se dispara automáticamente la solicitud. GH
+          Cuando el líder aprueba un integrante, se dispara automáticamente la solicitud. GH
           envía la orden al centro médico y registra el concepto recibido.
         </p>
       </div>
@@ -262,7 +262,7 @@ export default function ExamenesMedicosPage() {
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
           <p className="text-[14px] font-medium text-text-strong">Sin exámenes pendientes</p>
           <p className="text-[12px] text-text-muted mt-1">
-            Cuando el líder apruebe un candidato en la terna, aparecerá aquí la solicitud.
+            Cuando el líder apruebe un integrante en la terna, aparecerá aquí la solicitud.
           </p>
         </div>
       )}
@@ -382,7 +382,7 @@ export default function ExamenesMedicosPage() {
                     size="medium"
                     icon={<Send size={13} strokeWidth={1.75} />}
                   >
-                    Enviar al candidato · paso 16
+                    Enviar al integrante · paso 16
                   </Button>
                 )}
                 {ex.estado === 'enviada' && accion?.id !== ex.id && (
@@ -411,7 +411,7 @@ export default function ExamenesMedicosPage() {
                 {ex.estado === 'no_apto' && (
                   <span className="inline-flex items-center gap-1.5 text-[12px] text-danger-700 font-medium">
                     <XCircle size={12} strokeWidth={1.75} />
-                    Candidato descartado por médicos
+                    Integrante descartado por médicos
                   </span>
                 )}
               </div>
@@ -419,7 +419,7 @@ export default function ExamenesMedicosPage() {
               {accion?.id === ex.id && accion.tipo === 'enviar' && (
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3">
                   <p className="text-[12px] font-semibold text-text-strong">
-                    Enviar orden al candidato · paso 16
+                    Enviar orden al integrante · paso 16
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <label className="block">
@@ -458,7 +458,7 @@ export default function ExamenesMedicosPage() {
                   </label>
                   <label className="block">
                     <span className="block text-[11px] font-medium text-text-muted mb-1">
-                      Indicaciones para el candidato (opcional)
+                      Indicaciones para el integrante (opcional)
                     </span>
                     <textarea
                       value={instrucciones}
@@ -469,7 +469,7 @@ export default function ExamenesMedicosPage() {
                     />
                   </label>
                   <p className="text-[11px] text-text-muted">
-                    Al confirmar se le envía el correo al candidato con estos datos.
+                    Al confirmar se le envía el correo al integrante con estos datos.
                   </p>
                   <div className="flex gap-2 justify-end">
                     <Button onClick={cerrarAccion} variant="neutral-secondary" size="small">

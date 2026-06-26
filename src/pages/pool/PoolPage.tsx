@@ -139,11 +139,11 @@ export default function PoolPage() {
           className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
           style={{ textWrap: 'balance' }}
         >
-          Pool propio de candidatos
+          Pool propio de integrantes
         </h1>
         <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-3xl">
-          Búsqueda cross-vacante de candidatos que ya pasaron por procesos. Cuando se abre una
-          vacante similar a una anterior, en vez de empezar desde cero, sugiere candidatos
+          Búsqueda cross-vacante de integrantes que ya pasaron por procesos. Cuando se abre una
+          vacante similar a una anterior, en vez de empezar desde cero, sugiere integrantes
           reciclables del pool.
         </p>
       </div>
@@ -161,10 +161,10 @@ export default function PoolPage() {
               </p>
               <p className="text-[12px] text-warning-700/80 mt-1.5 max-w-2xl leading-relaxed">
                 Hoy hay{' '}
-                <span className="tabular-nums font-bold">{stats.total}</span> candidato(s). En 2-3
-                meses de operación, esta vista será útil para reciclar candidatos descartados
+                <span className="tabular-nums font-bold">{stats.total}</span> integrante(s). En 2-3
+                meses de operación, esta vista será útil para reciclar integrantes descartados
                 blando, aptos no contratados, o aceptados que desistieron. Por ahora la prioridad
-                es que cada candidato quede bien etiquetado (ciudad, dominio, motivo de descarte) —
+                es que cada integrante quede bien etiquetado (ciudad, dominio, motivo de descarte) —
                 eso ya pasa automático.
               </p>
             </div>
@@ -175,7 +175,7 @@ export default function PoolPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MiniStat
-          label="Candidatos totales"
+          label="Integrantes totales"
           valor={stats.total}
           icono={<Users size={14} strokeWidth={1.75} />}
         />
@@ -265,8 +265,8 @@ export default function PoolPage() {
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
           <p className="text-[13px] text-text-muted">
             {stats.total === 0
-              ? 'Aún no hay candidatos en la base. Crea o recibe la primera postulación para empezar a llenar el pool.'
-              : 'Ningún candidato cumple los filtros actuales.'}
+              ? 'Aún no hay integrantes en la base. Crea o recibe la primera postulación para empezar a llenar el pool.'
+              : 'Ningún integrante cumple los filtros actuales.'}
           </p>
         </div>
       )}
@@ -277,7 +277,7 @@ export default function PoolPage() {
             <thead className="bg-slate-50 text-text-muted">
               <tr>
                 <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
-                  Candidato
+                  Integrante
                 </th>
                 <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-[0.06em]">
                   Ciudad

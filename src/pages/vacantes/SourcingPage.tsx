@@ -139,7 +139,7 @@ export default function SourcingPage() {
           className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
           style={{ textWrap: 'balance' }}
         >
-          Candidatos sourceados
+          Integrantes sourceados
         </h1>
         <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
           {vacante.cargo_nombre} ·{' '}
@@ -159,7 +159,7 @@ export default function SourcingPage() {
           <div className="flex-1 min-w-0">
             <Pill tono="brand">Búsqueda IA</Pill>
             <h2 className="mt-2 text-[18px] font-semibold tracking-[-0.012em] text-text-strong">
-              Encontrar más candidatos en internet
+              Encontrar más integrantes en internet
             </h2>
             <p className="text-[13px] text-text-muted mt-1.5 max-w-2xl">
               Gemini hace deep research sobre perfiles públicos (LinkedIn, GitHub, sitios
@@ -174,7 +174,7 @@ export default function SourcingPage() {
             variant="brand-primary"
             icon={<Sparkles size={13} strokeWidth={1.75} />}
           >
-            {ejecutando ? 'Buscando…' : 'Buscar candidatos'}
+            {ejecutando ? 'Buscando…' : 'Buscar integrantes'}
           </Button>
         </div>
         {error && (
@@ -202,7 +202,7 @@ export default function SourcingPage() {
             />
             <div className="flex-1">
               <p className="text-[13px] font-semibold text-text-strong">
-                Buscando candidatos en internet…
+                Buscando integrantes en internet…
               </p>
               <p className="text-[11px] text-text-muted mt-0.5">
                 La IA está rastreando perfiles públicos. Puede tomar entre 1 y 5 minutos. Los
@@ -213,7 +213,7 @@ export default function SourcingPage() {
         </Card>
       )}
 
-      {cargando && <p className="text-[13px] text-text-muted">Cargando candidatos…</p>}
+      {cargando && <p className="text-[13px] text-text-muted">Cargando integrantes…</p>}
 
       {!cargando && ordenados.length === 0 && (
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-12 text-center">
@@ -221,7 +221,7 @@ export default function SourcingPage() {
             <Sparkles size={20} strokeWidth={1.5} />
           </div>
           <p className="text-[15px] font-medium text-text-strong">
-            Sin candidatos sourceados todavía
+            Sin integrantes sourceados todavía
           </p>
           <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
             Si las publicaciones pasivas no traen suficientes HVs, lanza una búsqueda con IA y
@@ -292,7 +292,7 @@ export default function SourcingPage() {
                         <X size={11} strokeWidth={1.75} className="mt-0.5 shrink-0" />
                         <span>
                           La URL que dio la IA no resolvió, posiblemente fue inventada. Usa el
-                          link de búsqueda para ubicar al candidato manualmente.
+                          link de búsqueda para ubicar al integrante manualmente.
                         </span>
                       </p>
                     )}
@@ -334,7 +334,7 @@ export default function SourcingPage() {
         >
           <p>
             <span className="font-semibold">Habeas Data:</span> promover a postulado mueve al
-            candidato al flujo normal del paso 5. Recuerda incluir un mensaje de opt-in claro al
+            integrante al flujo normal del paso 5. Recuerda incluir un mensaje de opt-in claro al
             primer contacto.
           </p>
         </div>

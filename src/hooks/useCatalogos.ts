@@ -114,3 +114,22 @@ export function useFestivosAnio(anio: number) {
   }, [anio]);
   return festivos;
 }
+
+/**
+ * Festivos colombianos COMPLETOS (toda la colección, sin filtrar por año). La
+ * colección es chica (~18 docs/año) → cargarla entera evita que el cómputo de
+ * días hábiles cuente como hábil un festivo de un año fuera de una ventana fija
+ * (afectaría el ANS de vacantes/ternas con histórico de otros años). El id de
+ * cada doc es 'yyyy-MM-dd'.
+ */
+export function useFestivosTodos() {
+  const [festivos, setFestivos] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    return onSnapshot(collection(db, 'festivos'), (snap) => {
+      const s = new Set<string>();
+      snap.docs.forEach((d) => s.add(d.id));
+      setFestivos(s);
+    });
+  }, []);
+  return festivos;
+}

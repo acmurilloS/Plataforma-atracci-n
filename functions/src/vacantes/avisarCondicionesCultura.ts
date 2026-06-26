@@ -3,6 +3,10 @@ import { logger } from 'firebase-functions/v2';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import {
+  emailAnalistaDeVacante,
+  emailCoordinadorFallback,
+} from '../notificaciones/emailAnalista';
+import {
   envolverMarca,
   escapeHtml,
   FOOTER_EMPRESAS_DEFAULT,
@@ -71,20 +75,15 @@ export async function avisarCondicionesCultura(
   const sede = String(v.sede_nombre ?? '').trim();
   const consecutivo = String(v.consecutivo ?? '').trim();
   const liderNombre = String(v.lider_nombre ?? '').trim();
-  const liderUid = String(v.lider_uid ?? '').trim();
   const salario = Number(v.salario_base ?? 0);
   const comisiones = String(v.comisiones_texto ?? '').trim();
   const rodamiento = v.rodamiento === true;
   const garantizado = String(v.garantizado_texto ?? '').trim();
 
-  // Reply-to al líder; CC a coordinación.
-  let liderEmail = '';
+  // CC a coordinación. (El reply-to ya no va al líder: va al analista del
+  // proceso —ver más abajo—, nunca al líder ni a Steve.)
   const coordinadores: { uid: string; email: string }[] = [];
   try {
-    if (liderUid) {
-      const u = await db.collection('usuarios').doc(liderUid).get();
-      if (u.exists) liderEmail = String(u.data()?.email ?? '').trim();
-    }
     const cs = await db
       .collection('usuarios')
       .where('rol', '==', 'coordinador')
@@ -146,12 +145,18 @@ export async function avisarCondicionesCultura(
     consecutivo ? ` (${consecutivo})` : ''
   }`;
 
+  // Reply-to al ANALISTA del proceso; nunca al líder ni a Steve. Este correo
+  // sale al CREAR la vacante, cuando puede no haber analista aún: en ese caso,
+  // cae a coordinación.
+  const replyToAnalista =
+    (await emailAnalistaDeVacante(vacanteId)) || (await emailCoordinadorFallback());
+
   try {
     await enviarConGmail({
       from: FROM,
       to: [DIEGO_CULTURA],
       cc: ccCopia.length > 0 ? ccCopia : undefined,
-      replyTo: liderEmail || undefined,
+      replyTo: replyToAnalista || undefined,
       subject,
       html,
     });

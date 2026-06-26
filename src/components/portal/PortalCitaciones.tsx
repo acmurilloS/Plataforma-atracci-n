@@ -19,6 +19,7 @@ export interface CitaExamen {
   orden_direccion: string;
   orden_url: string;
   orden_instrucciones: string;
+  cita_para_ms: number | null;
 }
 
 const DURACION_ENTREVISTA_MIN = 45;
@@ -86,7 +87,7 @@ export function PortalCitaciones({
               ) : (
                 <Video size={15} strokeWidth={1.9} className="text-brand-600" />
               )}
-              Entrevista {entrevista.tipo === 'lider' ? 'con el líder' : 'de selección'}
+              Entrevista {entrevista.tipo === 'lider' ? 'con el líder' : 'de atracción'}
             </div>
             <p className="text-[13.5px] text-text-strong mt-1.5 capitalize">
               {fechaLegible(entrevista.programada_para_ms)}
@@ -136,6 +137,11 @@ export function PortalCitaciones({
               <Stethoscope size={15} strokeWidth={1.9} className="text-brand-600" />
               Exámenes médicos de ingreso
             </div>
+            {examen.cita_para_ms && (
+              <p className="text-[13.5px] text-text-strong mt-1.5 capitalize">
+                {fechaLegible(examen.cita_para_ms)}
+              </p>
+            )}
             {examen.centro_medico && (
               <p className="text-[13px] text-text-strong mt-1.5">
                 Centro médico: <span className="font-medium">{examen.centro_medico}</span>
@@ -148,6 +154,24 @@ export function PortalCitaciones({
               <p className="text-[12.5px] text-text-body mt-1.5 whitespace-pre-line">
                 {examen.orden_instrucciones}
               </p>
+            )}
+            {examen.cita_para_ms && (
+              <a
+                href={gcalUrl({
+                  titulo: `Exámenes médicos Equitel · ${cargo}`,
+                  inicioMs: examen.cita_para_ms,
+                  detalle: `Exámenes médicos de ingreso para el cargo ${cargo}.${
+                    examen.centro_medico ? `\nCentro: ${examen.centro_medico}` : ''
+                  }`,
+                  ubicacion: examen.orden_direccion || examen.centro_medico || '',
+                })}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 mr-2 inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-text-strong hover:bg-slate-50"
+              >
+                <CalendarPlus size={14} strokeWidth={2} />
+                Agregar a Google Calendar
+              </a>
             )}
             {examen.orden_url && (
               <a

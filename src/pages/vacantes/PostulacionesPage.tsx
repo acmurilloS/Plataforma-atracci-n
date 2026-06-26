@@ -24,6 +24,7 @@ import type {
 } from '../../schemas';
 import { estadoPostulacion, fuentePostulacion } from '../../schemas';
 import { Button, Card, Pill } from '../../components/brand';
+import { FaseCandidato } from '../../components/postulaciones/FaseCandidato';
 import { cn } from '../../utils/cn';
 
 /**
@@ -363,7 +364,7 @@ export default function PostulacionesPage() {
               </p>
             </div>
             <p className="text-[13px] text-text-muted mt-2 max-w-2xl leading-relaxed">
-              Selecciona varios PDFs a la vez (Magneto, Drive). Cada archivo crea un candidato
+              Selecciona varios PDFs a la vez (Magneto, Drive). Cada archivo crea un integrante
               provisional + una postulación con el CV adjunto. Luego editas los datos en{' '}
               <span className="font-semibold text-text-body">Abrir →</span>.
             </p>
@@ -418,7 +419,7 @@ export default function PostulacionesPage() {
         <div className="flex items-center gap-2 mb-5">
           <UserPlus size={14} strokeWidth={1.75} className="text-text-muted" />
           <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-            Agregar candidato manual
+            Agregar integrante manual
           </p>
         </div>
 
@@ -537,7 +538,7 @@ export default function PostulacionesPage() {
               disabled={procesando}
               loading={procesando}
             >
-              {procesando ? 'Guardando…' : 'Agregar candidato'}
+              {procesando ? 'Guardando…' : 'Agregar integrante'}
             </Button>
           </div>
         </form>
@@ -595,7 +596,7 @@ export default function PostulacionesPage() {
           <thead className="bg-slate-50 text-text-muted">
             <tr>
               <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-[0.06em] text-left">
-                Candidato
+                Integrante
               </th>
               <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-[0.06em] text-left">
                 Contacto
@@ -640,6 +641,9 @@ export default function PostulacionesPage() {
                     {p.fuente?.replace(/_/g, ' ')}
                     {p.fuente_detalle ? ` · ${p.fuente_detalle}` : ''}
                   </p>
+                  <div className="mt-1.5">
+                    <FaseCandidato estado={p.estado} variante="mini" />
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-text-muted text-[12px]">
                   {p.candidato_email || (
@@ -671,11 +675,15 @@ export default function PostulacionesPage() {
                     onChange={(e) => cambiarEstado(p, e.target.value as EstadoPostulacion)}
                     className="rounded-brand-input bg-white border border-slate-200 px-2 py-1 text-[12px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
                   >
-                    {ESTADOS.map((s) => (
-                      <option key={s} value={s}>
-                        {s.replace(/_/g, ' ')}
-                      </option>
-                    ))}
+                    {/* 'contratado' no se setea aquí: se llega solo al aprobar la
+                        carpeta (paso 19). Se muestra solo si ya está contratado. */}
+                    {ESTADOS.filter((s) => s !== 'contratado' || p.estado === 'contratado').map(
+                      (s) => (
+                        <option key={s} value={s}>
+                          {s.replace(/_/g, ' ')}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </td>
                 <td className="px-4 py-3 text-right">

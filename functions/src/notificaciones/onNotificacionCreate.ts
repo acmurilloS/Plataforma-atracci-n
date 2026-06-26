@@ -5,6 +5,11 @@ import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../utils/admin';
 import { enviarConGmail } from './enviarConGmail';
+import {
+  emailAnalistaDePostulacion,
+  emailAnalistaDeVacante,
+  emailCoordinadorFallback,
+} from './emailAnalista';
 
 /**
  * onNotificacionCreate · cada notificación interna también se manda al
@@ -76,10 +81,24 @@ export const onNotificacionCreate = onDocumentCreated(
 
     const html = construirHtml({ nombre, titulo, mensaje, link });
 
+    // Reply-To al ANALISTA del proceso (nunca a Steve). Si la notificación trae
+    // postulacion_id/vacante_id se resuelve por ahí; si no, fallback al coordinador.
+    const postulacionId = String(noti.postulacion_id ?? '').trim();
+    const vacanteId = String(noti.vacante_id ?? '').trim();
+    let correoAnalista = '';
+    if (postulacionId) {
+      correoAnalista = await emailAnalistaDePostulacion(postulacionId);
+    } else if (vacanteId) {
+      correoAnalista = await emailAnalistaDeVacante(vacanteId);
+    } else {
+      correoAnalista = await emailCoordinadorFallback();
+    }
+
     try {
       await enviarConGmail({
         from: FROM,
         to: [email],
+        replyTo: correoAnalista || undefined,
         subject: `[Equitel Atracción] ${titulo}`,
         html,
       });

@@ -5,6 +5,7 @@ import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { envolverMarca, escapeHtml, interpolar, leerPlantillas } from '../notificaciones/plantillasMensajes';
+import { leerConfigConexionTalentos } from '../notificaciones/configConexionTalentos';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -111,7 +112,12 @@ export const onCandidatoContratado = onDocumentUpdated(
     }
     const coordEmails = coords.map((c) => c.email).filter(Boolean);
 
-    // 1) Plan de conexión y talentos (Plantilla 3) → José + coordinación (Karen).
+    // 1) Plan de conexión y talentos (Plantilla 3) → José + Karen (configurable).
+    // Destinatarios/copias editables en configuracion_global/conexion_talentos;
+    // fallback legacy a José (to) + coordinadores por rol (cc). Reply-to al analista.
+    const cfgCT = await leerConfigConexionTalentos();
+    const toTalentos = cfgCT.destinatarios.length ? cfgCT.destinatarios : [JOSE_TALENTOS];
+    const ccTalentos = cfgCT.copias.length ? cfgCT.copias : coordEmails;
     const { plantillas, footerEmpresas } = await leerPlantillas();
     const tpl = plantillas.conexion_talentos;
     const guion = '—';
@@ -131,8 +137,8 @@ export const onCandidatoContratado = onDocumentUpdated(
     try {
       await enviarConGmail({
         from: FROM,
-        to: [JOSE_TALENTOS],
-        cc: coordEmails.length ? coordEmails : undefined,
+        to: toTalentos,
+        cc: ccTalentos.length ? ccTalentos : undefined,
         replyTo: analistaEmail || undefined,
         subject: interpolar(tpl.asunto, asuntoVars),
         html: envolverMarca(interpolar(tpl.cuerpo, cuerpoVars), { footerEmpresas }),

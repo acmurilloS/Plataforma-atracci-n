@@ -1,5 +1,4 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import {
   Check,
@@ -106,13 +105,16 @@ export function DebidaDiligenciaTab({ postulacion }: Props) {
         </div>
         {dd && (
           <div className="flex items-center gap-2">
-            <Link
-              to={`/postulaciones/${postulacion.id}/diligencia-pdf`}
+            <a
+              href="/formatos/debida-diligencia.pdf"
+              target="_blank"
+              rel="noreferrer"
+              download
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-text-strong hover:bg-slate-50"
             >
               <Printer size={12} strokeWidth={1.75} />
-              Imprimir / PDF
-            </Link>
+              Formato oficial
+            </a>
             <Pill tono={ESTADO_TONO[dd.estado]} dot>
               {ESTADO_LABEL[dd.estado]}
             </Pill>
@@ -288,7 +290,7 @@ function CrearDebidaDiligencia({
             Iniciar debida diligencia
           </h4>
           <p className="text-[12px] text-text-muted mt-1.5 max-w-2xl">
-            Solo se diligencia para candidatos seleccionados. El integrante completa los
+            Solo se diligencia para integrantes seleccionados. El integrante completa los
             campos y firma; el oficial de cumplimiento verifica en listas vinculantes.
           </p>
         </div>

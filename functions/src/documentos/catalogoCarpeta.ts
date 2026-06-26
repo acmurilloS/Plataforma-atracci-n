@@ -15,17 +15,17 @@ export interface ItemCatalogoCarpeta {
   nombre: string;
   opcional: boolean;
   aporta_candidato: boolean;
-  /** Lo gestiona GH (contrato, afiliaciones): NO cuenta como obligatorio. */
-  gestionado_por_gh?: boolean;
+  /** Responsable: 'gh' (contrato, afiliaciones) NO bloquea la parte de CyD. */
+  responsable?: 'cyd' | 'gh';
 }
 
 export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'datos_basicos_integrante', seccion: 'generales', nombre: 'Datos Básicos del Integrante (DGH-F-05)', opcional: false, aporta_candidato: false },
-  { clave: 'contrato_trabajo', seccion: 'generales', nombre: 'Contrato de Trabajo', opcional: false, aporta_candidato: false, gestionado_por_gh: true },
+  { clave: 'contrato_trabajo', seccion: 'generales', nombre: 'Contrato de Trabajo', opcional: false, aporta_candidato: false, responsable: 'gh' },
   { clave: 'solicitud_integrantes', seccion: 'generales', nombre: 'Solicitud de Integrantes / Reporte de Novedad', opcional: false, aporta_candidato: false },
-  { clave: 'afiliacion_arl', seccion: 'seguridad_social', nombre: 'Afiliación ARL', opcional: false, aporta_candidato: false, gestionado_por_gh: true },
-  { clave: 'afiliacion_eps', seccion: 'seguridad_social', nombre: 'Afiliación EPS', opcional: false, aporta_candidato: false, gestionado_por_gh: true },
-  { clave: 'afiliacion_caja', seccion: 'seguridad_social', nombre: 'Afiliación Caja de Compensación', opcional: false, aporta_candidato: false, gestionado_por_gh: true },
+  { clave: 'afiliacion_arl', seccion: 'seguridad_social', nombre: 'Afiliación ARL', opcional: false, aporta_candidato: false, responsable: 'gh' },
+  { clave: 'afiliacion_eps', seccion: 'seguridad_social', nombre: 'Afiliación EPS', opcional: false, aporta_candidato: false, responsable: 'gh' },
+  { clave: 'afiliacion_caja', seccion: 'seguridad_social', nombre: 'Afiliación Caja de Compensación', opcional: false, aporta_candidato: false, responsable: 'gh' },
   { clave: 'certificacion_eps', seccion: 'seguridad_social', nombre: 'Certificación de EPS', opcional: true, aporta_candidato: true },
   { clave: 'certificacion_afp', seccion: 'seguridad_social', nombre: 'Certificación de AFP', opcional: true, aporta_candidato: true },
   { clave: 'carta_cesantias', seccion: 'seguridad_social', nombre: 'Carta de Cesantías', opcional: true, aporta_candidato: true },
@@ -36,6 +36,7 @@ export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'certificado_medico', seccion: 'hoja_vida', nombre: 'Certificado médico de aptitud laboral', opcional: false, aporta_candidato: false },
   { clave: 'hoja_vida', seccion: 'hoja_vida', nombre: 'Hoja de Vida', opcional: false, aporta_candidato: true },
   { clave: 'autorizacion_datos', seccion: 'hoja_vida', nombre: 'Autorización para recolección y tratamiento de datos personales', opcional: false, aporta_candidato: false },
+  { clave: 'debida_diligencia', seccion: 'hoja_vida', nombre: 'Debida Diligencia / SAGRILAFT (F-CAR-01)', opcional: false, aporta_candidato: false },
   { clave: 'evaluacion_psicologica', seccion: 'hoja_vida', nombre: 'Informe de Evaluación Psicológica', opcional: false, aporta_candidato: false },
   { clave: 'resultado_pruebas_psicologicas', seccion: 'hoja_vida', nombre: 'Resultado de pruebas psicológicas del candidato', opcional: false, aporta_candidato: false },
   { clave: 'pruebas_tecnicas', seccion: 'hoja_vida', nombre: 'Informe de Pruebas Técnicas', opcional: true, aporta_candidato: false },
@@ -51,10 +52,18 @@ export const CLAVES_APORTA_CANDIDATO = CATALOGO_CARPETA.filter((i) => i.aporta_c
   (i) => i.clave,
 );
 
+const esGH = (i: ItemCatalogoCarpeta) => i.responsable === 'gh';
+
 /**
- * Claves obligatorias para ATRACCIÓN (evalúan si la carpeta está completa).
- * Excluye los gestionados por GH (contrato, afiliaciones): esos no bloquean.
+ * Claves obligatorias de la parte de CyD/Atracción (evalúan si CyD completó su
+ * parte → dispara el aviso a GH y el auto-armado). Excluye los de GH (contrato,
+ * afiliaciones): esos no bloquean la parte de CyD.
  */
 export const CLAVES_OBLIGATORIAS = CATALOGO_CARPETA.filter(
-  (i) => !i.opcional && !i.gestionado_por_gh,
+  (i) => !i.opcional && !esGH(i),
+).map((i) => i.clave);
+
+/** Claves obligatorias a cargo de Gestión Humana (contrato, afiliaciones). */
+export const CLAVES_OBLIGATORIAS_GH = CATALOGO_CARPETA.filter(
+  (i) => !i.opcional && esGH(i),
 ).map((i) => i.clave);

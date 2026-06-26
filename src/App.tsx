@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 import CatalogosAdminPage from './pages/admin/CatalogosAdminPage';
 import PanelAdminPage from './pages/admin/PanelAdminPage';
 import TicketsPage from './pages/apoyo/TicketsPage';
@@ -13,6 +13,7 @@ import ExamenesMedicosPage from './pages/gh/ExamenesMedicosPage';
 import AprobacionAvalPage from './pages/gh/AprobacionAvalPage';
 import LiderMisVacantesPage from './pages/lider/MisVacantesPage';
 import LoginPage from './pages/LoginPage';
+import OnboardingRolPage from './pages/OnboardingRolPage';
 import NuevaVacantePage from './pages/NuevaVacantePage';
 import PostulacionDetallePage from './pages/postulaciones/PostulacionDetallePage';
 import { AutorizacionDatosPage, AutorizacionImagenPage } from './pages/postulaciones/AutorizacionPage';
@@ -27,17 +28,26 @@ import TernaPage from './pages/vacantes/TernaPage';
 import ConceptoAtraccionPage from './pages/vacantes/ConceptoAtraccionPage';
 import SolicitudIntegrantePage from './pages/vacantes/SolicitudIntegrantePage';
 import ReferenciasPdfPage from './pages/postulaciones/ReferenciasPdfPage';
-import DatosBasicosPdfPage from './pages/postulaciones/DatosBasicosPdfPage';
-import DebidaDiligenciaPdfPage from './pages/postulaciones/DebidaDiligenciaPdfPage';
 import PoolPage from './pages/pool/PoolPage';
 import VacantesAbiertasPage from './pages/internos/VacantesAbiertasPage';
 
 function AppShell() {
   return (
     <ProtectedRoute>
-      <Layout />
+      <ShellConRol />
     </ProtectedRoute>
   );
+}
+
+/**
+ * Dentro de ProtectedRoute ya hay sesión iniciada. Si el usuario aún no tiene
+ * rol (primer ingreso, sin doc usuarios), mostramos el onboarding de selección
+ * de rol en vez de la app vacía. Con rol asignado, entra normal.
+ */
+function ShellConRol() {
+  const { rol, cargando } = useAuth();
+  if (!cargando && !rol) return <OnboardingRolPage />;
+  return <Layout />;
 }
 
 export default function App() {
@@ -51,7 +61,14 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/seguimiento" replace />} />
             <Route path="/seguimiento" element={<SeguimientoPage />} />
-            <Route path="/vacantes/nueva" element={<NuevaVacantePage />} />
+            <Route
+              path="/vacantes/nueva"
+              element={
+                <ProtectedRoute roles={['lider', 'coordinador', 'admin']}>
+                  <NuevaVacantePage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/vacantes" element={<VacantesListaPage />} />
             <Route path="/mis-vacantes" element={<LiderMisVacantesPage />} />
             <Route path="/vacantes/:id" element={<VacanteDetallePage />} />
@@ -74,8 +91,6 @@ export default function App() {
             />
             <Route path="/postulaciones/:id" element={<PostulacionDetallePage />} />
             <Route path="/postulaciones/:id/referencias-pdf" element={<ReferenciasPdfPage />} />
-            <Route path="/postulaciones/:id/datos-basicos-pdf" element={<DatosBasicosPdfPage />} />
-            <Route path="/postulaciones/:id/diligencia-pdf" element={<DebidaDiligenciaPdfPage />} />
             <Route path="/postulaciones/:id/autorizacion-datos" element={<AutorizacionDatosPage />} />
             <Route path="/postulaciones/:id/autorizacion-imagen" element={<AutorizacionImagenPage />} />
             <Route
@@ -122,7 +137,7 @@ export default function App() {
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute roles={['coordinador', 'admin']}>
+                <ProtectedRoute roles={['coordinador', 'admin', 'gh']}>
                   <DashboardCoordPage />
                 </ProtectedRoute>
               }

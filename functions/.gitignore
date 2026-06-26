@@ -1,1 +1,8 @@
 *.secret.local
+
+# Claves de cuentas de servicio de Google — NUNCA al repo (regla de seguridad).
+*service-account*.json
+*-sa.json
+gdrive-*.json
+*.serviceaccount.json
+service-account-key*.json

@@ -48,10 +48,10 @@ export async function notificarCarpetaListaValidarCore(
     await db.collection('notificaciones').add({
       destinatario_uid: g.id,
       tipo: 'generica',
-      titulo: 'Carpeta lista para validar',
-      mensaje: `La carpeta de ${nombre}${
+      titulo: 'Carpeta lista para tu validación (GH)',
+      mensaje: `La parte de Cultura y Desarrollo de la carpeta de ${nombre}${
         cargo ? ` (${cargo})` : ''
-      } ya tiene todos los documentos cargados. Entra a Carpetas para revisarla y validarla.`,
+      } está completa. Entra a Carpetas para revisarla, cargar los documentos a cargo de Gestión Humana (contrato y afiliaciones) y aprobarla.`,
       link: '/carpetas',
       leida: false,
       leida_en: null,

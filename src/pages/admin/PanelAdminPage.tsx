@@ -257,7 +257,7 @@ export default function PanelAdminPage() {
           />
           <LinkCard
             to="/pool"
-            titulo="Pool de candidatos"
+            titulo="Pool de integrantes"
             descripcion="Base cross-vacante para reciclar talento."
             badge="analista"
             tono="warning"

@@ -4,6 +4,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { emailAnalistaDeVacante } from '../notificaciones/emailAnalista';
 import { generarSlug } from '../referidos/generarSlug';
 import { DIAS_VIGENCIA_TOKEN } from './tokenVigente';
 
@@ -106,10 +107,13 @@ export const enviarPortalCandidato = onCall(
 
     const url = `${APP_URL}/portal/${token}`;
 
+    const correoAnalista = await emailAnalistaDeVacante(post.vacante_id as string | null | undefined);
+
     try {
       await enviarConGmail({
         from: FROM,
         to: [email],
+        replyTo: correoAnalista || undefined,
         subject: `Tu portal del proceso · ${cargo} · Equitel`,
         html: construirHtml({ nombre: candidatoNombre, cargo, url }),
       });

@@ -113,7 +113,7 @@ export function DocumentosTab({ postulacion }: Props) {
       CATALOGO_DOCUMENTOS_CARPETA.filter(
         (cat) =>
           !cat.opcional &&
-          !cat.gestionado_por_gh &&
+          cat.responsable !== 'gh' &&
           docsPorClave.get(cat.clave)?.estado === 'verificado',
       ).length,
     [docsPorClave],
@@ -124,7 +124,7 @@ export function DocumentosTab({ postulacion }: Props) {
   // avisar a GH que la carpeta está lista para validar. Backend idempotente.
   const todosCargados = useMemo(
     () =>
-      CATALOGO_DOCUMENTOS_CARPETA.filter((cat) => !cat.opcional && !cat.gestionado_por_gh).every(
+      CATALOGO_DOCUMENTOS_CARPETA.filter((cat) => !cat.opcional && cat.responsable !== 'gh').every(
         (cat) => {
           const e = docsPorClave.get(cat.clave)?.estado;
           return e === 'entregado' || e === 'verificado' || e === 'no_aplica';
@@ -152,7 +152,7 @@ export function DocumentosTab({ postulacion }: Props) {
           <div className="flex items-center gap-2 mb-2">
             <FolderOpen size={14} strokeWidth={1.75} className="text-info-700" />
             <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-info-700">
-              Aportados por el candidato · portal ({docsPortal.length})
+              Aportados por el integrante · portal ({docsPortal.length})
             </p>
           </div>
           <ul className="space-y-1.5">
@@ -237,14 +237,14 @@ export function DocumentosTab({ postulacion }: Props) {
             disabled={enviandoListado || docsParaCandidato.length === 0 || !emailCandidato}
             icon={<Mail size={13} strokeWidth={1.75} />}
           >
-            Enviar listado al candidato
+            Enviar listado al integrante
             {docsParaCandidato.length > 0 ? ` (${docsParaCandidato.length})` : ''}
           </Button>
           <span className="text-[11px] text-text-muted">
             {!emailCandidato
-              ? 'El candidato no tiene correo — agrégalo en Datos Básicos.'
+              ? 'El integrante no tiene correo — agrégalo en Datos Básicos.'
               : docsParaCandidato.length === 0
-                ? 'No hay documentos del candidato pendientes por solicitar.'
+                ? 'No hay documentos del integrante pendientes por solicitar.'
                 : 'Le llega un correo con la lista para que los envíe; tú los subes aquí.'}
           </span>
         </div>
@@ -273,10 +273,10 @@ export function DocumentosTab({ postulacion }: Props) {
       {secciones.map((seccion) => {
         const itemsSeccion = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => c.seccion === seccion);
         const verifSeccion = itemsSeccion.filter(
-          (c) => !c.gestionado_por_gh && docsPorClave.get(c.clave)?.estado === 'verificado',
+          (c) => c.responsable !== 'gh' && docsPorClave.get(c.clave)?.estado === 'verificado',
         ).length;
         const obligatoriosSeccion = itemsSeccion.filter(
-          (c) => !c.opcional && !c.gestionado_por_gh,
+          (c) => !c.opcional && c.responsable !== 'gh',
         ).length;
 
         return (
@@ -338,7 +338,7 @@ function DocumentoRow({
 }: RowProps) {
   const estado: EstadoDocumento = doc?.estado ?? 'pendiente';
   const esMultiple = !!catalogo.multiple;
-  const esGH = !!catalogo.gestionado_por_gh;
+  const esGH = catalogo.responsable === 'gh';
   // Lista de archivos: usa `archivos` si existe; si no, deriva del archivo único
   // (compatibilidad con documentos viejos o subidos desde el portal).
   const archivos: ArchivoCarpeta[] =
@@ -542,6 +542,18 @@ function DocumentoRow({
         )}
         {catalogo.ayuda && (
           <p className="text-[11px] text-text-muted mt-1">{catalogo.ayuda}</p>
+        )}
+        {catalogo.plantilla_oficial && (
+          <a
+            href={catalogo.plantilla_oficial}
+            target="_blank"
+            rel="noreferrer"
+            download
+            className="inline-flex items-center gap-1.5 mt-1.5 text-[11px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+          >
+            <FileText size={11} strokeWidth={1.5} />
+            Descargar formato oficial
+          </a>
         )}
         {/* Archivo(s) */}
         {esMultiple ? (

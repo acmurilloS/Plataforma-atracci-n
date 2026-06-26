@@ -163,7 +163,13 @@ service cloud.firestore {
       allow read: if signedIn();
       // Landing pública (anónimo) DEBE aceptar Habeas Data; flujos internos igual.
       allow create: if signedIn() && (!esAnonimo() || aceptoHabeasData());
-      allow update: if staff() || isAnalista();
+      // BUG 3 (2026-06-24): ningún cliente puede transicionar a 'contratado'
+      // directamente — solo la Cloud Function `aprobarCarpeta` (Admin SDK, que
+      // valida unicidad de 1 contratado por vacante). Así es imposible tener 2
+      // contratados aunque se salten la UI. El resto de updates no cambia.
+      allow update: if (staff() || isAnalista())
+        && !(request.resource.data.estado == 'contratado'
+             && resource.data.estado != 'contratado');
       allow delete: if false;
     }
     match /contactos_candidato/{id} {

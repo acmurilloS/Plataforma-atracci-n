@@ -3,9 +3,14 @@
 // Hasta que exista UI de gestión de usuarios en /admin (la invoca el admin).
 export { crearUsuarioCorporativo } from './auth/crearUsuarioCorporativo';
 export { setearRolUsuario } from './auth/setearRolUsuario';
+// Onboarding de autoservicio: el usuario elige su rol en el primer ingreso.
+export { autoasignarRol } from './auth/autoasignarRol';
 
 // Subir PDFs (avales, CVs, docs) a la Shared Drive corporativa de Equitel.
 export { subirArchivoADrive } from './drive/subirArchivoADrive';
+// Depósito de la carpeta completa (CyD+GH al 100%) en la Unidad Compartida de GH.
+export { onCarpetaCompletaTotal } from './drive/onCarpetaCompletaTotal';
+export { probarConexionDrive, sincronizarCarpetaDrive } from './drive/callablesDrive';
 
 export { onVacanteCreate } from './vacantes/onVacanteCreate';
 export { onCandidatoCreate } from './candidatos/onCandidatoCreate';
@@ -29,6 +34,8 @@ export { marcarComoEnviadasReferidos } from './referidos/marcarComoEnviadas';
 // Envío de pruebas al candidato por correo (paso 7, 2026-06-09).
 export { enviarPruebaCandidato } from './pruebas/enviarPruebaCandidato';
 
+// Asegura la solicitud de examen al ENTRAR a en_examenes_medicos (cualquier vía).
+export { onPostulacionEnExamenes } from './examenes/onPostulacionEnExamenes';
 // Correo de orden de exámenes médicos a los gestores SST (paso 15, 2026-06-09).
 export { onExamenMedicoCreate } from './examenes/onExamenMedicoCreate';
 // Reenvío manual de la orden a los gestores SST (botón de GH/analista, 2026-06-13).
@@ -45,12 +52,17 @@ export { enviarListadoDocumentos } from './documentos/enviarListadoDocumentos';
 export { notificarCarpetaListaValidar } from './documentos/notificarCarpetaListaValidar';
 // Auto-armado de la carpeta cuando se completan los obligatorios (Portal F5, 2026-06-17).
 export { onCarpetaCompletaCheck } from './documentos/onCarpetaCompletaCheck';
+// Aviso a GH cuando la carpeta se ENTREGA formalmente (paso 19, 2026-06-25).
+export { onCarpetaEntregada } from './documentos/onCarpetaEntregada';
 // Correo de agradecimiento al candidato descartado (D.3, 2026-06-16).
 export { enviarAgradecimientoCandidato } from './notificaciones/enviarAgradecimientoCandidato';
 // Borrador de mensaje al candidato con IA enchufable (categoría segura, confidencialidad).
 export { maquillarMensajeIA } from './notificaciones/maquillarMensaje';
 // Correos de plan de conexión/dotación al marcar contratado (F.2, 2026-06-16).
 export { onCandidatoContratado } from './tickets/onCandidatoContratado';
+// Aprobar carpeta = contratar + cerrar vacante + tickets, transaccional y con
+// unicidad de 1 contratado por vacante (BUG 3+4, 2026-06-24).
+export { aprobarCarpeta } from './carpetas/aprobarCarpeta';
 
 // Portal del candidato (público, sin login): consentimientos digitales (2026-06-13).
 export { enviarPortalCandidato } from './portal/enviarPortalCandidato';

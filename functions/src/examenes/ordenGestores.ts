@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { leerConfigExamenes } from './configExamenes';
 
 const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
 
@@ -64,15 +65,20 @@ export async function enviarOrdenAGestores(
   }
   const ex = (snap.data() ?? {}) as Record<string, unknown>;
 
+  // Modo prueba (config): si está activo, la orden NO va a los gestores reales
+  // sino al/los correo(s) de prueba (demo). Fallback seguro: sin config → real.
+  const cfg = await leerConfigExamenes();
+  const destinatarios = cfg.modo_prueba ? cfg.correo_prueba : GESTORES;
+
   // Idempotencia: el trigger no reenvía si ya se mandó. La callable (forzar) sí.
   if (!opts.forzar && ex.correo_gestor_enviado_en) {
     logger.info('enviarOrdenAGestores · ya notificado, omito', { examen_id: examenId });
-    return { estado: 'omitido_ya_enviado', faltantes: [], destinatarios: GESTORES };
+    return { estado: 'omitido_ya_enviado', faltantes: [], destinatarios };
   }
 
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
     logger.info('enviarOrdenAGestores · GMAIL_* ausentes, correo omitido', { examen_id: examenId });
-    return { estado: 'sin_secrets', faltantes: [], destinatarios: GESTORES };
+    return { estado: 'sin_secrets', faltantes: [], destinatarios };
   }
 
   // Datos: preferimos el snapshot que TernaPage guarda en el propio doc, y
@@ -174,7 +180,7 @@ export async function enviarOrdenAGestores(
   try {
     await enviarConGmail({
       from: FROM,
-      to: GESTORES,
+      to: destinatarios,
       cc: ccCopia.length > 0 ? ccCopia : undefined,
       replyTo: analistaEmail || undefined,
       subject: `Orden de exámenes médicos · ${nombre || 'candidato'} · ${cargo}`,
@@ -200,12 +206,12 @@ export async function enviarOrdenAGestores(
         conCorreo: true,
       });
     }
-    return { estado: 'error', faltantes, destinatarios: GESTORES, error: msg };
+    return { estado: 'error', faltantes, destinatarios, error: msg };
   }
 
   await ref.update({
     correo_gestor_enviado_en: FieldValue.serverTimestamp(),
-    correo_gestor_destinatarios: GESTORES,
+    correo_gestor_destinatarios: destinatarios,
     correo_gestor_datos_faltantes: faltantes,
     correo_gestor_error: null,
   });
@@ -216,7 +222,7 @@ export async function enviarOrdenAGestores(
       examen_id: examenId,
       postulacion_id: ex.postulacion_id ?? null,
       vacante_id: ex.vacante_id ?? null,
-      destinatarios: GESTORES,
+      destinatarios,
       datos_faltantes: faltantes,
       reenviado: opts.forzar === true,
       creado_en: FieldValue.serverTimestamp(),
@@ -239,7 +245,7 @@ export async function enviarOrdenAGestores(
         titulo: 'Gestores SST notificados',
         mensaje: `La orden de exámenes de ${nombre || 'el candidato'}${
           cargo ? ` (${cargo})` : ''
-        } se envió a los ${GESTORES.length} gestores SST con los 6 datos completos.`,
+        } se envió a ${destinatarios.length} destinatario(s) SST con los 6 datos completos.`,
         link: '/examenes-medicos',
         conCorreo: false,
       });
@@ -277,12 +283,12 @@ export async function enviarOrdenAGestores(
 
   logger.info('enviarOrdenAGestores · orden enviada a gestores', {
     examen_id: examenId,
-    destinatarios: GESTORES.length,
+    destinatarios: destinatarios.length,
     faltantes,
     forzar: opts.forzar === true,
   });
 
-  return { estado: 'enviado', faltantes, destinatarios: GESTORES };
+  return { estado: 'enviado', faltantes, destinatarios };
 }
 
 /**

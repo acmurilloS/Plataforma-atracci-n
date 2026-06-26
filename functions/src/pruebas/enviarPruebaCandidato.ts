@@ -4,6 +4,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { emailAnalistaDePostulacion } from '../notificaciones/emailAnalista';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -151,12 +152,16 @@ export const enviarPruebaCandidato = onCall(
       </div>
     `.trim();
 
+    // Las respuestas del candidato deben llegar al analista del proceso, no a Steve (FROM).
+    const replyToAnalista = await emailAnalistaDePostulacion(postulacionId);
+
     try {
       await enviarConGmail({
         from: FROM,
         to: [email],
         subject: `${plural ? 'Pruebas' : 'Prueba'} del proceso de atracción · ${cargo}`,
         html,
+        replyTo: replyToAnalista || undefined,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

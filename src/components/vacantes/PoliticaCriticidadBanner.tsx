@@ -82,10 +82,10 @@ export function PoliticaCriticidadBanner({ criticidad, compacto = false }: Props
       {expandido && (
         <div className={`mt-3 pt-3 border-t border-current/20 text-xs ${estilos.descripcion} space-y-2`}>
           <div className="grid grid-cols-2 gap-2">
-            <Dato label="Mín. candidatos en terna" valor={String(politica.min_candidatos_terna)} />
+            <Dato label="Mín. integrantes en terna" valor={String(politica.min_candidatos_terna)} />
             <Dato
               label="Sugerencia analista"
-              valor={`${politica.candidatos_terna_sugeridos} candidatos`}
+              valor={`${politica.candidatos_terna_sugeridos} integrantes`}
             />
             <Dato label="Mín. referencias" valor={String(politica.min_referencias)} />
             <Dato label="Meta ciclo total" valor={`${politica.meta_dias_habiles_total} días hábiles`} />

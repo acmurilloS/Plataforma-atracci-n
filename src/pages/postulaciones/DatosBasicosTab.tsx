@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import {
   Check,
@@ -108,13 +107,16 @@ export function DatosBasicosTab({ postulacion }: Props) {
         </div>
         {dato && (
           <div className="flex items-center gap-2">
-            <Link
-              to={`/postulaciones/${postulacion.id}/datos-basicos-pdf`}
+            <a
+              href="/formatos/datos-basicos.pdf"
+              target="_blank"
+              rel="noreferrer"
+              download
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-text-strong hover:bg-slate-50"
             >
               <Printer size={12} strokeWidth={1.75} />
-              Imprimir / PDF
-            </Link>
+              Formato oficial
+            </a>
             <Pill tono={ESTADO_TONO[dato.estado]} dot>
               {ESTADO_LABEL[dato.estado]}
             </Pill>
@@ -123,7 +125,7 @@ export function DatosBasicosTab({ postulacion }: Props) {
       </div>
 
       <FirmaDigitalBanner
-        titulo="Firma del candidato (portal)"
+        titulo="Firma del integrante (portal)"
         imagenUrl={(postulacion as unknown as Record<string, string | undefined>).firma_datos_basicos_imagen_url}
         fecha={(postulacion as unknown as Record<string, Timestamp | undefined>).firma_datos_basicos_en}
         pdfUrl={(postulacion as unknown as Record<string, string | undefined>).firma_datos_basicos_url}
@@ -295,7 +297,7 @@ function CrearDatosBasicos({
             Iniciar datos básicos del integrante
           </h4>
           <p className="text-[12px] text-text-muted mt-1.5 max-w-2xl">
-            El candidato seleccionado completa la información personal, laboral y familiar.
+            El integrante seleccionado completa la información personal, laboral y familiar.
             GH valida y registra en nómina.
           </p>
         </div>

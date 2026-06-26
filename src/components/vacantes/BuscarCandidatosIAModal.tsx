@@ -90,7 +90,7 @@ export function BuscarCandidatosIAModal({ open, onClose, onCompletado, vacante }
       open={open}
       onClose={onClose}
       size="lg"
-      title="Buscar candidatos con IA"
+      title="Buscar integrantes con IA"
       description="Gemini hará deep research sobre perfiles públicos y devolverá hasta 15 personas que coincidan con esta vacante."
       footer={
         <>
@@ -130,7 +130,7 @@ export function BuscarCandidatosIAModal({ open, onClose, onCompletado, vacante }
         <ul className="space-y-1.5">
           {[
             <>
-              Los candidatos entran con estado{' '}
+              Los integrantes entran con estado{' '}
               <Pill tono="brand">sourceado_por_ia</Pill>.
             </>,
             <>Tú revisas cada uno y decides si avanza al flujo normal (paso 5).</>,
@@ -163,7 +163,7 @@ export function BuscarCandidatosIAModal({ open, onClose, onCompletado, vacante }
                 className="text-warning-700 mt-0.5 shrink-0"
               />
               <div className="flex-1 space-y-2 text-[12px] text-warning-700">
-                <p className="font-semibold">Gemini no devolvió candidatos para esta vacante.</p>
+                <p className="font-semibold">Gemini no devolvió integrantes para esta vacante.</p>
                 <p className="leading-[1.5]">
                   Esto pasa cuando el rol no tiene huella digital significativa (ej. cargos
                   operativos, juniors, oficios) o cuando los criterios son demasiado genéricos.

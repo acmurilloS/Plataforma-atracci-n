@@ -121,7 +121,7 @@ export default function MisVacantesPage() {
                         Terna pendiente · paso 13
                       </p>
                       <p className="mt-1 text-[15px] font-semibold text-text-strong">
-                        Ya te conseguimos candidatos para{' '}
+                        Ya te conseguimos integrantes para{' '}
                         <span className="text-brand-700">{v.cargo_nombre}</span>
                       </p>
                       <p className="text-[12px] text-text-muted mt-0.5">

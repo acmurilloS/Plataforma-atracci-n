@@ -11,6 +11,7 @@ import {
   Copy,
   FileSignature,
   FileText,
+  HeartPulse,
   Mail,
   Phone,
   Send,
@@ -22,6 +23,8 @@ import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
+import { formatearCOP, soloDigitos } from '../../utils/moneda';
+import { condicionesLaboralesInputSchema } from '../../schemas/condicionesLaboralesSchema';
 import { useAuth } from '../../hooks/useAuth';
 import { ReferenciasTab } from './ReferenciasTab';
 import { DocumentosTab } from './DocumentosTab';
@@ -29,6 +32,7 @@ import { DebidaDiligenciaTab } from './DebidaDiligenciaTab';
 import { DatosBasicosTab } from './DatosBasicosTab';
 import { politicaParaCriticidad } from '../../schemas';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
+import { FaseCandidato, etiquetaEstado } from '../../components/postulaciones/FaseCandidato';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { cn } from '../../utils/cn';
 import type { PostulacionDoc, VacanteDoc, Criticidad, CargoDoc } from '../../schemas';
@@ -97,11 +101,26 @@ const inputClass =
 
 const textareaClass = inputClass + ' resize-none leading-relaxed';
 
+interface ExamenMin {
+  id: string;
+  estado?: string;
+  centro_medico?: string | null;
+  orden_direccion?: string | null;
+  orden_instrucciones?: string | null;
+  orden_url?: string | null;
+  enviada_al_candidato_en?: { toMillis?: () => number } | null;
+  [k: string]: unknown;
+}
+
 export default function PostulacionDetallePage() {
   const { id } = useParams<{ id: string }>();
   const { doc: post } = useDoc<PostulacionDoc>('postulaciones', id);
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', post?.vacante_id ?? null);
   const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
+  const { actualizar } = useMutacion();
+  const { docs: examenes } = useColeccion<ExamenMin>('examenes_medicos', {
+    filtros: [['postulacion_id', '==', id ?? '___']],
+  });
   const [tab, setTab] = useState<Tab>('pruebas');
   const [enviandoPortal, setEnviandoPortal] = useState(false);
   const [copiadoEnlace, setCopiadoEnlace] = useState(false);
@@ -110,10 +129,22 @@ export default function PostulacionDetallePage() {
   const [enviandoAgradecimiento, setEnviandoAgradecimiento] = useState(false);
   const [maquillando, setMaquillando] = useState(false);
   const [condicionesAbierto, setCondicionesAbierto] = useState(false);
+  const [salario, setSalario] = useState('');
+  const [comisiones, setComisiones] = useState('');
+  const [rodamiento, setRodamiento] = useState('');
   const [horario, setHorario] = useState('');
-  const [tipoContrato, setTipoContrato] = useState('');
+  const [tipoContrato, setTipoContrato] = useState<'indefinido' | 'temporal'>('indefinido');
+  const [tiempoContrato, setTiempoContrato] = useState('');
   const [perfilCargo, setPerfilCargo] = useState<File | null>(null);
   const [enviandoCondiciones, setEnviandoCondiciones] = useState(false);
+  const [examenAbierto, setExamenAbierto] = useState(false);
+  const [exCentro, setExCentro] = useState('');
+  const [exDireccion, setExDireccion] = useState('');
+  const [exRecomendaciones, setExRecomendaciones] = useState('');
+  const [exFecha, setExFecha] = useState('');
+  const [exOrdenFile, setExOrdenFile] = useState<File | null>(null);
+  const [exOrdenUrl, setExOrdenUrl] = useState('');
+  const [enviandoExamen, setEnviandoExamen] = useState(false);
 
   if (!post)
     return (
@@ -160,7 +191,7 @@ export default function PostulacionDetallePage() {
         { ok: true; url: string; email_destinatario: string }
       >(functions, 'enviarPortalCandidato');
       const res = await fn({ postulacion_id: post.id });
-      window.alert(`Portal enviado al candidato (${res.data.email_destinatario}).`);
+      window.alert(`Portal enviado al integrante (${res.data.email_destinatario}).`);
     } catch (e) {
       window.alert('No se pudo enviar el portal: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -172,7 +203,7 @@ export default function PostulacionDetallePage() {
     if (!post) return;
     if (
       !window.confirm(
-        '¿Revocar el portal del candidato? El enlace dejará de funcionar. Puedes reabrirlo con "Reenviar portal".',
+        '¿Revocar el portal del integrante? El enlace dejará de funcionar. Puedes reabrirlo con "Reenviar portal".',
       )
     )
       return;
@@ -200,12 +231,12 @@ export default function PostulacionDetallePage() {
 
   function abrirAgradecimiento() {
     if (!post) return;
-    const primer = post.candidato_nombre?.split(' ')[0] || 'candidato/a';
+    const primer = post.candidato_nombre?.split(' ')[0] || 'integrante';
     setMensajeAgradecimiento(
       `Hola ${primer},\n\n` +
         `Te agradecemos sinceramente tu interés y el tiempo que dedicaste a nuestro proceso de ` +
-        `selección${post.cargo_nombre ? ` para el cargo ${post.cargo_nombre}` : ''} en Equitel.\n\n` +
-        `En esta ocasión hemos continuado con otros candidatos. Valoramos mucho tu participación y ` +
+        `atracción${post.cargo_nombre ? ` para el cargo ${post.cargo_nombre}` : ''} en Equitel.\n\n` +
+        `En esta ocasión hemos continuado con otros integrantes. Valoramos mucho tu participación y ` +
         `conservaremos tu perfil para futuras oportunidades.\n\n` +
         `Te deseamos muchos éxitos.\n\n` +
         `Cordialmente,\nEquipo de Atracción · Organización Equitel`,
@@ -250,9 +281,49 @@ export default function PostulacionDetallePage() {
     }
   }
 
+  // E · prellenar y abrir el panel de condiciones (reenvío respeta lo ya enviado).
+  function abrirCondiciones() {
+    const c = (post?.condiciones_laborales ?? null) as Record<string, string> | null;
+    const sb = Number(vacante?.salario_base ?? 0);
+    const salarioVacante = sb > 0 ? formatearCOP(sb) : '';
+    if (c) {
+      setSalario(c.salario || salarioVacante);
+      setComisiones(c.comisiones && c.comisiones !== 'No aplica' ? c.comisiones : '');
+      setRodamiento(c.rodamiento && c.rodamiento !== 'No aplica' ? c.rodamiento : '');
+      setHorario(c.horario || '');
+      if (c.tiempo_contrato) {
+        setTipoContrato('temporal');
+        setTiempoContrato(c.tiempo_contrato);
+      } else {
+        setTipoContrato('indefinido');
+        setTiempoContrato('');
+      }
+    } else {
+      setSalario(salarioVacante);
+      setComisiones('');
+      setRodamiento('');
+      setHorario('');
+      setTipoContrato('indefinido');
+      setTiempoContrato('');
+    }
+    setCondicionesAbierto(true);
+  }
+
   // E · enviar condiciones laborales (tras apto médico = en_contratacion).
   async function enviarCondiciones() {
     if (!post) return;
+    const parsed = condicionesLaboralesInputSchema.safeParse({
+      salario,
+      comisiones,
+      rodamiento,
+      horario,
+      tipo_contrato: tipoContrato,
+      tiempo_contrato: tiempoContrato,
+    });
+    if (!parsed.success) {
+      window.alert(parsed.error.issues[0]?.message ?? 'Revisa los campos de condiciones.');
+      return;
+    }
     setEnviandoCondiciones(true);
     try {
       // Sube el perfil de cargo (PDF) a Storage para adjuntarlo al correo.
@@ -266,13 +337,26 @@ export default function PostulacionDetallePage() {
         perfilCargoUrl = await getDownloadURL(r);
       }
       const fn = httpsCallable<
-        { postulacion_id: string; horario: string; tipo_contrato: string; perfil_cargo_url?: string },
+        {
+          postulacion_id: string;
+          salario: string;
+          comisiones: string;
+          rodamiento: string;
+          horario: string;
+          tipo_contrato: string;
+          tiempo_contrato: string;
+          perfil_cargo_url?: string;
+        },
         { ok: true; email_destinatario: string }
       >(functions, 'enviarCondicionesLaborales');
       const res = await fn({
         postulacion_id: post.id,
+        salario,
+        comisiones,
+        rodamiento,
         horario,
         tipo_contrato: tipoContrato,
+        tiempo_contrato: tiempoContrato,
         perfil_cargo_url: perfilCargoUrl || undefined,
       });
       window.alert(`Condiciones laborales enviadas a ${res.data.email_destinatario}.`);
@@ -281,6 +365,73 @@ export default function PostulacionDetallePage() {
       window.alert('No se pudo enviar: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setEnviandoCondiciones(false);
+    }
+  }
+
+  // Paso 16 · enviar la orden de exámenes al candidato (con la orden del gestor).
+  function abrirExamen() {
+    const ex = examenes[0];
+    setExCentro((ex?.centro_medico as string) || '');
+    setExDireccion((ex?.orden_direccion as string) || '');
+    setExRecomendaciones((ex?.orden_instrucciones as string) || '');
+    setExFecha('');
+    setExOrdenUrl((ex?.orden_url as string) || '');
+    setExOrdenFile(null);
+    setExamenAbierto(true);
+  }
+
+  async function enviarExamen() {
+    if (!post) return;
+    const ex = examenes[0];
+    if (!ex) {
+      window.alert(
+        'Aún no hay solicitud de exámenes para este integrante; aparece al entrar a "en exámenes médicos".',
+      );
+      return;
+    }
+    if (!post.candidato_email) {
+      window.alert(
+        'El integrante no tiene correo registrado. Agrégalo en Datos Básicos antes de enviar la orden.',
+      );
+      return;
+    }
+    if (!exCentro.trim() && !exDireccion.trim() && !exOrdenFile && !exOrdenUrl.trim()) {
+      window.alert('Indica al menos el centro / dirección o adjunta la orden.');
+      return;
+    }
+    setEnviandoExamen(true);
+    try {
+      // Sube el PDF de la orden a Storage (si se adjuntó) → orden_url descargable.
+      let ordenUrl = exOrdenUrl.trim();
+      if (exOrdenFile) {
+        if (exOrdenFile.type !== 'application/pdf') throw new Error('La orden debe ser PDF.');
+        if (exOrdenFile.size > 8 * 1024 * 1024) throw new Error('El PDF supera 8 MB.');
+        const safe = exOrdenFile.name.replace(/[^\w.\-]+/g, '_');
+        const r = storageRef(storage, `ordenes_examenes/${ex.id}/${Date.now()}_${safe}`);
+        await uploadBytes(r, exOrdenFile, { contentType: 'application/pdf' });
+        ordenUrl = await getDownloadURL(r);
+      }
+      const cita = exFecha ? Timestamp.fromDate(new Date(`${exFecha}T08:00:00`)) : null;
+      await actualizar('examenes_medicos', ex.id, {
+        centro_medico: exCentro.trim(),
+        orden_direccion: exDireccion.trim(),
+        orden_instrucciones: exRecomendaciones.trim(),
+        orden_url: ordenUrl || null,
+        cita_para: cita,
+        enviada_al_candidato_en: Timestamp.now(),
+        estado: 'enviada',
+      });
+      const fn = httpsCallable<{ examen_id: string }, { ok: true; email_destinatario: string }>(
+        functions,
+        'enviarOrdenExamenCandidato',
+      );
+      const res = await fn({ examen_id: ex.id });
+      window.alert(`Orden de exámenes enviada al integrante (${res.data.email_destinatario}).`);
+      setExamenAbierto(false);
+    } catch (e) {
+      window.alert('No se pudo enviar la orden: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEnviandoExamen(false);
     }
   }
 
@@ -323,9 +474,12 @@ export default function PostulacionDetallePage() {
           </p>
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <Pill tono={tono} dot>
-              {post.estado.replace(/_/g, ' ')}
+              {etiquetaEstado(post.estado)}
             </Pill>
             {post.fuente === 'base_interna' && <Pill tono="info">🏢 Interno</Pill>}
+          </div>
+          <div className="mt-4">
+            <FaseCandidato estado={post.estado} variante="full" />
           </div>
         </div>
 
@@ -347,7 +501,7 @@ export default function PostulacionDetallePage() {
           {/* Portal del candidato: enlace siempre a la mano (copiar + reenviar). */}
           <div className="rounded-md border border-slate-200 bg-white p-3 space-y-2 w-full sm:w-72">
             <p className="text-[11px] uppercase tracking-[0.1em] font-semibold text-text-subtle">
-              Portal del candidato
+              Portal del integrante
             </p>
             {enlacePortal ? (
               <>
@@ -371,7 +525,7 @@ export default function PostulacionDetallePage() {
                   </button>
                 </div>
                 <p className="text-[10.5px] text-text-subtle leading-[1.45]">
-                  Cópialo y compártelo por WhatsApp u otro medio si hace falta. El candidato entra con
+                  Cópialo y compártelo por WhatsApp u otro medio si hace falta. El integrante entra con
                   su número de cédula.
                 </p>
               </>
@@ -379,7 +533,7 @@ export default function PostulacionDetallePage() {
               <p className="text-[11px] text-text-muted leading-[1.45]">
                 {post.portal_revocado_en
                   ? 'El portal está revocado. Reenvíalo para reabrir el enlace.'
-                  : 'Aún no hay enlace. Envíalo al candidato para generarlo (le llega por correo).'}
+                  : 'Aún no hay enlace. Envíalo al integrante para generarlo (le llega por correo).'}
               </p>
             )}
             <button
@@ -392,7 +546,7 @@ export default function PostulacionDetallePage() {
                 ? 'Enviando…'
                 : post.portal_enviado_en
                   ? 'Reenviar por correo'
-                  : 'Enviar al candidato'}
+                  : 'Enviar al integrante'}
             </button>
             {post.portal_token && !post.portal_revocado_en && (
               <button
@@ -414,13 +568,24 @@ export default function PostulacionDetallePage() {
           )}
           {post.estado === 'en_contratacion' && (
             <button
-              onClick={() => setCondicionesAbierto(true)}
+              onClick={abrirCondiciones}
               className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
             >
               <Mail size={12} strokeWidth={1.75} />
               {post.condiciones_enviadas_en
                 ? 'Reenviar condiciones laborales'
                 : 'Enviar condiciones laborales'}
+            </button>
+          )}
+          {post.estado === 'en_examenes_medicos' && (
+            <button
+              onClick={abrirExamen}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+            >
+              <HeartPulse size={12} strokeWidth={1.75} />
+              {examenes[0]?.enviada_al_candidato_en
+                ? 'Reenviar orden de exámenes'
+                : 'Enviar orden de exámenes'}
             </button>
           )}
           {(post.consentimiento_datos_aceptado_en || post.consentimiento_imagen_aceptado_en) && (
@@ -442,7 +607,7 @@ export default function PostulacionDetallePage() {
         <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3 print:hidden">
           <div>
             <p className="text-[13px] font-semibold text-text-strong">
-              Mensaje de agradecimiento al candidato
+              Mensaje de agradecimiento al integrante
             </p>
             <p className="text-[11px] text-text-muted mt-0.5">
               Edítalo si quieres. <strong>No menciones el motivo del descarte.</strong>
@@ -486,11 +651,24 @@ export default function PostulacionDetallePage() {
           <div>
             <p className="text-[13px] font-semibold text-text-strong">Enviar condiciones laborales</p>
             <p className="text-[11px] text-text-muted mt-0.5">
-              Cargo, empresa, unidad y salario salen de la vacante. Completa el horario y el tipo de
-              contrato.
+              Cargo, empresa y unidad salen de la vacante. Diligencia el salario, comisiones,
+              rodamiento, horario y tipo de contrato.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">Salario *</span>
+              <input
+                value={salario}
+                onChange={(e) => {
+                  const d = soloDigitos(e.target.value);
+                  setSalario(d ? formatearCOP(Number(d)) : '');
+                }}
+                inputMode="numeric"
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                placeholder="$ 2.500.000"
+              />
+            </label>
             <label className="block">
               <span className="block text-[11px] font-medium text-text-muted mb-1">Horario</span>
               <input
@@ -502,15 +680,56 @@ export default function PostulacionDetallePage() {
             </label>
             <label className="block">
               <span className="block text-[11px] font-medium text-text-muted mb-1">
-                Tipo de contrato
+                Comisiones <span className="font-normal text-text-subtle">(si aplica)</span>
               </span>
               <input
-                value={tipoContrato}
-                onChange={(e) => setTipoContrato(e.target.value)}
+                value={comisiones}
+                onChange={(e) => setComisiones(e.target.value)}
                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
-                placeholder="Término indefinido / fijo…"
+                placeholder="Ej. 3% sobre ventas · vacío = No aplica"
               />
             </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">
+                Rodamiento <span className="font-normal text-text-subtle">(si aplica)</span>
+              </span>
+              <input
+                value={rodamiento}
+                onChange={(e) => {
+                  const d = soloDigitos(e.target.value);
+                  setRodamiento(d ? formatearCOP(Number(d)) : '');
+                }}
+                inputMode="numeric"
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                placeholder="$ · vacío = No aplica"
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">
+                Tipo de contrato
+              </span>
+              <select
+                value={tipoContrato}
+                onChange={(e) => setTipoContrato(e.target.value as 'indefinido' | 'temporal')}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+              >
+                <option value="indefinido">Indefinido</option>
+                <option value="temporal">Temporal</option>
+              </select>
+            </label>
+            {tipoContrato === 'temporal' && (
+              <label className="block">
+                <span className="block text-[11px] font-medium text-text-muted mb-1">
+                  Tiempo del contrato *
+                </span>
+                <input
+                  value={tiempoContrato}
+                  onChange={(e) => setTiempoContrato(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                  placeholder="6 meses / 1 año"
+                />
+              </label>
+            )}
           </div>
           <label className="block">
             <span className="block text-[11px] font-medium text-text-muted mb-1">
@@ -529,7 +748,7 @@ export default function PostulacionDetallePage() {
             )}
           </label>
           <p className="text-[11px] text-text-subtle">
-            Se envía al candidato con <strong>copia a coordinación</strong> y responder le llega al
+            Se envía al integrante con <strong>copia a coordinación</strong> y responder le llega al
             analista.
           </p>
           <div className="flex gap-2 justify-end">
@@ -546,6 +765,107 @@ export default function PostulacionDetallePage() {
             >
               <Mail size={12} strokeWidth={1.75} />
               {enviandoCondiciones ? 'Enviando…' : 'Enviar condiciones'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {examenAbierto && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3 print:hidden">
+          <div>
+            <p className="text-[13px] font-semibold text-text-strong">
+              Enviar orden de exámenes médicos
+            </p>
+            <p className="text-[11px] text-text-muted mt-0.5">
+              Con la orden que te devolvió el gestor: diligencia los datos, adjunta el PDF y
+              envíasela al integrante. Le llega por correo y queda descargable en su portal.
+            </p>
+          </div>
+          {!post.candidato_email && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+              El integrante no tiene correo registrado. Agrégalo en Datos Básicos antes de enviar.
+            </p>
+          )}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">Centro médico</span>
+              <input
+                value={exCentro}
+                onChange={(e) => setExCentro(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                placeholder="Colsanitas"
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">
+                Fecha / cita <span className="font-normal text-text-subtle">(opcional)</span>
+              </span>
+              <input
+                type="date"
+                value={exFecha}
+                onChange={(e) => setExFecha(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">Dirección</span>
+              <input
+                value={exDireccion}
+                onChange={(e) => setExDireccion(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                placeholder="Cra 00 # 00-00, ciudad"
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="block text-[11px] font-medium text-text-muted mb-1">
+                Recomendaciones
+              </span>
+              <textarea
+                value={exRecomendaciones}
+                onChange={(e) => setExRecomendaciones(e.target.value)}
+                rows={2}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                placeholder="Ayuno de 8 h, llevar documento, horario de atención…"
+              />
+            </label>
+          </div>
+          <label className="block">
+            <span className="block text-[11px] font-medium text-text-muted mb-1">
+              Orden de exámenes (PDF) — se adjunta al correo y queda en el portal
+            </span>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setExOrdenFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-[12px] text-text-muted file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-text-strong hover:file:bg-slate-50"
+            />
+            {exOrdenFile ? (
+              <span className="mt-1 inline-block text-[11px] text-text-subtle">
+                Adjunto: {exOrdenFile.name}
+              </span>
+            ) : exOrdenUrl ? (
+              <span className="mt-1 inline-block text-[11px] text-text-subtle">
+                Ya hay una orden cargada. Adjunta otra solo si quieres reemplazarla.
+              </span>
+            ) : null}
+          </label>
+          <p className="text-[11px] text-text-subtle">
+            Se envía al integrante; al responder le llega al analista.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setExamenAbierto(false)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={enviarExamen}
+              disabled={enviandoExamen}
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-[12px] font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              <HeartPulse size={12} strokeWidth={1.75} />
+              {enviandoExamen ? 'Enviando…' : 'Enviar orden'}
             </button>
           </div>
         </div>
@@ -838,7 +1158,7 @@ function PruebasTab({
             value={instrucciones}
             onChange={(e) => setInstrucciones(e.target.value)}
             rows={2}
-            placeholder="Instrucciones para el candidato (opcional): plazo, duración, recomendaciones…"
+            placeholder="Instrucciones para el integrante (opcional): plazo, duración, recomendaciones…"
             className={textareaClass}
           />
 
@@ -852,7 +1172,7 @@ function PruebasTab({
             >
               {enviandoCorreo
                 ? 'Enviando…'
-                : `Enviar al candidato${filasCompletas.length > 1 ? ` (${filasCompletas.length})` : ''}`}
+                : `Enviar al integrante${filasCompletas.length > 1 ? ` (${filasCompletas.length})` : ''}`}
             </Button>
             <Button
               onClick={registrarSolo}
@@ -864,7 +1184,7 @@ function PruebasTab({
             </Button>
             {!emailCandidato && (
               <span className="text-[11px] text-warning-700">
-                El candidato no tiene correo — agrégalo en Datos Básicos para poder enviarle la prueba.
+                El integrante no tiene correo — agrégalo en Datos Básicos para poder enviarle la prueba.
               </span>
             )}
           </div>
@@ -1142,7 +1462,7 @@ function EntrevistasTab({
             <label className="block">
               <span className="block text-[11px] font-medium text-text-strong mb-1">
                 Link de la videollamada{' '}
-                <span className="text-text-subtle font-normal">(se lo enviamos al candidato)</span>
+                <span className="text-text-subtle font-normal">(se lo enviamos al integrante)</span>
               </span>
               <input
                 value={link}
@@ -1345,7 +1665,7 @@ function InformeTab({ postulacion }: SubProps) {
               onChange={(e) => setResumen(e.target.value)}
               rows={3}
               required
-              placeholder="3-4 líneas: quién es el candidato, qué pesa más, recomendación corta."
+              placeholder="3-4 líneas: quién es el integrante, qué pesa más, recomendación corta."
               className={textareaClass}
             />
           </label>

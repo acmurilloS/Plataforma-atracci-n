@@ -24,7 +24,7 @@ const VALUE_PROPS = [
   {
     n: '01',
     titulo: 'Trazabilidad',
-    detalle: 'Cada vacante, cada candidato, cada decisión auditada en línea.',
+    detalle: 'Cada vacante, cada integrante, cada decisión auditada en línea.',
   },
   {
     n: '02',
@@ -223,7 +223,7 @@ export default function LoginPage() {
             >
               Cada vacante.
               <br />
-              Cada candidato.
+              Cada integrante.
               <br />
               <span
                 className="bg-clip-text text-transparent"
@@ -238,7 +238,7 @@ export default function LoginPage() {
 
             <p className="mt-7 text-[16px] text-text-muted leading-[1.55] max-w-md">
               Orquestamos los 20 pasos del proceso de atracción del holding —
-              desde la solicitud del líder hasta el ingreso del candidato — con
+              desde la solicitud del líder hasta el ingreso del integrante — con
               trazabilidad por rol, ANS por etapa y disparadores automáticos a
               IT, compras y talentos.
             </p>

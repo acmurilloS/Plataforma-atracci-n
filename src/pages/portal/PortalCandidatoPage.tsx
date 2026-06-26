@@ -23,8 +23,7 @@ import {
   tituloConsentimiento,
 } from '../../components/consentimientos/consentimientoLegal';
 import { FirmaInput } from '../../components/firma/FirmaInput';
-import { generarConstanciaFirma } from '../../utils/pdfFirma';
-import { textoDocumentoFirma } from '../../portal/textosDocumentosFirma';
+import { estamparFormatoOficial } from '../../utils/estamparFormatoOficial';
 import { MENSAJE_FINALIZADO_DEFAULT, mensajeFase } from '../../portal/faseProceso';
 import { PortalStepper } from '../../components/portal/PortalStepper';
 import {
@@ -341,6 +340,8 @@ export default function PortalCandidatoPage() {
               tipo="datos"
               token={token ?? ''}
               empresa={empresa}
+              empresaCodigo={data.empresa_codigo}
+              cargo={data.cargo_nombre}
               nombreCompleto={data.candidato_nombre}
               documentoNumero={data.documento_numero}
               aceptado={data.consentimiento_datos_aceptado}
@@ -350,31 +351,16 @@ export default function PortalCandidatoPage() {
               tipo="imagen"
               token={token ?? ''}
               empresa={empresa}
+              empresaCodigo={data.empresa_codigo}
+              cargo={data.cargo_nombre}
               nombreCompleto={data.candidato_nombre}
               documentoNumero={data.documento_numero}
               aceptado={data.consentimiento_imagen_aceptado}
               onAceptar={(url, img) => aceptar('imagen', url, img)}
             />
-            <FirmaDocumentoCard
-              token={token ?? ''}
-              tipo="datos_basicos"
-              titulo="Datos básicos del integrante"
-              descripcion="Revisa y firma el formato de datos básicos del integrante."
-              nombreCompleto={data.candidato_nombre}
-              documentoNumero={data.documento_numero}
-              empresaNombre={empresa.nombre}
-              firmadoInicial={data.firma_datos_basicos}
-            />
-            <FirmaDocumentoCard
-              token={token ?? ''}
-              tipo="debida_diligencia"
-              titulo="Debida diligencia · SAGRILAFT"
-              descripcion="Firma la declaración de debida diligencia (SAGRILAFT · F-CAR-01)."
-              nombreCompleto={data.candidato_nombre}
-              documentoNumero={data.documento_numero}
-              empresaNombre={empresa.nombre}
-              firmadoInicial={data.firma_debida_diligencia}
-            />
+            {/* Datos básicos (DGH-F-05) y Debida diligencia (SAGRILAFT F-CAR-01)
+                ya NO se firman aquí con un layout inventado: se diligencian sobre
+                el FORMATO OFICIAL y se suben firmados a la carpeta (servir+subir). */}
             {data.condiciones && (
               <CondicionesCard
                 token={token ?? ''}
@@ -401,7 +387,7 @@ function Encabezado() {
       <EquitelLogo size={44} />
       <div>
         <p className="text-[11px] uppercase tracking-[0.14em] text-text-subtle font-semibold">
-          Portal del candidato
+          Portal del integrante
         </p>
         <p className="text-[13px] text-text-muted">Organización Equitel</p>
       </div>
@@ -465,7 +451,7 @@ function CedulaGate({
           <header className="flex flex-col items-center text-center mb-7">
             <EquitelLogo size={48} />
             <p className="mt-4 text-[11px] uppercase tracking-[0.14em] text-text-subtle font-semibold">
-              Portal del candidato
+              Portal del integrante
             </p>
           </header>
           <section className="bg-white rounded-xl border border-slate-200 shadow-brand-card px-6 py-7 text-center">
@@ -505,7 +491,7 @@ function CedulaGate({
         <header className="flex flex-col items-center text-center mb-7">
           <EquitelLogo size={48} />
           <p className="mt-4 text-[11px] uppercase tracking-[0.14em] text-text-subtle font-semibold">
-            Portal del candidato
+            Portal del integrante
           </p>
         </header>
         <section className="bg-white rounded-xl border border-slate-200 shadow-brand-card px-6 py-7">
@@ -570,6 +556,8 @@ function ConsentimientoCard({
   tipo,
   token,
   empresa,
+  empresaCodigo,
+  cargo,
   nombreCompleto,
   documentoNumero,
   aceptado,
@@ -578,6 +566,8 @@ function ConsentimientoCard({
   tipo: 'datos' | 'imagen';
   token: string;
   empresa: ReturnType<typeof empresaConsentimiento>;
+  empresaCodigo: string;
+  cargo: string;
   nombreCompleto: string;
   documentoNumero: string;
   aceptado: boolean;
@@ -594,14 +584,19 @@ function ConsentimientoCard({
     setErr(null);
     try {
       const ts = Date.now();
-      const blob = await generarConstanciaFirma({
-        titulo: tituloConsentimiento(tipo),
-        nombre: nombreCompleto || 'Candidato',
-        documentoIdentidad: documentoNumero || '—',
-        fechaTexto: new Date().toLocaleDateString('es-CO'),
-        firmaPngDataUrl: firma,
-        empresaNombre: empresa.nombre,
-      });
+      // Estampa los datos + la firma sobre el PDF OFICIAL de la empresa (Calidad),
+      // sin alterar el layout — reemplaza la "constancia" inventada.
+      const blob = await estamparFormatoOficial(
+        tipo,
+        empresaCodigo,
+        {
+          nombre: nombreCompleto || 'Candidato',
+          cedula: documentoNumero || '',
+          cargo: cargo || '',
+          fechaTexto: new Date().toLocaleDateString('es-CO'),
+        },
+        firma,
+      );
       const r = storageRef(storage, `portal_docs/${token}/firma_${tipo}_${ts}.pdf`);
       await uploadBytes(r, blob, { contentType: 'application/pdf' });
       const url = await getDownloadURL(r);
@@ -678,128 +673,6 @@ function ConsentimientoCard({
   );
 }
 
-function FirmaDocumentoCard({
-  token,
-  tipo,
-  titulo,
-  descripcion,
-  nombreCompleto,
-  documentoNumero,
-  empresaNombre,
-  firmadoInicial,
-}: {
-  token: string;
-  tipo: 'datos_basicos' | 'debida_diligencia';
-  titulo: string;
-  descripcion: string;
-  nombreCompleto: string;
-  documentoNumero: string;
-  empresaNombre: string;
-  firmadoInicial: boolean;
-}) {
-  const [firma, setFirma] = useState<string | null>(null);
-  const [chk, setChk] = useState(false);
-  const [enviando, setEnviando] = useState(false);
-  const [firmado, setFirmado] = useState(firmadoInicial);
-  const [err, setErr] = useState<string | null>(null);
-
-  const texto = textoDocumentoFirma(tipo, {
-    nombre: nombreCompleto,
-    documento: documentoNumero,
-    empresa: empresaNombre,
-  });
-
-  async function firmar() {
-    if (!firma || !chk || !token) return;
-    setEnviando(true);
-    setErr(null);
-    try {
-      const blob = await generarConstanciaFirma({
-        titulo,
-        nombre: nombreCompleto || 'Candidato',
-        documentoIdentidad: documentoNumero || '—',
-        fechaTexto: new Date().toLocaleDateString('es-CO'),
-        firmaPngDataUrl: firma,
-        empresaNombre,
-        parrafos: texto.parrafos,
-      });
-      const ts = Date.now();
-      const r = storageRef(storage, `portal_docs/${token}/firma_${tipo}_${ts}.pdf`);
-      await uploadBytes(r, blob, { contentType: 'application/pdf' });
-      const url = await getDownloadURL(r);
-      // Imagen (PNG) de la firma para incrustarla en la vista del staff.
-      const imgBlob = await (await fetch(firma)).blob();
-      const ri = storageRef(storage, `portal_docs/${token}/firma_img_${tipo}_${ts}.png`);
-      await uploadBytes(ri, imgBlob, { contentType: 'image/png' });
-      const imgUrl = await getDownloadURL(ri);
-      const fn = httpsCallable<
-        { token: string; tipo: string; url: string; firma_imagen_url?: string },
-        { ok: true }
-      >(functions, 'registrarFirmaDocumento');
-      await fn({ token, tipo, url, firma_imagen_url: imgUrl });
-      setFirmado(true);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No se pudo registrar. Reintenta.');
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  return (
-    <section className="bg-white rounded-xl border border-slate-200 shadow-brand-card overflow-hidden">
-      <div className="px-5 sm:px-7 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text-strong">{titulo}</h2>
-          <p className="text-[12px] text-text-muted mt-0.5">{descripcion}</p>
-        </div>
-        {firmado && (
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-success-700 bg-success-50 border border-success-500/25 rounded-full px-2.5 py-1">
-            <Check size={13} strokeWidth={2} />
-            Firmado
-          </span>
-        )}
-      </div>
-      {!firmado && (
-        <div className="px-5 sm:px-7 py-5 space-y-3">
-          <p className="text-[12.5px] text-text-muted leading-[1.5]">{texto.intro}</p>
-          <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-4 py-3 max-h-[260px] overflow-y-auto space-y-2.5">
-            {texto.parrafos.map((p, i) => (
-              <p key={i} className="text-[12.5px] text-text-strong leading-[1.6]">
-                {p}
-              </p>
-            ))}
-          </div>
-          <label className="flex items-start gap-2.5 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={chk}
-              onChange={(e) => setChk(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-            />
-            <span className="text-[13px] text-text-body leading-[1.5]">
-              He leído y <strong>acepto</strong> este documento.
-            </span>
-          </label>
-          <div>
-            <p className="text-[12px] font-medium text-text-body mb-1">Tu firma</p>
-            <FirmaInput onChange={setFirma} />
-          </div>
-          {err && <p className="text-[12px] text-danger-700">{err}</p>}
-          <Button
-            onClick={firmar}
-            disabled={!chk || !firma || enviando}
-            loading={enviando}
-            variant="brand-primary"
-            icon={<Check size={14} strokeWidth={2} />}
-          >
-            {enviando ? 'Firmando…' : 'Firmar'}
-          </Button>
-        </div>
-      )}
-    </section>
-  );
-}
-
 function CondicionesCard({
   token,
   condiciones,
@@ -820,6 +693,8 @@ function CondicionesCard({
       ['Unidad', condiciones.unidad],
       ['Sede', condiciones.sede],
       ['Salario', condiciones.salario],
+      ['Comisiones', condiciones.comisiones],
+      ['Rodamiento', condiciones.rodamiento],
       ['Horario', condiciones.horario],
       ['Tipo de contrato', condiciones.tipo_contrato],
     ] as [string, string | undefined][]

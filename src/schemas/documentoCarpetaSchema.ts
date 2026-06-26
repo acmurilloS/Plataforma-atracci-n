@@ -35,13 +35,23 @@ export interface DocumentoCarpetaCatalogo {
    */
   aporta_candidato?: boolean;
   /**
-   * True si lo gestiona directamente Gestión Humana (contrato, afiliaciones).
-   * No lo sube el candidato ni Atracción → NO cuenta como obligatorio de la
-   * carpeta de Atracción; se muestra con la nota "Omitir — gestión de GH".
+   * Responsable de cargar/gestionar el documento dentro de la carpeta:
+   *  - 'cyd' (Cultura y Desarrollo / Atracción) — default; cuenta para la
+   *    completitud de la parte de CyD.
+   *  - 'gh' (Gestión Humana) — contrato y afiliaciones; NO bloquea la parte de
+   *    CyD, se muestra aparte y GH lo carga al verificar la carpeta.
+   * Configurable desde este catálogo (no quemado en la lógica de completitud).
    */
-  gestionado_por_gh?: boolean;
+  responsable?: 'cyd' | 'gh';
   /** True si el ítem admite VARIOS archivos (p. ej. antecedentes judiciales). */
   multiple?: boolean;
+  /**
+   * Ruta al FORMATO OFICIAL (parametrizado por Calidad) que se sirve para
+   * diligenciar y subir firmado — p. ej. '/formatos/datos-basicos.pdf'. Cuando
+   * está presente, la carpeta muestra un botón "Descargar formato oficial". El
+   * documento que se sube debe ser ese formato oficial, no uno inventado.
+   */
+  plantilla_oficial?: string;
 }
 
 /**
@@ -56,20 +66,23 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'generales',
     nombre: 'Datos Básicos del Integrante (DGH-F-05)',
     opcional: false,
-    ayuda: 'Formato interno con datos personales, laborales y familiares del candidato.',
+    ayuda: 'Formato oficial DGH-F-05. Descárgalo, diligéncialo y súbelo firmado.',
+    plantilla_oficial: '/formatos/datos-basicos.pdf',
   },
   {
     clave: 'contrato_trabajo',
     seccion: 'generales',
     nombre: 'Contrato de Trabajo',
     opcional: false,
-    gestionado_por_gh: true,
+    responsable: 'gh',
   },
   {
     clave: 'solicitud_integrantes',
     seccion: 'generales',
     nombre: 'Solicitud de Integrantes / Reporte de Novedad',
     opcional: false,
+    multiple: true,
+    ayuda: 'Admite varios archivos: la solicitud/reporte y el soporte del aval del líder.',
   },
 
   // ─── Seguridad Social ─────────────────────────────────────────────────
@@ -78,21 +91,21 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'seguridad_social',
     nombre: 'Afiliación ARL',
     opcional: false,
-    gestionado_por_gh: true,
+    responsable: 'gh',
   },
   {
     clave: 'afiliacion_eps',
     seccion: 'seguridad_social',
     nombre: 'Afiliación EPS',
     opcional: false,
-    gestionado_por_gh: true,
+    responsable: 'gh',
   },
   {
     clave: 'afiliacion_caja',
     seccion: 'seguridad_social',
     nombre: 'Afiliación Caja de Compensación',
     opcional: false,
-    gestionado_por_gh: true,
+    responsable: 'gh',
   },
   {
     clave: 'certificacion_eps',
@@ -170,7 +183,15 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'hoja_vida',
     nombre: 'Autorización para recolección y tratamiento de datos personales',
     opcional: false,
-    ayuda: 'Habeas Data · Ley 1581 de 2012. Plantilla auto-generada por la plataforma.',
+    ayuda: 'Habeas Data · Ley 1581 de 2012. Formato oficial por empresa, firmado en el portal.',
+  },
+  {
+    clave: 'debida_diligencia',
+    seccion: 'hoja_vida',
+    nombre: 'Debida Diligencia / SAGRILAFT (F-CAR-01)',
+    opcional: false,
+    ayuda: 'Formato oficial F-CAR-01. Descárgalo, diligéncialo y súbelo firmado por el integrante y el oficial de cumplimiento.',
+    plantilla_oficial: '/formatos/debida-diligencia.pdf',
   },
   {
     clave: 'evaluacion_psicologica',
@@ -198,7 +219,8 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     seccion: 'hoja_vida',
     nombre: 'Verificación de Referencias',
     opcional: false,
-    ayuda: 'Formato VIDA-F-12 diligenciado dentro de la plataforma.',
+    multiple: true,
+    ayuda: 'Formato VIDA-F-12 diligenciado dentro de la plataforma. Admite varios archivos.',
   },
 ];
 
@@ -208,12 +230,22 @@ export const SECCIONES_LABEL: Record<SeccionDocumento, string> = {
   hoja_vida: 'Documentos Hoja de Vida',
 };
 
+/** True si el documento lo gestiona Gestión Humana (no bloquea la parte CyD). */
+export function esResponsableGH(d: { responsable?: 'cyd' | 'gh' }): boolean {
+  return d.responsable === 'gh';
+}
+
 /**
- * Helper: cuántos del checklist son obligatorios para ATRACCIÓN (no opcionales
- * y no gestionados por GH). Los de GH no bloquean la completitud de la carpeta.
+ * Helper: cuántos del checklist son obligatorios. Sin argumento (o 'cyd') cuenta
+ * la parte de Cultura y Desarrollo (excluye los de GH, que no la bloquean); con
+ * 'gh' cuenta los obligatorios a cargo de Gestión Humana.
  */
-export function totalObligatorios(): number {
-  return CATALOGO_DOCUMENTOS_CARPETA.filter((d) => !d.opcional && !d.gestionado_por_gh).length;
+export function totalObligatorios(responsable?: 'cyd' | 'gh'): number {
+  return CATALOGO_DOCUMENTOS_CARPETA.filter((d) => {
+    if (d.opcional) return false;
+    if (responsable === 'gh') return esResponsableGH(d);
+    return !esResponsableGH(d); // sin arg | 'cyd' → parte de CyD/Atracción
+  }).length;
 }
 
 // ─── Documento individual del candidato (un row por ítem del checklist) ───

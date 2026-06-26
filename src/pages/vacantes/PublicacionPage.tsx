@@ -217,7 +217,7 @@ export default function PublicacionPage() {
             </h2>
             <p className="text-[13px] text-text-muted mt-1.5 max-w-2xl leading-relaxed">
               Un link propio para esta vacante. Pégalo en LinkedIn, WhatsApp, cajas de
-              compensación o donde quieras. Los candidatos ven la info y postulan con CV
+              compensación o donde quieras. Los integrantes ven la info y postulan con CV
               directo al portal, sin pasar por Magneto ni correo.
             </p>
             {vacante.estado === 'lista_para_publicar' && (
@@ -294,7 +294,7 @@ export default function PublicacionPage() {
               onClick={() => setModalIAAbierto(true)}
               icon={<Sparkles size={13} strokeWidth={1.75} />}
             >
-              Buscar candidatos con IA
+              Buscar integrantes con IA
             </Button>
           </div>
         </Card>
@@ -523,7 +523,7 @@ export default function PublicacionPage() {
       <div className="flex justify-end gap-3 flex-wrap pt-2">
         {puedeBuscarConIA && (
           <Link to={`/vacantes/${vacante.id}/sourcing`}>
-            <Button variant="neutral-secondary">Ver candidatos sourceados →</Button>
+            <Button variant="neutral-secondary">Ver integrantes sourceados →</Button>
           </Link>
         )}
         <Link to={`/vacantes/${vacante.id}/postulaciones`}>

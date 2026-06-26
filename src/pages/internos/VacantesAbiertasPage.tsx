@@ -341,7 +341,7 @@ function ModalPostulacionInterna({ vacante, onClose, onResultado }: ModalProps) 
         </label>
         <p className="text-[11px] text-text-subtle italic">
           Tu candidatura aparece marcada como "interna" para el analista. El proceso es el mismo
-          que para candidatos externos.
+          que para integrantes externos.
         </p>
         {err && (
           <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3 py-2 text-[12px] text-danger-700">

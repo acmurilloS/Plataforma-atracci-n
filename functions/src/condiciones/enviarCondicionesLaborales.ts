@@ -32,10 +32,19 @@ export const enviarCondicionesLaborales = onCall(
     }
 
     const postulacionId = String(req.data?.postulacion_id ?? '').trim();
+    const salarioInput = String(req.data?.salario ?? '').trim().slice(0, 80);
+    const comisionesInput = String(req.data?.comisiones ?? '').trim().slice(0, 160);
+    const rodamientoInput = String(req.data?.rodamiento ?? '').trim().slice(0, 80);
     const horario = String(req.data?.horario ?? '').trim().slice(0, 200);
-    const tipoContrato = String(req.data?.tipo_contrato ?? '').trim().slice(0, 120);
+    const tipoContratoRaw = String(req.data?.tipo_contrato ?? '').trim().slice(0, 40);
+    const tiempoContrato = String(req.data?.tiempo_contrato ?? '').trim().slice(0, 60);
     const perfilCargoUrl = String(req.data?.perfil_cargo_url ?? '').trim();
     if (!postulacionId) throw new HttpsError('invalid-argument', 'Falta postulacion_id.');
+    if (!salarioInput) throw new HttpsError('invalid-argument', 'El salario es obligatorio.');
+    const esTemporal = tipoContratoRaw === 'temporal';
+    if (esTemporal && !tiempoContrato) {
+      throw new HttpsError('invalid-argument', 'Indica el tiempo del contrato temporal.');
+    }
 
     const postRef = db.collection('postulaciones').doc(postulacionId);
     const postSnap = await postRef.get();
@@ -53,7 +62,7 @@ export const enviarCondicionesLaborales = onCall(
     let empresa = '';
     let unidad = '';
     let sede = '';
-    let salario = '';
+    let salarioVacante = '';
     let analistaEmail = '';
     try {
       if (post.vacante_id) {
@@ -63,7 +72,7 @@ export const enviarCondicionesLaborales = onCall(
         unidad = String(vd.unidad_nombre ?? '').trim();
         sede = String(vd.sede_nombre ?? '').trim();
         const sb = Number(vd.salario_base ?? 0);
-        salario = sb > 0 ? `$ ${sb.toLocaleString('es-CO')}` : '';
+        salarioVacante = sb > 0 ? `$ ${sb.toLocaleString('es-CO')}` : '';
         const analistaUid = String(vd.analista_uid ?? '').trim();
         if (analistaUid) {
           const u = await db.collection('usuarios').doc(analistaUid).get();
@@ -94,12 +103,25 @@ export const enviarCondicionesLaborales = onCall(
     // Plantilla 2 (configurable) + botón al portal + envoltorio de marca.
     const { plantillas, footerEmpresas } = await leerPlantillas();
     const tpl = plantillas.condiciones;
+    // Campos económicos (diligenciados por la analista). Vacío → "No aplica";
+    // el salario cae al de la vacante si la analista no lo cambió.
+    const salario = salarioInput || salarioVacante;
+    const comisiones = comisionesInput || 'No aplica';
+    const rodamiento = rodamientoInput || 'No aplica';
+    const tipoContratoTexto = esTemporal
+      ? `Temporal · ${tiempoContrato}`
+      : tipoContratoRaw === 'indefinido'
+        ? 'Indefinido'
+        : tipoContratoRaw || guion;
     const cuerpoVars = {
       nombre: escapeHtml(primer),
       cargo: escapeHtml(cargo || guion),
       empresa: escapeHtml(empresa || guion),
       unidad: escapeHtml(unidad || guion),
-      tipo_contrato: escapeHtml(tipoContrato || guion),
+      tipo_contrato: escapeHtml(tipoContratoTexto),
+      salario: escapeHtml(salario || guion),
+      comisiones: escapeHtml(comisiones),
+      rodamiento: escapeHtml(rodamiento),
       horario: escapeHtml(horario || guion),
     };
     const boton = portalLink
@@ -151,8 +173,11 @@ export const enviarCondicionesLaborales = onCall(
         unidad,
         sede,
         salario,
+        comisiones,
+        rodamiento,
         horario,
-        tipo_contrato: tipoContrato,
+        tipo_contrato: tipoContratoTexto,
+        tiempo_contrato: tiempoContrato,
       },
       perfil_cargo_url: perfilCargoUrl || null,
       condiciones_enviadas_en: FieldValue.serverTimestamp(),

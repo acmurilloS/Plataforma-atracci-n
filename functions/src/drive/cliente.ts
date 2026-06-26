@@ -126,3 +126,86 @@ export async function borrarDeDrive(fileId: string): Promise<void> {
   const drive = getDriveClient();
   await drive.files.delete({ fileId, supportsAllDrives: true });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers genéricos para el DEPÓSITO DE CARPETAS en la Unidad Compartida de GH.
+// A diferencia de subirPdfADrive (que usa el secret GDRIVE_SHARED_DRIVE_ID del
+// flujo de avales/CVs), estos reciben el `driveId`/`parentId` explícitos — la
+// unidad de carpetas viene del config `configuracion_global/drive`, configurable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Asegura un folder por nombre bajo `parentId` dentro de la Shared Drive `driveId`.
+ * Idempotente: si ya existe, lo reutiliza (no duplica).
+ */
+export async function asegurarFolder(opts: {
+  parentId: string;
+  nombre: string;
+}): Promise<string> {
+  const drive = getDriveClient();
+  const nombreEscapado = opts.nombre.replace(/'/g, "\\'");
+  const q = `name='${nombreEscapado}' and mimeType='application/vnd.google-apps.folder' and '${opts.parentId}' in parents and trashed=false`;
+  // Sin corpora/driveId: filtramos por carpeta padre; supportsAllDrives +
+  // includeItemsFromAllDrives cubren Shared Drives sin exigir el ID-raíz del drive
+  // (el destino puede ser una carpeta DENTRO de la unidad, no su raíz).
+  const existentes = await drive.files.list({
+    q,
+    fields: 'files(id,name)',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
+  });
+  if (existentes.data.files && existentes.data.files.length > 0) {
+    return existentes.data.files[0].id as string;
+  }
+  const creado = await drive.files.create({
+    requestBody: {
+      name: opts.nombre,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [opts.parentId],
+    },
+    fields: 'id',
+    supportsAllDrives: true,
+  });
+  return creado.data.id as string;
+}
+
+/** Nombres de los archivos (no carpetas) dentro de un folder. Para idempotencia. */
+export async function listarNombresEnFolder(opts: {
+  parentId: string;
+}): Promise<Set<string>> {
+  const drive = getDriveClient();
+  const nombres = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      q: `'${opts.parentId}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'nextPageToken, files(name)',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      pageSize: 1000,
+      pageToken,
+    });
+    (res.data.files ?? []).forEach((f) => {
+      if (f.name) nombres.add(f.name);
+    });
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return nombres;
+}
+
+/** Sube un buffer a un folder. NO deduplica (el caller lo hace con listarNombresEnFolder). */
+export async function subirBufferAFolder(opts: {
+  parentId: string;
+  nombre: string;
+  buffer: Buffer;
+  mimeType: string;
+}): Promise<string> {
+  const drive = getDriveClient();
+  const creado = await drive.files.create({
+    requestBody: { name: opts.nombre, parents: [opts.parentId], mimeType: opts.mimeType },
+    media: { mimeType: opts.mimeType, body: Readable.from(opts.buffer) },
+    fields: 'id',
+    supportsAllDrives: true,
+  });
+  return creado.data.id as string;
+}

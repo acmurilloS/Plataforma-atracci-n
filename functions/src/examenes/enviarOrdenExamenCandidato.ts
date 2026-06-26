@@ -3,7 +3,8 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
-import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { enviarConGmail, type AdjuntoCorreo } from '../notificaciones/enviarConGmail';
+import { leerConfigExamenes } from './configExamenes';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -77,6 +78,26 @@ export const enviarOrdenExamenCandidato = onCall(
     const cargo = String(ex.cargo_nombre ?? 'tu proceso').trim();
     const primer = nombreCandidato.split(' ')[0] || nombreCandidato || 'candidato/a';
 
+    // Fecha/cita opcional (si la analista la puso) + botón de Google Calendar.
+    const citaMs = (ex.cita_para as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null;
+    const cita = citaMs ? new Date(citaMs) : null;
+    const fechaCitaTxt = cita
+      ? cita.toLocaleString('es-CO', {
+          dateStyle: 'full',
+          timeStyle: 'short',
+          timeZone: 'America/Bogota',
+        })
+      : '';
+    const gcalUrl = cita
+      ? construirGCalUrl({
+          titulo: `Exámenes médicos de ingreso · ${cargo}`,
+          inicio: cita,
+          fin: new Date(cita.getTime() + 2 * 60 * 60 * 1000),
+          detalle: `Centro: ${centro || '—'}.${instrucciones ? ' Indicaciones: ' + instrucciones : ''}`,
+          ubicacion: direccion || centro || '',
+        })
+      : '';
+
     const html = `
       <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
         <p>Hola ${escapeHtml(primer)},</p>
@@ -90,6 +111,13 @@ export const enviarOrdenExamenCandidato = onCall(
           <tr><td style="padding:2px 10px 2px 0; font-weight:600;">Dirección:</td><td>${escapeHtml(
             direccion || '—',
           )}</td></tr>
+          ${
+            fechaCitaTxt
+              ? `<tr><td style="padding:2px 10px 2px 0; font-weight:600;">Fecha / cita:</td><td>${escapeHtml(
+                  fechaCitaTxt,
+                )}</td></tr>`
+              : ''
+          }
         </table>
         ${
           instrucciones
@@ -105,6 +133,13 @@ export const enviarOrdenExamenCandidato = onCall(
               )}" style="display:inline-block;background:#be1e0d;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;">Ver / descargar tu orden médica →</a></p>`
             : ''
         }
+        ${
+          gcalUrl
+            ? `<p style="margin:8px 0;"><a href="${escapeAttr(
+                gcalUrl,
+              )}" style="display:inline-block;color:#be1e0d;text-decoration:none;font-size:13px;font-weight:600;">Agregar a Google Calendar →</a></p>`
+            : ''
+        }
         <p style="font-size:13px; color:#555;">Cualquier duda, responde a este correo.</p>
         ${
           portalToken
@@ -116,13 +151,38 @@ export const enviarOrdenExamenCandidato = onCall(
       </div>
     `.trim();
 
+    // Adjuntar el PDF de la orden (si hay url) — best-effort, además del link.
+    const attachments: AdjuntoCorreo[] = [];
+    if (ordenUrl) {
+      try {
+        const r = await fetch(ordenUrl, { signal: AbortSignal.timeout(10000) });
+        if (r.ok) {
+          attachments.push({
+            filename: `Orden de exámenes${cargo ? ` - ${cargo}` : ''}.pdf`,
+            content: Buffer.from(await r.arrayBuffer()),
+            contentType: 'application/pdf',
+          });
+        }
+      } catch (e) {
+        logger.warn('[ordenCandidato] no se pudo adjuntar la orden', {
+          examenId,
+          m: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    // Modo prueba: redirige el correo del candidato al correo de prueba (demo).
+    const cfg = await leerConfigExamenes();
+    const to = cfg.modo_prueba && cfg.redirige_candidato ? cfg.correo_prueba : [email];
+
     try {
       await enviarConGmail({
         from: FROM,
-        to: [email],
+        to,
         replyTo: analistaEmail || undefined,
         subject: `Tu orden de exámenes médicos · ${cargo} · Equitel`,
         html,
+        attachments: attachments.length ? attachments : undefined,
       });
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
@@ -141,9 +201,27 @@ export const enviarOrdenExamenCandidato = onCall(
       creado_por: req.auth.uid,
     });
 
-    return { ok: true as const, email_destinatario: email };
+    return { ok: true as const, email_destinatario: to.join(', ') };
   },
 );
+
+function construirGCalUrl(args: {
+  titulo: string;
+  inicio: Date;
+  fin: Date;
+  detalle: string;
+  ubicacion: string;
+}): string {
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: args.titulo,
+    dates: `${fmt(args.inicio)}/${fmt(args.fin)}`,
+    details: args.detalle,
+    location: args.ubicacion,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
 
 function escapeHtml(s: string): string {
   return s

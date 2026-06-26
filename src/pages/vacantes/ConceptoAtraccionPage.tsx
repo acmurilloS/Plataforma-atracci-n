@@ -228,6 +228,11 @@ export default function ConceptoAtraccionPage() {
       setErr('Esta vacante no tiene un líder asignado, así que no hay a quién enviarle el concepto.');
       return;
     }
+    // Guarda anti-doble-envío: si ya se le envió el concepto al líder, confirmar.
+    const yaEnviado = (vacante as unknown as Record<string, unknown>).concepto_enviado_lider_en;
+    if (yaEnviado && !window.confirm('Ya le enviaste el concepto a este líder. ¿Reenviar?')) {
+      return;
+    }
     setEnviandoLider(true);
     setErr(null);
     // Guardamos primero para que el líder abra exactamente lo que está en pantalla.
@@ -244,11 +249,12 @@ export default function ConceptoAtraccionPage() {
         destinatario_uid: vacante.lider_uid,
         tipo: 'concepto_listo',
         titulo: 'Concepto de atracción listo para tu revisión',
-        mensaje: `${analista} te compartió el concepto de atracción de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${nombres.length} candidato(s) finalista(s)${lista}. Ábrelo para revisarlo desde la plataforma.`,
+        mensaje: `${analista} te compartió el concepto de atracción de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${nombres.length} integrante(s) finalista(s)${lista}. Ábrelo para revisarlo desde la plataforma.`,
         link: `/vacantes/${vacante.id}/concepto-atraccion`,
         leida: false,
         leida_en: null,
       });
+      await actualizar('vacantes', vacante.id, { concepto_enviado_lider_en: Timestamp.now() });
       setEnviadoLider(true);
       setTimeout(() => setEnviadoLider(false), 4000);
     } catch (e) {
@@ -293,7 +299,7 @@ export default function ConceptoAtraccionPage() {
             </h1>
             <p className="mt-3 text-[14px] text-text-muted leading-[1.55] max-w-xl">
               {esLider
-                ? 'Concepto de atracción de los candidatos finalistas, preparado por el equipo de Atracción. Revísalo y, si lo necesitas, expórtalo a PDF.'
+                ? 'Concepto de atracción de los integrantes finalistas, preparado por el equipo de Atracción. Revísalo y, si lo necesitas, expórtalo a PDF.'
                 : 'Formato oficial VIDA-F-03 v0. La tabla se llena sola con lo que escribiste en los Informes (paso 11); ajusta lo que falte, guarda, envíaselo al líder o expórtalo a PDF.'}
             </p>
           </div>
@@ -415,7 +421,7 @@ export default function ConceptoAtraccionPage() {
           <thead className="bg-slate-100 print:bg-white">
             <tr>
               <th className="border border-text-strong px-2 py-2 text-left font-bold w-[18%]">
-                Nombre del candidato
+                Nombre del integrante
               </th>
               <th className="border border-text-strong px-2 py-2 text-left font-bold w-[10%]">
                 Ciudad
@@ -442,8 +448,8 @@ export default function ConceptoAtraccionPage() {
                   colSpan={7}
                   className="border border-text-strong px-3 py-6 text-center text-text-subtle italic"
                 >
-                  Sin candidatos. Click "+ Agregar" para llenar manualmente o asegúrate de tener
-                  candidatos en estado "en terna" o más allá.
+                  Sin integrantes. Click "+ Agregar" para llenar manualmente o asegúrate de tener
+                  integrantes en estado "en terna" o más allá.
                 </td>
               </tr>
             )}

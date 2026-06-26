@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { db } from '../utils/admin';
 import { agregarFilaSheet } from '../sheets/cliente';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
+import { emailAnalistaDeVacante } from '../notificaciones/emailAnalista';
 
 /**
  * registrarSolicitudHerramientas · reemplazo del Google Forms de IT.
@@ -232,6 +233,7 @@ async function enviarCorreoIT(args: {
   asunto: string;
   html: string;
   correoContacto: string;
+  replyTo: string;
 }): Promise<void> {
   const cc =
     args.correoContacto && !DESTINOS_IT.includes(args.correoContacto)
@@ -242,6 +244,7 @@ async function enviarCorreoIT(args: {
     from: FROM,
     to: DESTINOS_IT,
     cc,
+    replyTo: args.replyTo || undefined,
     subject: args.asunto,
     html: args.html,
   });
@@ -346,9 +349,11 @@ export const registrarSolicitudHerramientas = onCall(
     let correoError: string | null = null;
     if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
       try {
+        const analistaEmail = await emailAnalistaDeVacante(vacante_id);
         await enviarCorreoIT({
           asunto: `${consecutivo} Solicitud de herramientas tecnológicas · ${cargo} · ${ciudad}`,
           correoContacto: sol.correo_contacto || '',
+          replyTo: analistaEmail,
           html: construirCorreoHtml({
             vacante_id,
             cargo,

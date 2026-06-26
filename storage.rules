@@ -51,6 +51,14 @@ service firebase.storage {
       allow write: if tieneRol() && esPdf() && request.resource.size < 8 * 1024 * 1024;
     }
 
+    // Orden de exámenes médicos (PDF) que el staff adjunta al enviarla al
+    // candidato (paso 16). Solo usuarios internos suben/leen; el candidato la
+    // recibe adjunta al correo y por la URL de descarga (token) en su portal.
+    match /ordenes_examenes/{examen}/{file} {
+      allow read: if tieneRol();
+      allow write: if tieneRol() && esPdf() && request.resource.size < 8 * 1024 * 1024;
+    }
+
     // Todo lo demás: denegado. Antes había un catch-all (read/write si auth!=null)
     // que dejaba a cualquier candidato anónimo leer TODO el bucket (avales,
     // carpetas con cédulas y PII) y sobrescribirlo.

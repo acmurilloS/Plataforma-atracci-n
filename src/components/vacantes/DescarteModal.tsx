@@ -77,7 +77,7 @@ export function DescarteModal({ open, candidatoNombre, onClose, onConfirmar }: P
     >
       <div className="space-y-3.5">
         <GrupoMotivos
-          titulo="Motivos reciclables · candidato podría volver al pool"
+          titulo="Motivos reciclables · integrante podría volver al pool"
           icono={<Recycle size={11} strokeWidth={1.75} />}
           tono="success"
           motivos={reciclables}

@@ -96,9 +96,9 @@ export const PLANTILLAS_DEFAULT: Record<string, Plantilla> = {
 🏢 <strong>Empresa:</strong> {{empresa}}<br>
 ⚙️ <strong>Unidad:</strong> {{unidad}}<br>
 📄 <strong>Tipo de contrato:</strong> {{tipo_contrato}}<br>
-💰 <strong>Salario:</strong> prestaciones de ley<br>
-&nbsp;&nbsp;&nbsp;Comisiones: en caso de que aplique<br>
-&nbsp;&nbsp;&nbsp;Rodamiento: solo si aplica<br>
+💰 <strong>Salario:</strong> {{salario}}<br>
+&nbsp;&nbsp;&nbsp;Comisiones: {{comisiones}}<br>
+&nbsp;&nbsp;&nbsp;Rodamiento: {{rodamiento}}<br>
 🕒 <strong>Horario:</strong> {{horario}}
 </p>
 <p>Adjuntamos el perfil de cargo para que estés enterado.</p>

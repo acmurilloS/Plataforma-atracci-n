@@ -208,6 +208,7 @@ export const resolverPortalToken = onCall(
     orden_direccion: string;
     orden_url: string;
     orden_instrucciones: string;
+    cita_para_ms: number | null;
   } | null = null;
   try {
     if (postulacionId) {
@@ -267,6 +268,8 @@ export const resolverPortalToken = onCall(
           orden_direccion: String(elegido.orden_direccion ?? ''),
           orden_url: String(elegido.orden_url ?? ''),
           orden_instrucciones: String(elegido.orden_instrucciones ?? ''),
+          cita_para_ms:
+            (elegido.cita_para as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null,
         };
       }
     }
