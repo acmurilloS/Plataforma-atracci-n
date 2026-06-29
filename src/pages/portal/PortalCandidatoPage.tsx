@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileText,
   HelpCircle,
+  IdCard,
   Loader2,
   Lock,
   ShieldCheck,
@@ -23,6 +24,7 @@ import {
   tituloConsentimiento,
 } from '../../components/consentimientos/consentimientoLegal';
 import { FirmaInput } from '../../components/firma/FirmaInput';
+import { DatosBasicosPortalCard } from '../../components/portal/DatosBasicosPortalCard';
 import { estamparFormatoOficial } from '../../utils/estamparFormatoOficial';
 import { MENSAJE_FINALIZADO_DEFAULT, mensajeFase } from '../../portal/faseProceso';
 import { PortalStepper } from '../../components/portal/PortalStepper';
@@ -88,7 +90,7 @@ type ResolverResp =
   | ({ encontrado: true; requiere_cedula: true } & GateInfo)
   | ({ encontrado: true; requiere_cedula: false } & PortalData);
 
-type TabKey = 'proceso' | 'documentos' | 'autorizaciones' | 'ayuda';
+type TabKey = 'proceso' | 'documentos' | 'datos_basicos' | 'autorizaciones' | 'ayuda';
 
 export default function PortalCandidatoPage() {
   const { token } = useParams<{ token: string }>();
@@ -251,6 +253,7 @@ export default function PortalCandidatoPage() {
   const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: 'proceso', label: 'Mi proceso', icon: <ClipboardList size={15} strokeWidth={1.9} /> },
     { key: 'documentos', label: 'Documentos', icon: <FileText size={15} strokeWidth={1.9} /> },
+    { key: 'datos_basicos', label: 'Datos Básicos', icon: <IdCard size={15} strokeWidth={1.9} /> },
     { key: 'autorizaciones', label: 'Autorizaciones', icon: <ShieldCheck size={15} strokeWidth={1.9} /> },
     { key: 'ayuda', label: '¿Dudas?', icon: <HelpCircle size={15} strokeWidth={1.9} /> },
   ];
@@ -332,6 +335,17 @@ export default function PortalCandidatoPage() {
             <PortalDocumentos token={token ?? ''} cedula={cedula} slots={data.slots} />
             <SubirDocumentos token={token ?? ''} cedula={cedula} iniciales={data.documentos} />
           </div>
+        )}
+
+        {tab === 'datos_basicos' && (
+          <DatosBasicosPortalCard
+            token={token ?? ''}
+            cedula={cedula}
+            empresaNombre={empresa.nombre}
+            nombreCompleto={data.candidato_nombre}
+            documentoNumero={data.documento_numero}
+            yaEnviado={data.firma_datos_basicos}
+          />
         )}
 
         {tab === 'autorizaciones' && (

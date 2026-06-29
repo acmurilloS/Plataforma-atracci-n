@@ -13,6 +13,7 @@ import {
   FolderOpen,
   RefreshCw,
   Send,
+  Shirt,
   Sparkles,
   User,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { DotacionModal } from '../../components/gh/DotacionModal';
 import { cn } from '../../utils/cn';
 import {
   CATALOGO_DOCUMENTOS_CARPETA,
@@ -67,6 +69,12 @@ interface CarpetaDoc {
   [k: string]: unknown;
 }
 
+/** Mínimo del proceso que necesitamos para saber si el cargo requiere dotación. */
+interface ProcesoDotacion {
+  id: string;
+  perfilamiento?: { herramientas_requeridas?: { dotacion?: boolean } };
+}
+
 const ESTADO_TONO: Record<string, PillTono> = {
   armando: 'neutral',
   lista: 'info',
@@ -107,6 +115,16 @@ export default function CarpetasPage() {
     () => new Map(todasPostulaciones.map((p) => [p.id, p])),
     [todasPostulaciones],
   );
+  // Procesos: para saber si el cargo de cada carpeta requiere dotación (flag del
+  // perfilamiento) y mostrar el subpaso de solicitud de dotación.
+  const { docs: procesos } = useColeccion<ProcesoDotacion>('procesos');
+  const procPorId = useMemo(() => new Map(procesos.map((p) => [p.id, p])), [procesos]);
+  const [dotacion, setDotacion] = useState<{
+    postulacionId: string;
+    nombre: string;
+    cargo: string;
+    yaEnviada: boolean;
+  } | null>(null);
   const docsPorPostulacion = useMemo(() => {
     const m = new Map<string, DocumentoCandidatoDoc[]>();
     for (const d of todosDocumentos) {
@@ -411,6 +429,11 @@ export default function CarpetasPage() {
           const contratadoOtro = contratadoPorVacante.get(c.vacante_id);
           const bloqueadoPorContratado =
             !!contratadoOtro && contratadoOtro !== c.postulacion_id;
+          // Dotación: subpaso solo si el cargo la requiere (flag del perfilamiento).
+          const proc = procPorId.get(String(post?.proceso_id ?? ''));
+          const aplicaDotacion =
+            proc?.perfilamiento?.herramientas_requeridas?.dotacion === true;
+          const dotacionEnviada = !!post?.solicitud_dotacion_enviada_en;
 
           return (
             <Card key={c.id} padding="lg">
@@ -690,6 +713,23 @@ export default function CarpetasPage() {
                 </Link>
 
                 <div className="flex gap-2 flex-wrap">
+                  {aplicaDotacion && (
+                    <Button
+                      onClick={() =>
+                        setDotacion({
+                          postulacionId: c.postulacion_id,
+                          nombre: String(c.candidato_nombre ?? post?.candidato_nombre ?? ''),
+                          cargo: String(c.cargo_nombre ?? post?.cargo_nombre ?? ''),
+                          yaEnviada: dotacionEnviada,
+                        })
+                      }
+                      variant="neutral-secondary"
+                      size="medium"
+                      icon={<Shirt size={13} strokeWidth={1.75} />}
+                    >
+                      {dotacionEnviada ? 'Dotación enviada ✓' : 'Solicitar dotación'}
+                    </Button>
+                  )}
                   {c.estado === 'armando' && (
                     <Button
                       onClick={() => marcarLista(c)}
@@ -764,6 +804,16 @@ export default function CarpetasPage() {
           );
         })}
       </div>
+
+      {dotacion && (
+        <DotacionModal
+          postulacionId={dotacion.postulacionId}
+          candidatoNombre={dotacion.nombre}
+          cargoNombre={dotacion.cargo}
+          yaEnviada={dotacion.yaEnviada}
+          onClose={() => setDotacion(null)}
+        />
+      )}
     </div>
   );
 }

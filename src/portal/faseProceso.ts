@@ -109,6 +109,9 @@ const MAPA_ESTADO_FASE: Record<EstadoPostulacion, ClaveFase | 'finalizado'> = {
   en_contratacion: 'documentos',
   contratado: 'contratacion',
   desistio_candidato: 'finalizado',
+  // Repostulado a otra vacante: para ESTA postulación el proceso terminó (el
+  // candidato sigue activo en la del destino). El portal lo trata como finalizado.
+  repostulado: 'finalizado',
 };
 
 export function faseDeEstado(estado: string): ClaveFase | 'finalizado' {

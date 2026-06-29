@@ -25,6 +25,7 @@ import type {
 import { estadoPostulacion, fuentePostulacion } from '../../schemas';
 import { Button, Card, Pill } from '../../components/brand';
 import { FaseCandidato } from '../../components/postulaciones/FaseCandidato';
+import { RepostularModal } from '../../components/postulaciones/RepostularModal';
 import { cn } from '../../utils/cn';
 
 /**
@@ -76,6 +77,8 @@ export default function PostulacionesPage() {
     fuente_detalle: '',
   });
   const [err, setErr] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [repostulando, setRepostulando] = useState<PostulacionDoc | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -644,6 +647,11 @@ export default function PostulacionesPage() {
                   <div className="mt-1.5">
                     <FaseCandidato estado={p.estado} variante="mini" />
                   </div>
+                  {p.repostulado_a_vacante_consecutivo && (
+                    <p className="text-[10px] text-text-subtle mt-0.5">
+                      Movido a {p.repostulado_a_vacante_consecutivo}
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-text-muted text-[12px]">
                   {p.candidato_email || (
@@ -672,33 +680,54 @@ export default function PostulacionesPage() {
                 <td className="px-4 py-3">
                   <select
                     value={p.estado}
+                    disabled={p.estado === 'repostulado'}
                     onChange={(e) => cambiarEstado(p, e.target.value as EstadoPostulacion)}
-                    className="rounded-brand-input bg-white border border-slate-200 px-2 py-1 text-[12px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                    className="rounded-brand-input bg-white border border-slate-200 px-2 py-1 text-[12px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 disabled:opacity-60"
                   >
-                    {/* 'contratado' no se setea aquí: se llega solo al aprobar la
-                        carpeta (paso 19). Se muestra solo si ya está contratado. */}
-                    {ESTADOS.filter((s) => s !== 'contratado' || p.estado === 'contratado').map(
-                      (s) => (
-                        <option key={s} value={s}>
-                          {s.replace(/_/g, ' ')}
-                        </option>
-                      ),
-                    )}
+                    {/* 'contratado' se llega solo al aprobar la carpeta (paso 19);
+                        'repostulado' lo setea solo la callable. Se muestran únicamente
+                        si la postulación ya está en ese estado. */}
+                    {ESTADOS.filter(
+                      (s) =>
+                        (s !== 'contratado' || p.estado === 'contratado') &&
+                        (s !== 'repostulado' || p.estado === 'repostulado'),
+                    ).map((s) => (
+                      <option key={s} value={s}>
+                        {s.replace(/_/g, ' ')}
+                      </option>
+                    ))}
                   </select>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Link
-                    to={`/postulaciones/${p.id}`}
-                    className="text-brand-700 hover:text-brand-800 hover:underline text-[12px] font-medium"
-                  >
-                    Abrir →
-                  </Link>
+                  <div className="flex items-center justify-end gap-3">
+                    {p.estado !== 'repostulado' && p.estado !== 'contratado' && (
+                      <button
+                        type="button"
+                        onClick={() => setRepostulando(p)}
+                        className="text-text-muted hover:text-brand-700 hover:underline text-[12px] font-medium"
+                      >
+                        Repostular
+                      </button>
+                    )}
+                    <Link
+                      to={`/postulaciones/${p.id}`}
+                      className="text-brand-700 hover:text-brand-800 hover:underline text-[12px] font-medium"
+                    >
+                      Abrir →
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </Card>
+
+      {okMsg && (
+        <div className="rounded-md border border-success-500/20 bg-success-50 px-3.5 py-2.5 text-[13px] text-success-700">
+          {okMsg}
+        </div>
+      )}
 
       {/* ─── CTAs siguiente paso ──────────────────────────────── */}
       <div className="flex justify-end gap-3 flex-wrap pt-2">
@@ -709,6 +738,20 @@ export default function PostulacionesPage() {
           <Button variant="brand-primary">Ir a terna →</Button>
         </Link>
       </div>
+
+      {repostulando && (
+        <RepostularModal
+          postulacion={repostulando}
+          onClose={() => setRepostulando(null)}
+          onDone={(consecutivo) =>
+            setOkMsg(
+              `${repostulando.candidato_nombre} fue repostulado${
+                consecutivo ? ` a ${consecutivo}` : ''
+              }. Quedó activo en esa vacante y repostulado aquí.`,
+            )
+          }
+        />
+      )}
     </div>
   );
 }

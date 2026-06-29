@@ -101,6 +101,15 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
   proceso_activo_id: string | null;
   analista_uid: string | null;
   analista_nombre: string | null;
+  /**
+   * Auditoría de la asignación MANUAL de analista (la hace el staff desde la
+   * vacante; antes quedaba auto-asignada la que entraba a perfilar). Solo la
+   * setea la callable `asignarAnalista` (Admin SDK); las firestore.rules
+   * bloquean cambiar analista_uid/nombre desde el cliente. Opcionales para
+   * retrocompatibilidad con vacantes viejas.
+   */
+  analista_asignado_por?: string | null;
+  analista_asignado_en?: Timestamp | null;
   cerrada_en: Timestamp | null;
   razon_cierre: string | null;
   /**

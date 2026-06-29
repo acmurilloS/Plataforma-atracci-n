@@ -137,7 +137,13 @@ service cloud.firestore {
               resource.data.analista_uid == null
               || resource.data.analista_uid == request.auth.uid
             ))
-      ) && preservaCreador();
+      ) && preservaCreador()
+        // La asignación de analista la hace SOLO la callable asignarAnalista
+        // (Admin SDK, staff-only). Ningún cliente puede cambiar analista_uid /
+        // analista_nombre por su cuenta — ni una analista autoasignarse vacantes
+        // ajenas, ni el perfilamiento auto-asignarse (decisión 2026-06-28).
+        && request.resource.data.analista_uid == resource.data.analista_uid
+        && request.resource.data.analista_nombre == resource.data.analista_nombre;
       allow delete: if false;
     }
 
@@ -177,7 +183,12 @@ service cloud.firestore {
       // contratados aunque se salten la UI. El resto de updates no cambia.
       allow update: if (staff() || isAnalista())
         && !(request.resource.data.estado == 'contratado'
-             && resource.data.estado != 'contratado');
+             && resource.data.estado != 'contratado')
+        // Igual que 'contratado': 'repostulado' SOLO lo setea la callable
+        // `repostularCandidato` (Admin SDK), que además crea la postulación
+        // destino y estampa la traza. Un cliente no puede saltárselo.
+        && !(request.resource.data.estado == 'repostulado'
+             && resource.data.estado != 'repostulado');
       allow delete: if false;
     }
     match /contactos_candidato/{id} {
@@ -320,6 +331,15 @@ service cloud.firestore {
       allow read: if staff();
       allow create: if signedIn();
       allow update, delete: if false;
+    }
+    // Versiones de los formatos controlados por Calidad (Datos Básicos / SAGRILAFT)
+    // al corregir un campo: historial inmutable (quién/cuándo/qué/PDF por versión).
+    // Solo la callable `regenerarFormatoOficial` (Admin SDK) escribe; staff lee.
+    match /formatos_versiones/{id} {
+      // Lectura para quienes pueden corregir (staff + analista): así la analista
+      // que genera la corrección ve su propio historial. Escritura solo la callable.
+      allow read: if staff() || isAnalista();
+      allow write: if false;
     }
     match /notificaciones/{id} {
       allow get: if signedIn() && resource.data.destinatario_uid == request.auth.uid;

@@ -13,6 +13,7 @@ import {
   FileText,
   HeartPulse,
   Mail,
+  Pencil,
   Phone,
   Send,
   Sparkles,
@@ -33,6 +34,7 @@ import { DatosBasicosTab } from './DatosBasicosTab';
 import { politicaParaCriticidad } from '../../schemas';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 import { FaseCandidato, etiquetaEstado } from '../../components/postulaciones/FaseCandidato';
+import { EditarDatosModal } from '../../components/postulaciones/EditarDatosModal';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { cn } from '../../utils/cn';
 import type { PostulacionDoc, VacanteDoc, Criticidad, CargoDoc } from '../../schemas';
@@ -118,9 +120,12 @@ export default function PostulacionDetallePage() {
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', post?.vacante_id ?? null);
   const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
   const { actualizar } = useMutacion();
+  const { rol } = useAuth();
   const { docs: examenes } = useColeccion<ExamenMin>('examenes_medicos', {
     filtros: [['postulacion_id', '==', id ?? '___']],
   });
+  const puedeEditarDatos = ['analista', 'coordinador', 'gh', 'admin'].includes(rol ?? '');
+  const [editarDatosAbierto, setEditarDatosAbierto] = useState(false);
   const [tab, setTab] = useState<Tab>('pruebas');
   const [enviandoPortal, setEnviandoPortal] = useState(false);
   const [copiadoEnlace, setCopiadoEnlace] = useState(false);
@@ -484,6 +489,16 @@ export default function PostulacionDetallePage() {
         </div>
 
         <div className="flex flex-col gap-2">
+          {puedeEditarDatos && (
+            <button
+              type="button"
+              onClick={() => setEditarDatosAbierto(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+            >
+              <Pencil size={12} strokeWidth={1.75} />
+              Editar datos del candidato
+            </button>
+          )}
           <Link
             to={`/postulaciones/${post.id}/autorizacion-datos`}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
@@ -602,6 +617,15 @@ export default function PostulacionDetallePage() {
           )}
         </div>
       </div>
+
+      {editarDatosAbierto && (
+        <EditarDatosModal
+          candidatoId={post.candidato_id}
+          postulacionId={post.id}
+          postulacionEstado={post.estado}
+          onClose={() => setEditarDatosAbierto(false)}
+        />
+      )}
 
       {agradecerAbierto && (
         <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3 print:hidden">

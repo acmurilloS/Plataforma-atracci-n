@@ -242,8 +242,10 @@ export default function PerfilamientoPage() {
           vacante_consecutivo: vacante.consecutivo,
           numero_intento: 1,
           estado: 'activo',
-          analista_uid: user.uid,
-          analista_nombre: `${perfil.nombre} ${perfil.apellido}`,
+          // La analista la asigna el STAFF desde la vacante (callable asignarAnalista);
+          // el proceso refleja la ya asignada (o null si todavía no la asignaron).
+          analista_uid: vacante.analista_uid,
+          analista_nombre: vacante.analista_nombre,
           empresa_codigo: vacante.empresa_codigo,
           sede_codigo: vacante.sede_codigo,
           unidad_id: vacante.unidad_id,
@@ -262,8 +264,8 @@ export default function PerfilamientoPage() {
         estado: 'lista_para_publicar',
         fecha_entrevista_pactada: Timestamp.fromDate(fechaDate),
         proceso_activo_id: procesoId,
-        analista_uid: user.uid,
-        analista_nombre: `${perfil.nombre} ${perfil.apellido}`,
+        // analista_uid NO se setea aquí: lo asigna el staff (asignarAnalista) y
+        // las firestore.rules bloquean cambiarlo desde el cliente.
       });
       // Disparo ADELANTADO de pre-avisos a IT/talentos/compras/etc.
       // (Dolor #4: candidatos con 15 días sin equipo). Refleja lo que Karen

@@ -63,6 +63,11 @@ export const estadoPostulacion = z.enum([
 
   // Salida del candidato (transversal)
   'desistio_candidato',
+
+  // Repostulado a otra vacante (reu 26-jun): sale del pipeline de ESTA vacante
+  // pero NO es un descarte/rechazo — queda activo en la vacante destino con una
+  // postulación nueva. El estado lo setea SOLO la callable repostularCandidato.
+  'repostulado',
 ]);
 export type EstadoPostulacion = z.infer<typeof estadoPostulacion>;
 
@@ -135,6 +140,15 @@ export const postulacionInputSchema = z.object({
   /** Etapa donde se descartó. Texto libre — los descartes ad-hoc (ej. `'entrevista_lider'`) no siempre son un estado del enum. */
   descarte_etapa: z.string().nullable().default(null),
 
+  // ── Repostulación a otra vacante (reu 26-jun) ──────────────────────────────
+  // El candidato se mueve a otra vacante sin re-inscribirlo (mismo candidato_id,
+  // postulación nueva en el destino). La trazabilidad queda en ambos lados:
+  /** En la postulación ORIGEN: vacante a la que se movió el candidato. */
+  repostulado_a_vacante_id: z.string().nullable().default(null),
+  repostulado_a_vacante_consecutivo: z.string().nullable().default(null),
+  /** En la postulación DESTINO: postulación de origen de la que se repostuló. */
+  repostulacion_origen_id: z.string().nullable().default(null),
+
   // ── Referidos internos (módulo v1, 2026-06-03) ─────────────────────────────
   // Se llenan cuando la postulación entra por la landing pública con `?ref=<slug>`.
   // Se mapean en CarreraPublicaPage tras llamar `resolverRefSlug`. Cuando GH
@@ -184,4 +198,6 @@ export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
   condiciones_laborales?: Record<string, string> | null;
   condiciones_enviadas_en?: Timestamp | null;
   condiciones_aceptadas_en?: Timestamp | null;
+  /** Solicitud de dotación enviada a compras/gestores (subpaso de carpeta, reu 26-jun). */
+  solicitud_dotacion_enviada_en?: Timestamp | null;
 }

@@ -12,11 +12,15 @@ import {
   Sparkles,
   User2,
 } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
 import { FlujogramaTimeline } from '../components/FlujogramaTimeline';
 import { PoliticaCriticidadBanner } from '../components/vacantes/PoliticaCriticidadBanner';
 import { BitacoraReprocesos } from '../components/vacantes/BitacoraReprocesos';
-import { Card, Pill, type PillTono } from '../components/brand';
+import { SelectorAnalista } from '../components/vacantes/SelectorAnalista';
+import { Button, Card, Pill, type PillTono } from '../components/brand';
+import { useAuth } from '../hooks/useAuth';
 import { useVacantes } from '../hooks/useVacantes';
+import { functions } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
 import { formatearCOP } from '../utils/moneda';
 import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../schemas';
@@ -224,19 +228,7 @@ export default function VacanteDetallePage() {
       </section>
 
       {/* ─── Asignación ──────────────────────────────────────────── */}
-      {(vac.analista_nombre || vac.lider_nombre) && (
-        <section>
-          <SectionEyebrow icon={<User2 size={12} strokeWidth={1.75} />}>
-            Asignación
-          </SectionEyebrow>
-          <Card padding="lg" className="mt-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-              <Dato label="Analista responsable" valor={vac.analista_nombre ?? 'Sin asignar'} />
-              <Dato label="Líder solicitante" valor={vac.lider_nombre ?? '—'} />
-            </div>
-          </Card>
-        </section>
-      )}
+      <AsignacionAnalista vac={vac} />
 
       {/* ─── Reprocesos y novedades (bitácora) ───────────────────── */}
       <BitacoraReprocesos vacante={vac} />
@@ -255,6 +247,84 @@ export default function VacanteDetallePage() {
         </Card>
       </section>
     </div>
+  );
+}
+
+/**
+ * AsignacionAnalista · muestra la analista/líder de la vacante y, para el STAFF
+ * (coordinador/admin), un selector para asignar/reasignar la analista responsable
+ * vía la callable `asignarAnalista` (reu 26-jun). La asignación ya NO es
+ * automática en el perfilamiento; la decide el staff a mano.
+ */
+function AsignacionAnalista({ vac }: { vac: VacanteDoc }) {
+  const { rol } = useAuth();
+  const esStaff = rol === 'admin' || rol === 'coordinador';
+  const [selUid, setSelUid] = useState<string | null>(vac.analista_uid);
+  const [asignando, setAsignando] = useState(false);
+  const [msg, setMsg] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
+
+  const asignadoEn = vac.analista_asignado_en?.toDate?.() ?? null;
+  const cambio = !!selUid && selUid !== vac.analista_uid;
+
+  async function asignar() {
+    if (!selUid) return;
+    setAsignando(true);
+    setMsg(null);
+    try {
+      const fn = httpsCallable(functions, 'asignarAnalista');
+      const res = (await fn({ vacante_id: vac.id, analista_uid: selUid })) as {
+        data: { analista_nombre?: string };
+      };
+      setMsg({ tipo: 'ok', texto: `Analista asignada: ${res.data?.analista_nombre ?? ''}.` });
+    } catch (e) {
+      setMsg({
+        tipo: 'error',
+        texto: e instanceof Error ? e.message : 'No pudimos asignar la analista.',
+      });
+    } finally {
+      setAsignando(false);
+    }
+  }
+
+  return (
+    <section>
+      <SectionEyebrow icon={<User2 size={12} strokeWidth={1.75} />}>Asignación</SectionEyebrow>
+      <Card padding="lg" className="mt-3 space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+          <Dato label="Analista responsable" valor={vac.analista_nombre ?? 'Sin asignar'} />
+          <Dato label="Líder solicitante" valor={vac.lider_nombre ?? '—'} />
+        </div>
+        {asignadoEn && (
+          <p className="text-[11px] text-text-subtle">Analista asignada el {formatearFecha(asignadoEn)}.</p>
+        )}
+        {esStaff && (
+          <div className="border-t border-slate-100 pt-5 space-y-3">
+            <p className="text-[10px] font-bold tracking-[0.08em] uppercase text-text-subtle">
+              {vac.analista_uid ? 'Reasignar analista' : 'Asignar analista'}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 md:items-center">
+              <SelectorAnalista value={selUid} onChange={(uid) => setSelUid(uid)} disabled={asignando} />
+              <Button
+                variant="brand-primary"
+                onClick={asignar}
+                loading={asignando}
+                disabled={asignando || !cambio}
+              >
+                {vac.analista_uid ? 'Reasignar' : 'Asignar'}
+              </Button>
+            </div>
+            {msg && (
+              <p className={`text-[12px] ${msg.tipo === 'ok' ? 'text-success-700' : 'text-danger-700'}`}>
+                {msg.texto}
+              </p>
+            )}
+            <p className="text-[11px] text-text-subtle">
+              La asignación la hace coordinación/admin; una analista no se autoasigna vacantes ajenas.
+            </p>
+          </div>
+        )}
+      </Card>
+    </section>
   );
 }
 

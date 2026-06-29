@@ -22,6 +22,7 @@ export const tipoNovedadVacante = z.enum([
   'suspension',        // la vacante queda suspendida (pasa a `pausada`)
   'reactivacion',      // se retoma una vacante suspendida
   'observacion',       // nota general de trazabilidad
+  'asignacion_analista', // staff asignó/reasignó la analista (lo crea la callable, no el form)
 ]);
 export type TipoNovedadVacante = z.infer<typeof tipoNovedadVacante>;
 
@@ -32,6 +33,7 @@ export const TIPO_NOVEDAD_LABEL: Record<TipoNovedadVacante, string> = {
   suspension: 'Suspensión',
   reactivacion: 'Reactivación',
   observacion: 'Observación general',
+  asignacion_analista: 'Asignación de analista',
 };
 
 /** Orden en que se ofrecen los tipos en el formulario. */

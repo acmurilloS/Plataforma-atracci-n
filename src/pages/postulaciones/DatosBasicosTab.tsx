@@ -1,10 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Timestamp } from 'firebase/firestore';
 import {
   Check,
   CheckCircle2,
   ChevronDown,
+  History,
   IdCard,
+  Pencil,
   Plus,
   Printer,
   Trash2,
@@ -13,13 +15,13 @@ import { useColeccion } from '../../hooks/useColeccion';
 import { useDoc } from '../../hooks/useDoc';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
+import { CorregirFormatoModal } from '../../components/postulaciones/CorregirFormatoModal';
 import { useEmpresas } from '../../hooks/useCatalogos';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { FirmaDigitalBanner } from '../../components/firma/FirmaDigitalBanner';
 import { cn } from '../../utils/cn';
 import type {
-  CandidatoDoc,
   DatosBasicosIntegranteDoc,
   EstadoCivil,
   EstadoDatosBasicos,
@@ -71,20 +73,37 @@ const inputClass =
 
 const textareaClass = inputClass + ' resize-none leading-relaxed';
 
+interface VersionFormato {
+  v: number;
+  fecha?: Timestamp;
+  regenerado_nombre?: string;
+  campos?: { campo: string; antes?: string; despues?: string }[];
+}
+interface FormatosVersionesDoc {
+  id: string;
+  datos_basicos?: { ultima_version?: number; versiones?: VersionFormato[] };
+}
+
 export function DatosBasicosTab({ postulacion }: Props) {
   const { docs } = useColeccion<DatosBasicosIntegranteDoc>('datos_basicos_integrante', {
     filtros: [['postulacion_id', '==', postulacion.id]],
     limit: 1,
   });
-  const { doc: candidato } = useDoc<CandidatoDoc>('candidatos', postulacion.candidato_id ?? null);
-  const { crear, actualizar } = useMutacion();
+  const { actualizar } = useMutacion();
   const { user, perfil, rol } = useAuth();
   const { empresas } = useEmpresas();
   const [err, setErr] = useState<string | null>(null);
   const [seccionAbierta, setSeccionAbierta] = useState<string>('personal');
+  const [corrigiendo, setCorrigiendo] = useState(false);
+  const { doc: versionesDoc } = useDoc<FormatosVersionesDoc>('formatos_versiones', postulacion.id);
 
   const dato = docs[0] ?? null;
   const esGH = rol === 'gh' || rol === 'admin' || rol === 'coordinador';
+  const puedeCorregir = ['analista', 'gh', 'coordinador', 'admin'].includes(rol ?? '');
+  // El integrante lo diligencia en su portal: del lado del staff es revisión.
+  // GH conserva edición (completa caja/ARL/riesgo); las analistas solo leen.
+  const soloLectura = !!dato && dato.estado !== 'borrador' && !esGH;
+  const versiones = versionesDoc?.datos_basicos?.versiones ?? [];
 
   return (
     <div className="space-y-6">
@@ -117,12 +136,43 @@ export function DatosBasicosTab({ postulacion }: Props) {
               <Printer size={12} strokeWidth={1.75} />
               Formato oficial
             </a>
+            {dato.estado !== 'borrador' && puedeCorregir && (
+              <button
+                type="button"
+                onClick={() => setCorrigiendo(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-text-strong hover:bg-slate-50"
+              >
+                <Pencil size={12} strokeWidth={1.75} />
+                Corregir formato
+              </button>
+            )}
             <Pill tono={ESTADO_TONO[dato.estado]} dot>
               {ESTADO_LABEL[dato.estado]}
             </Pill>
           </div>
         )}
       </div>
+
+      {versiones.length > 0 && (
+        <div className="rounded-md border border-slate-200 bg-slate-50/60 px-4 py-3">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-[0.06em] uppercase text-text-muted">
+            <History size={12} strokeWidth={1.75} />
+            Correcciones del formato ({versiones.length})
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {[...versiones]
+              .sort((a, b) => b.v - a.v)
+              .map((vr) => (
+                <li key={vr.v} className="text-[12px] text-text-body">
+                  <span className="font-medium">v{vr.v}</span>
+                  {vr.fecha ? ` · ${formatearFecha(vr.fecha.toDate())}` : ''}
+                  {vr.regenerado_nombre ? ` · ${vr.regenerado_nombre}` : ''}
+                  {vr.campos?.length ? ` · ${vr.campos.map((c) => c.campo).join(', ')}` : ''}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
 
       <FirmaDigitalBanner
         titulo="Firma del integrante (portal)"
@@ -138,18 +188,32 @@ export function DatosBasicosTab({ postulacion }: Props) {
       )}
 
       {!dato && (
-        <CrearDatosBasicos
-          postulacion={postulacion}
-          candidato={candidato}
-          empresas={empresas}
-          uid={user?.uid ?? ''}
-          onError={(m) => setErr(m)}
-          crear={crear}
-        />
+        <Card padding="lg">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-md bg-slate-100 text-text-muted flex items-center justify-center shrink-0">
+              <IdCard size={16} strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-text-strong">
+                Pendiente de diligenciar por el integrante
+              </p>
+              <p className="text-[12px] text-text-muted mt-1 max-w-xl">
+                Los Datos Básicos los diligencia y firma el integrante desde su portal (pestaña
+                “Datos Básicos”). Cuando los envíe, aparecerán aquí para tu revisión.
+              </p>
+            </div>
+          </div>
+        </Card>
       )}
 
       {dato && (
         <div className="space-y-3">
+          {soloLectura && (
+            <div className="rounded-md border border-info-500/20 bg-info-50 px-3.5 py-2.5 text-[12px] text-info-700">
+              Diligenciado por el integrante desde su portal. Esta vista es de revisión; para
+              corregir un campo usa “Corregir formato” (queda con trazabilidad).
+            </div>
+          )}
           {SECCIONES.map((s) => (
             <Seccion
               key={s.id}
@@ -163,6 +227,7 @@ export function DatosBasicosTab({ postulacion }: Props) {
                 empresas={empresas}
                 actualizar={actualizar}
                 esGH={esGH}
+                soloLectura={soloLectura}
                 onError={(m) => setErr(m)}
               />
             </Seccion>
@@ -178,164 +243,15 @@ export function DatosBasicosTab({ postulacion }: Props) {
           />
         </div>
       )}
+
+      {corrigiendo && dato && (
+        <CorregirFormatoModal
+          dato={dato}
+          postulacionId={postulacion.id}
+          onClose={() => setCorrigiendo(false)}
+        />
+      )}
     </div>
-  );
-}
-
-// ─── Crear datos básicos ───────────────────────────────────────────────
-
-function CrearDatosBasicos({
-  postulacion,
-  candidato,
-  empresas,
-  onError,
-  crear,
-}: {
-  postulacion: PostulacionDoc;
-  candidato: CandidatoDoc | null;
-  empresas: { id: string; codigo: string; nombre: string }[];
-  uid: string;
-  onError: (msg: string) => void;
-  crear: ReturnType<typeof useMutacion>['crear'];
-}) {
-  const [empresaCodigo, setEmpresaCodigo] = useState(empresas[0]?.codigo ?? '');
-  const [tipoContrat, setTipoContrat] = useState<TipoContratacion>('directo');
-  const [creando, setCreando] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setCreando(true);
-    try {
-      const empresa = empresas.find((e) => e.codigo === empresaCodigo);
-      const nombreCompleto = postulacion.candidato_nombre ?? '';
-      // Pre-llenado: usa el registro del candidato (más preciso) y cae al
-      // spliteo del nombre completo solo si el candidato no tiene nombres/apellidos.
-      const partes = nombreCompleto.trim().split(/\s+/);
-      const nombres =
-        candidato?.nombres?.trim() ||
-        partes.slice(0, Math.max(1, Math.floor(partes.length / 2))).join(' ');
-      const apellidos =
-        candidato?.apellidos?.trim() ||
-        partes.slice(Math.max(1, Math.floor(partes.length / 2))).join(' ');
-
-      await crear('datos_basicos_integrante', {
-        postulacion_id: postulacion.id,
-        candidato_id: postulacion.candidato_id,
-        candidato_nombre: nombreCompleto,
-        estado: 'borrador',
-        tipo_contratacion: tipoContrat,
-        empresa_codigo: empresaCodigo,
-        empresa_nombre: empresa?.nombre ?? '',
-        nombres,
-        apellidos,
-        documento_tipo: candidato?.documento_tipo || 'CC',
-        documento_numero: candidato?.documento_numero ?? '',
-        documento_ciudad_expedicion: '',
-        documento_dpto_expedicion: '',
-        direccion: '',
-        barrio: '',
-        ciudad_domicilio: candidato?.ciudad_residencia ?? '',
-        telefono_fijo: '',
-        celular: postulacion.candidato_telefono ?? candidato?.telefono ?? '',
-        fecha_nacimiento: null,
-        lugar_nacimiento: '',
-        estado_civil: null,
-        profesion_actividad: '',
-        genero: null,
-        grupo_sanguineo: null,
-        alergico_a: '',
-        dependiente_medicamento: '',
-        libreta_militar_numero: '',
-        libreta_militar_clase: '',
-        correo_electronico: postulacion.candidato_email ?? '',
-        cuenta_banco_numero: '',
-        entidad_bancaria: '',
-        fondo_pensiones_obligatorias: '',
-        entidad_promotora_salud: '',
-        fondo_cesantias: '',
-        caja_compensacion: '',
-        arl: '',
-        riesgo_porcentaje: '',
-        conyuge_nombre: '',
-        conyuge_documento: '',
-        conyuge_profesion_actividad: '',
-        conyuge_fecha_nacimiento: null,
-        hijos: [],
-        emergencia_contacto_1: { nombre: '', telefono: '' },
-        emergencia_contacto_2: { nombre: '', telefono: '' },
-        talla_calzado: '',
-        talla_pantalon: '',
-        talla_chaleco: '',
-        talla_guantes: '',
-        talla_overol: '',
-        talla_camisa_blusa: '',
-        talla_otros: '',
-        observaciones: '',
-        tiene_familiares_organizacion: false,
-        nombre_familiar_organizacion: '',
-        firma_integrante_url: null,
-        fecha_firma_integrante: null,
-        autorizacion_gh_uid: null,
-        autorizacion_gh_nombre: null,
-        fecha_autorizacion_gh: null,
-        registrado_nomina_uid: null,
-        registrado_nomina_nombre: null,
-        fecha_registrado_nomina: null,
-      });
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'No pudimos crear los datos básicos.');
-    } finally {
-      setCreando(false);
-    }
-  }
-
-  return (
-    <Card padding="lg">
-      <form onSubmit={submit} className="space-y-5">
-        <div>
-          <h4 className="text-[16px] font-semibold tracking-[-0.012em] text-text-strong">
-            Iniciar datos básicos del integrante
-          </h4>
-          <p className="text-[12px] text-text-muted mt-1.5 max-w-2xl">
-            El integrante seleccionado completa la información personal, laboral y familiar.
-            GH valida y registra en nómina.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label className="block">
-            <span className="block text-[13px] font-medium text-text-strong mb-1.5">
-              Tipo de contratación
-            </span>
-            <select
-              value={tipoContrat}
-              onChange={(e) => setTipoContrat(e.target.value as TipoContratacion)}
-              className={inputClass}
-            >
-              <option value="directo">Directo</option>
-              <option value="temporal">Temporal</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-[13px] font-medium text-text-strong mb-1.5">Empresa</span>
-            <select
-              value={empresaCodigo}
-              onChange={(e) => setEmpresaCodigo(e.target.value)}
-              required
-              className={inputClass}
-            >
-              {empresas.map((e) => (
-                <option key={e.codigo} value={e.codigo}>
-                  {e.nombre}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <Button type="submit" variant="brand-primary" disabled={creando} loading={creando}>
-          {creando ? 'Creando…' : 'Iniciar datos básicos'}
-        </Button>
-      </form>
-    </Card>
   );
 }
 
@@ -384,6 +300,7 @@ function ContenidoSeccion({
   empresas,
   actualizar,
   esGH,
+  soloLectura,
   onError,
 }: {
   seccionId: string;
@@ -391,6 +308,7 @@ function ContenidoSeccion({
   empresas: { id: string; codigo: string; nombre: string }[];
   actualizar: ReturnType<typeof useMutacion>['actualizar'];
   esGH: boolean;
+  soloLectura: boolean;
   onError: (m: string) => void;
 }) {
   const [local, setLocal] = useState<Partial<DatosBasicosIntegranteDoc>>({});
@@ -434,7 +352,7 @@ function ContenidoSeccion({
   const hayCambios = Object.keys(local).length > 0;
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={soloLectura} className="space-y-5 min-w-0 border-0 p-0 m-0">
       {seccionId === 'cabecera' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <SelectField
@@ -699,7 +617,7 @@ function ContenidoSeccion({
           {guardando ? 'Guardando…' : 'Guardar sección'}
         </Button>
       </div>
-    </div>
+    </fieldset>
   );
 }
 

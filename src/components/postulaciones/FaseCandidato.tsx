@@ -34,6 +34,7 @@ const ESTADO_LABEL: Record<EstadoPostulacion, string> = {
   en_contratacion: 'En contratación',
   contratado: 'Contratado',
   desistio_candidato: 'Desistió',
+  repostulado: 'Repostulado',
 };
 
 const DESCARTES = new Set<string>([
@@ -51,7 +52,8 @@ export function etiquetaEstado(estado: string): string {
 function tonoEstado(estado: string): PillTono {
   if (estado === 'contratado') return 'success';
   if (DESCARTES.has(estado)) return 'danger';
-  if (estado === 'desistio_candidato') return 'neutral';
+  // Repostulado no es un rechazo (se movió a otra vacante) → tono neutro, no rojo.
+  if (estado === 'desistio_candidato' || estado === 'repostulado') return 'neutral';
   return 'info';
 }
 

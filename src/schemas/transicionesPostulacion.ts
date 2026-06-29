@@ -57,6 +57,11 @@ const T: Record<EstadoPostulacion, readonly EstadoPostulacion[]> = {
   contratado: [],
 
   desistio_candidato: [],
+
+  // Terminal: el candidato se movió a otra vacante (lo setea la callable
+  // repostularCandidato, no el patcher de UI). Su vida sigue en la postulación
+  // del destino.
+  repostulado: [],
 };
 
 export const transicionesPostulacion = T;

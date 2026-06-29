@@ -15,7 +15,13 @@ export { onCarpetaCompletaTotal } from './drive/onCarpetaCompletaTotal';
 export { probarConexionDrive, sincronizarCarpetaDrive } from './drive/callablesDrive';
 
 export { onVacanteCreate } from './vacantes/onVacanteCreate';
+// Asignación MANUAL de la analista por el staff (reu 26-jun): selector en la vacante.
+export { asignarAnalista } from './vacantes/asignarAnalista';
+// Repostular un candidato a otra vacante activa sin re-inscribirlo (reu 26-jun).
+export { repostularCandidato } from './postulaciones/repostularCandidato';
 export { onCandidatoCreate } from './candidatos/onCandidatoCreate';
+// Edición de datos del candidato/integrante por staff, con auditoría (reu 26-jun).
+export { editarDatosCandidato } from './candidatos/editarDatosCandidato';
 export { scheduledSeedFestivos, sembrarFestivosCallable } from './festivos/festivos';
 export { seedInicial } from './seed/seedInicial';
 export { buscarCandidatosIA } from './sourcing/buscarCandidatosIA';
@@ -65,6 +71,8 @@ export { onCandidatoContratado } from './tickets/onCandidatoContratado';
 // Aprobar carpeta = contratar + cerrar vacante + tickets, transaccional y con
 // unicidad de 1 contratado por vacante (BUG 3+4, 2026-06-24).
 export { aprobarCarpeta } from './carpetas/aprobarCarpeta';
+// Solicitud de dotación con tallas (subpaso de entrega de carpeta, reu 26-jun).
+export { enviarSolicitudDotacion } from './dotacion/enviarSolicitudDotacion';
 
 // Portal del candidato (público, sin login): consentimientos digitales (2026-06-13).
 export { enviarPortalCandidato } from './portal/enviarPortalCandidato';
@@ -79,6 +87,10 @@ export { onPostulacionAvance } from './portal/onPostulacionAvance';
 export { revocarPortalCandidato } from './portal/revocarPortalCandidato';
 // Firma de documentos del proceso (datos básicos / debida diligencia) en el portal (D.2, 2026-06-16).
 export { registrarFirmaDocumento } from './portal/registrarFirmaDocumento';
+// El integrante diligencia y firma sus Datos Básicos (DGH-F-05) desde el portal (reu 26-jun).
+export { registrarDatosBasicosPortal } from './portal/registrarDatosBasicosPortal';
+// Corregir un formato controlado (Datos Básicos / SAGRILAFT) + regenerar con trazabilidad (reu 26-jun).
+export { regenerarFormatoOficial } from './formatos/regenerarFormatoOficial';
 // Condiciones laborales: envío al candidato + aceptación en el portal (E, 2026-06-16).
 export { enviarCondicionesLaborales } from './condiciones/enviarCondicionesLaborales';
 export { aceptarCondicionesLaborales } from './condiciones/aceptarCondicionesLaborales';

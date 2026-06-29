@@ -59,6 +59,14 @@ service firebase.storage {
       allow write: if tieneRol() && esPdf() && request.resource.size < 8 * 1024 * 1024;
     }
 
+    // Formato oficial REGENERADO al corregir un campo (Datos Básicos / SAGRILAFT).
+    // Lo sube el staff (con rol); cada versión queda con su propio archivo, el
+    // anterior NO se borra (trazabilidad de Calidad). Registro en formatos_versiones.
+    match /formatos_corregidos/{postulacion}/{file} {
+      allow read: if tieneRol();
+      allow write: if tieneRol() && esPdf() && request.resource.size < 10 * 1024 * 1024;
+    }
+
     // Todo lo demás: denegado. Antes había un catch-all (read/write si auth!=null)
     // que dejaba a cualquier candidato anónimo leer TODO el bucket (avales,
     // carpetas con cédulas y PII) y sobrescribirlo.
