@@ -52,32 +52,27 @@ export function useSedesDeEmpresa(empresaCodigo: string | null | undefined) {
   return { sedes, cargando };
 }
 
-export function useUnidadesDeSede(sedeCodigo: string | null | undefined) {
+export function useUnidadesDeSede(_sedeCodigo?: string | null | undefined) {
+  // Las unidades son áreas del HOLDING (globales), no de una sede puntual
+  // (reu 26-jun: la lista oficial es transversal — ADM, gerencias, IG, LAP…).
+  // Se devuelven TODAS las activas para cualquier vacante; el parámetro de sede
+  // se conserva por compatibilidad de las llamadas pero se ignora.
   const [unidades, setUnidades] = useState<UnidadDoc[]>([]);
-  const [cargando, setCargando] = useState(false);
+  const [cargando, setCargando] = useState(true);
   useEffect(() => {
-    if (!sedeCodigo) {
-      setUnidades([]);
-      return;
-    }
     setCargando(true);
-    const q = query(
-      collection(db, 'unidades'),
-      where('sede_codigo', '==', sedeCodigo),
-      where('activo', '==', true),
-      orderBy('nombre'),
-    );
+    const q = query(collection(db, 'unidades'), where('activo', '==', true));
     return onSnapshot(
       q,
       (snap) => {
-        setUnidades(
-          snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<UnidadDoc, 'id'>) })),
-        );
+        const arr = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<UnidadDoc, 'id'>) }));
+        arr.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+        setUnidades(arr);
         setCargando(false);
       },
       () => setCargando(false),
     );
-  }, [sedeCodigo]);
+  }, []);
   return { unidades, cargando };
 }
 
