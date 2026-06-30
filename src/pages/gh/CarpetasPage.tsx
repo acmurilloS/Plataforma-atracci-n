@@ -168,6 +168,8 @@ export default function CarpetasPage() {
   // Por default todas colapsadas; el usuario abre las que quiera revisar.
   // Evita que la página crezca a la altura de 18 docs × N carpetas.
   const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
+  // Filtro de foco para GH: solo las carpetas con CyD al 100% pendientes de GH.
+  const [soloListasGH, setSoloListasGH] = useState(false);
 
   function toggleExpandir(id: string) {
     setExpandidas((prev) => {
@@ -408,8 +410,36 @@ export default function CarpetasPage() {
         </div>
       )}
 
+      {carpetas.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setSoloListasGH((v) => !v)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium border transition-colors',
+              soloListasGH
+                ? 'bg-brand-600 text-white border-brand-600'
+                : 'bg-white text-text-muted border-slate-200 hover:text-text-strong',
+            )}
+          >
+            Listas para GH
+          </button>
+          <span className="text-[11px] text-text-subtle">
+            {soloListasGH
+              ? 'Cultura y Desarrollo al 100% · pendientes de Gestión Humana'
+              : 'Mostrando todas las carpetas'}
+          </span>
+        </div>
+      )}
+
       <div className="space-y-4">
-        {carpetas.map((c) => {
+        {(soloListasGH
+          ? carpetas.filter((c) => {
+              const comp = calcularCompletitud(c.postulacion_id);
+              return comp.porcentaje === 100 && comp.gh.porcentaje < 100;
+            })
+          : carpetas
+        ).map((c) => {
           const tono = ESTADO_TONO[c.estado] ?? 'neutral';
           const info = resolverInfo(c);
           const completitud = calcularCompletitud(c.postulacion_id);

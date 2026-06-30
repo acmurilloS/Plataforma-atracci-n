@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import { Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
@@ -120,28 +120,10 @@ export function DocumentosTab({ postulacion }: Props) {
   );
   const porcentaje = totalReq > 0 ? Math.round((verificadosObligatorios / totalReq) * 100) : 0;
 
-  // C.1 · cuando todos los obligatorios ya están cargados (ninguno 'pendiente'),
-  // avisar a GH que la carpeta está lista para validar. Backend idempotente.
-  const todosCargados = useMemo(
-    () =>
-      CATALOGO_DOCUMENTOS_CARPETA.filter((cat) => !cat.opcional && cat.responsable !== 'gh').every(
-        (cat) => {
-          const e = docsPorClave.get(cat.clave)?.estado;
-          return e === 'entregado' || e === 'verificado' || e === 'no_aplica';
-        },
-      ),
-    [docsPorClave],
-  );
-  useEffect(() => {
-    if (!todosCargados || postulacion.carpeta_lista_validar_notificada_en) return;
-    const fn = httpsCallable<{ postulacion_id: string }, { ok: true }>(
-      functions,
-      'notificarCarpetaListaValidar',
-    );
-    fn({ postulacion_id: postulacion.id }).catch(() => {
-      /* el backend es idempotente; un fallo de red no es crítico */
-    });
-  }, [todosCargados, postulacion.id, postulacion.carpeta_lista_validar_notificada_en]);
+  // C.1 · El aviso a GH "carpeta lista para validar" (al 100% de CyD) lo dispara
+  // ÚNICAMENTE el trigger del servidor onCarpetaCompletaCheck (fuente única, reu
+  // 26-jun). Antes había además un useEffect aquí que llamaba la callable; era
+  // redundante (idempotente por flag) y se eliminó para no duplicar la lógica.
 
   const secciones: SeccionDocumento[] = ['generales', 'seguridad_social', 'hoja_vida'];
 
