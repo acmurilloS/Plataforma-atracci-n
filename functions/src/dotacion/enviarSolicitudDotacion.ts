@@ -84,6 +84,17 @@ export const enviarSolicitudDotacion = onCall(
   const consecutivo = String(post.vacante_consecutivo ?? vac.consecutivo ?? '').trim();
   const analistaUid = String(vac.analista_uid ?? '').trim();
 
+  // Cédula del integrante (para la plantilla {{cedula}}).
+  let cedula = '';
+  try {
+    if (post.candidato_id) {
+      const c = await db.collection('candidatos').doc(String(post.candidato_id)).get();
+      if (c.exists) cedula = String(c.data()?.documento_numero ?? '').trim();
+    }
+  } catch {
+    /* noop */
+  }
+
   // Tallas normalizadas (solo las 7 conocidas).
   const tallas: Record<string, string> = {};
   for (const t of TALLAS) tallas[t.key] = String(tallasIn[t.key] ?? '').trim().slice(0, 60);
@@ -185,10 +196,21 @@ export const enviarSolicitudDotacion = onCall(
     tabla_tallas: tablaTallas,
     observaciones: obsHtml,
     nombre: escapeHtml(nombre),
+    cedula: escapeHtml(cedula),
+    unidad: escapeHtml(unidad),
     cargo: escapeHtml(cargo),
     empresa: escapeHtml(empresa),
     sede: escapeHtml(sede),
     consecutivo: escapeHtml(consecutivo),
+    // Tallas individuales: permiten una plantilla con el formato de Karen
+    // (Botas={{talla_calzado}}, Overol={{talla_overol}}, EPP={{talla_otros}}, etc.).
+    talla_calzado: escapeHtml(tallas.talla_calzado),
+    talla_pantalon: escapeHtml(tallas.talla_pantalon),
+    talla_chaleco: escapeHtml(tallas.talla_chaleco),
+    talla_guantes: escapeHtml(tallas.talla_guantes),
+    talla_overol: escapeHtml(tallas.talla_overol),
+    talla_camisa_blusa: escapeHtml(tallas.talla_camisa_blusa),
+    talla_otros: escapeHtml(tallas.talla_otros),
   });
   const html = envolverMarca(cuerpo, { preheader: `Solicitud de dotación · ${nombre}` });
   const asunto =

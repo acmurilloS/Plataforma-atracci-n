@@ -160,6 +160,9 @@ export async function enviarOrdenAGestores(
       <table style="border-collapse:collapse; font-size:14px; margin:8px 0 16px;">
         ${filasHtml}
       </table>
+      <p style="font-size:14px; margin:0 0 14px;">
+        <strong>Tiempo de respuesta esperado:</strong> ${escapeHtml(cfg.tiempo_esperado)}.
+      </p>
       <p style="font-size:13px; color:#333; background:#fff8e1; padding:8px 10px; border-left:3px solid #f0b400;">
         <strong>Para responder:</strong> si respondes a este correo, tu respuesta llega directamente a
         ${escapeHtml(analistaNombre || 'el analista que lleva el proceso')}${

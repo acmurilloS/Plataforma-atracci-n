@@ -72,6 +72,12 @@ export const vacanteInputSchema = z.object({
    * desde Aprobaciones y puede pedirlo después o adjuntarlo en nombre del líder.
    */
   aval_pendiente: z.boolean().default(false),
+  /**
+   * El líder marca que este cargo NO requiere aval (ej. reemplazo): así la
+   * vacante no aparece como "aval pendiente" en Aprobaciones aunque no tenga PDF.
+   * Excluyente con aval_pendiente (si no requiere, no está pendiente).
+   */
+  aval_no_requiere: z.boolean().default(false),
 
   fecha_entrevista_propuesta: z.date({
     required_error: 'Propón una fecha de entrevista',

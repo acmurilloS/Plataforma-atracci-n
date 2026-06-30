@@ -10,6 +10,7 @@ const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
 const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**
  * enviarListadoDocumentos · paso 10.
@@ -57,6 +58,12 @@ export const enviarListadoDocumentos = onCall(
     }
     const nombreCandidato = String(post.candidato_nombre ?? '').trim() || 'candidato/a';
     const cargo = String(post.cargo_nombre ?? 'la vacante').trim();
+    const portalToken = String(post.portal_token ?? '').trim();
+    const bloquePortal = portalToken
+      ? `<p style="font-size:14px; margin:6px 0 12px;"><strong>La forma más fácil:</strong> entra a tu
+           <a href="${APP_URL}/portal/${portalToken}" style="color:#be1e0d;">portal</a> (pestaña
+           <strong>Documentos</strong>) y súbelos tú mismo, uno por uno.</p>`
+      : '';
 
     const itemsHtml = documentos
       .map((d: string) => `<li style="margin:0 0 4px;">${escapeHtml(d)}</li>`)
@@ -72,8 +79,10 @@ export const enviarListadoDocumentos = onCall(
           ${itemsHtml}
         </ul>
         ${mensajeExtra ? `<p style="font-size:13px; color:#333;">${escapeHtml(mensajeExtra).replace(/\n/g, '<br>')}</p>` : ''}
-        <p style="font-size:14px;"><strong>¿Cómo enviarlos?</strong> Responde a este mismo correo
-          adjuntando los documentos en PDF o como foto legible. Nosotros los cargamos por ti.</p>
+        ${bloquePortal}
+        <p style="font-size:14px;"><strong>¿Cómo enviarlos?</strong> Súbelos en tu portal (lo más
+          rápido) o, si prefieres, responde a este mismo correo adjuntándolos en PDF, Word o como
+          foto legible. Nosotros los cargamos por ti.</p>
         <p style="font-size:13px; color:#555;">Cualquier duda, responde a este correo.</p>
         <p style="font-size:13px; color:#555;">Gracias,<br>Equipo de Atracción · Organización Equitel</p>
       </div>

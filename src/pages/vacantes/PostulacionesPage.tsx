@@ -422,7 +422,7 @@ export default function PostulacionesPage() {
         <div className="flex items-center gap-2 mb-5">
           <UserPlus size={14} strokeWidth={1.75} className="text-text-muted" />
           <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-            Agregar integrante manual
+            Agregar candidato manual
           </p>
         </div>
 
@@ -541,7 +541,7 @@ export default function PostulacionesPage() {
               disabled={procesando}
               loading={procesando}
             >
-              {procesando ? 'Guardando…' : 'Agregar integrante'}
+              {procesando ? 'Guardando…' : 'Agregar candidato'}
             </Button>
           </div>
         </form>

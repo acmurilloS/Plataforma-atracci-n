@@ -7,7 +7,11 @@ export interface ConfigExamenes {
   correo_prueba: string[];
   /** En modo prueba, ¿también se redirige el correo del candidato? (default true). */
   redirige_candidato: boolean;
+  /** Tiempo de respuesta esperado que se muestra en el correo a los gestores. */
+  tiempo_esperado: string;
 }
+
+const TIEMPO_ESPERADO_DEFAULT = 'el mismo día de la solicitud';
 
 /**
  * Lee `configuracion_global/examenes_medicos` (interruptor de modo prueba para la
@@ -29,8 +33,17 @@ export async function leerConfigExamenes(): Promise<ConfigExamenes> {
       modo_prueba: d.modo_prueba === true && correos.length > 0,
       correo_prueba: correos,
       redirige_candidato: d.redirige_candidato !== false,
+      tiempo_esperado:
+        typeof d.tiempo_esperado === 'string' && d.tiempo_esperado.trim()
+          ? d.tiempo_esperado.trim()
+          : TIEMPO_ESPERADO_DEFAULT,
     };
   } catch {
-    return { modo_prueba: false, correo_prueba: [], redirige_candidato: true };
+    return {
+      modo_prueba: false,
+      correo_prueba: [],
+      redirige_candidato: true,
+      tiempo_esperado: TIEMPO_ESPERADO_DEFAULT,
+    };
   }
 }

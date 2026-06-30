@@ -409,11 +409,13 @@ export default function PostulacionDetallePage() {
       // Sube el PDF de la orden a Storage (si se adjuntó) → orden_url descargable.
       let ordenUrl = exOrdenUrl.trim();
       if (exOrdenFile) {
-        if (exOrdenFile.type !== 'application/pdf') throw new Error('La orden debe ser PDF.');
-        if (exOrdenFile.size > 8 * 1024 * 1024) throw new Error('El PDF supera 8 MB.');
+        const esPdf = exOrdenFile.type === 'application/pdf';
+        const esImagen = exOrdenFile.type.startsWith('image/');
+        if (!esPdf && !esImagen) throw new Error('La orden debe ser PDF o imagen.');
+        if (exOrdenFile.size > 8 * 1024 * 1024) throw new Error('El archivo supera 8 MB.');
         const safe = exOrdenFile.name.replace(/[^\w.\-]+/g, '_');
         const r = storageRef(storage, `ordenes_examenes/${ex.id}/${Date.now()}_${safe}`);
-        await uploadBytes(r, exOrdenFile, { contentType: 'application/pdf' });
+        await uploadBytes(r, exOrdenFile, { contentType: exOrdenFile.type });
         ordenUrl = await getDownloadURL(r);
       }
       const cita = exFecha ? Timestamp.fromDate(new Date(`${exFecha}T08:00:00`)) : null;
@@ -637,6 +639,18 @@ export default function PostulacionDetallePage() {
               Edítalo si quieres. <strong>No menciones el motivo del descarte.</strong>
             </p>
           </div>
+          {post.estado === 'descartado_examenes_medicos' && (
+            <div className="rounded-md border border-danger-500/30 bg-danger-50 px-3 py-2.5">
+              <p className="text-[12px] font-semibold text-danger-700">
+                ⚠️ Descarte CONFIDENCIAL · exámenes médicos
+              </p>
+              <p className="text-[11px] text-danger-700 mt-0.5 leading-[1.5]">
+                El mensaje <strong>nunca</strong> debe revelar la causa: no menciones exámenes,
+                salud, diagnóstico ni aptitud médica. Usa solo lenguaje neutro de agradecimiento.
+                Se valida antes de enviar.
+              </p>
+            </div>
+          )}
           <textarea
             value={mensajeAgradecimiento}
             onChange={(e) => setMensajeAgradecimiento(e.target.value)}
@@ -855,11 +869,11 @@ export default function PostulacionDetallePage() {
           </div>
           <label className="block">
             <span className="block text-[11px] font-medium text-text-muted mb-1">
-              Orden de exámenes (PDF) — se adjunta al correo y queda en el portal
+              Orden de exámenes (PDF o imagen) — se adjunta al correo y queda en el portal
             </span>
             <input
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,image/*"
               onChange={(e) => setExOrdenFile(e.target.files?.[0] ?? null)}
               className="block w-full text-[12px] text-text-muted file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-text-strong hover:file:bg-slate-50"
             />

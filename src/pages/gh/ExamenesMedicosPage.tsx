@@ -358,7 +358,17 @@ export default function ExamenesMedicosPage() {
                 </Pill>
               </div>
 
-              <div className="mt-4 flex gap-2 justify-end flex-wrap">
+              <div className="mt-4 flex gap-2 justify-end flex-wrap items-center">
+                {(ex.estado === 'enviada' || ex.estado === 'apto' || ex.estado === 'no_apto') && (
+                  <span
+                    className={`mr-auto inline-flex items-center gap-1.5 text-[12px] font-medium ${
+                      ex.concepto_recibido_en ? 'text-success-700' : 'text-warning-700'
+                    }`}
+                  >
+                    <Stethoscope size={12} strokeWidth={1.75} />
+                    Concepto médico: {ex.concepto_recibido_en ? 'recibido' : 'pendiente'}
+                  </span>
+                )}
                 {(ex.estado === 'solicitada' ||
                   ex.estado === 'enviada' ||
                   ex.correo_gestor_error) && (

@@ -106,6 +106,33 @@ export const onEntrevistaCreate = onDocumentCreated(
       timeZone: 'America/Bogota',
     }).format(inicio);
 
+    // Para presencial: dirección OFICIAL de la sede (del catálogo), además de la
+    // sala/indicaciones puntuales. Si la sede aún no tiene dirección cargada, se
+    // cae a la sala_o_link / nombre de sede (robusto mientras Karen/Mari la cargan).
+    let sedeNombre = '';
+    let sedeDireccion = '';
+    if (modalidad === 'presencial') {
+      try {
+        const vacId = String(ent.vacante_id ?? post.vacante_id ?? '');
+        if (vacId) {
+          const v = await db.collection('vacantes').doc(vacId).get();
+          const vd = v.data() ?? {};
+          sedeNombre = String(vd.sede_nombre ?? '').trim();
+          const sedeCodigo = String(vd.sede_codigo ?? '').trim();
+          const empresaCodigo = String(vd.empresa_codigo ?? '').trim();
+          if (sedeCodigo) {
+            const ss = await db.collection('sedes').where('codigo', '==', sedeCodigo).get();
+            const match =
+              ss.docs.find((d) => String(d.data()?.empresa_codigo ?? '') === empresaCodigo) ??
+              ss.docs[0];
+            if (match) sedeDireccion = String(match.data()?.direccion ?? '').trim();
+          }
+        }
+      } catch (e) {
+        logger.warn('onEntrevistaCreate · no se pudo leer la dirección de la sede', { e: String(e) });
+      }
+    }
+
     // Detalle según modalidad.
     let bloqueLugar = '';
     let locationCal = '';
@@ -113,9 +140,14 @@ export const onEntrevistaCreate = onDocumentCreated(
       locationCal = salaOLink;
       bloqueLugar = `<p style="margin:0 0 6px;"><strong>Link de la videollamada:</strong><br>
         <a href="${escapeAttr(salaOLink)}" style="color:#be1e0d;">${escapeHtml(salaOLink)}</a></p>`;
-    } else if (modalidad === 'presencial' && salaOLink) {
-      locationCal = salaOLink;
-      bloqueLugar = `<p style="margin:0 0 6px;"><strong>Dirección:</strong><br>${escapeHtml(salaOLink)}</p>`;
+    } else if (modalidad === 'presencial') {
+      const partes: string[] = [];
+      const sedeTexto = [sedeNombre, sedeDireccion].filter(Boolean).join(' — ');
+      if (sedeTexto) partes.push(`<strong>Sede:</strong><br>${escapeHtml(sedeTexto)}`);
+      if (salaOLink) partes.push(`<strong>Lugar / indicaciones:</strong><br>${escapeHtml(salaOLink)}`);
+      if (!partes.length) partes.push('Te confirmaremos la dirección exacta por este medio.');
+      bloqueLugar = partes.map((p) => `<p style="margin:0 0 6px;">${p}</p>`).join('');
+      locationCal = [sedeDireccion, salaOLink].filter(Boolean).join(' · ') || sedeNombre;
     } else if (modalidad === 'telefonica') {
       bloqueLugar = `<p style="margin:0 0 6px;">Te llamaremos al número que registraste.</p>`;
     }

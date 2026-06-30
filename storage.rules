@@ -15,6 +15,16 @@ service firebase.storage {
         && (request.resource.contentType == 'application/pdf'
             || request.resource.contentType.matches('image/.*'));
     }
+    // PDF + imagen + Word (.doc/.docx): para documentos del candidato donde se
+    // admiten varios formatos (reu 26-jun). Los formatos OFICIALES/avales/CVs
+    // siguen exigiendo PDF (esPdf).
+    function esPdfOImagenOWord() {
+      return request.resource.contentType != null
+        && (request.resource.contentType == 'application/pdf'
+            || request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/msword'
+            || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    }
 
     // Avales de vacante (PDF). Solo usuarios internos suben y leen.
     match /avales/{empresa}/{file} {
@@ -33,7 +43,7 @@ service firebase.storage {
     // Carpeta digital del candidato. Sube y lee el analista/GH (con rol).
     match /documentos_candidato/{candidato}/{file} {
       allow read: if tieneRol();
-      allow write: if tieneRol() && esPdfOImagen() && request.resource.size < 15 * 1024 * 1024;
+      allow write: if tieneRol() && esPdfOImagenOWord() && request.resource.size < 15 * 1024 * 1024;
     }
 
     // Documentos que el candidato sube desde su portal público (anónimo).
@@ -41,7 +51,7 @@ service firebase.storage {
     // limitada a PDF/imagen y tamaño.
     match /portal_docs/{token}/{file} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && esPdfOImagen() && request.resource.size < 10 * 1024 * 1024;
+      allow write: if request.auth != null && esPdfOImagenOWord() && request.resource.size < 10 * 1024 * 1024;
     }
 
     // Perfil de cargo (PDF) que el staff adjunta al enviar condiciones laborales.
@@ -56,7 +66,8 @@ service firebase.storage {
     // recibe adjunta al correo y por la URL de descarga (token) en su portal.
     match /ordenes_examenes/{examen}/{file} {
       allow read: if tieneRol();
-      allow write: if tieneRol() && esPdf() && request.resource.size < 8 * 1024 * 1024;
+      // Los gestores mandan la orden como PDF o imagen (reu 26-jun) → ambos.
+      allow write: if tieneRol() && esPdfOImagen() && request.resource.size < 8 * 1024 * 1024;
     }
 
     // Formato oficial REGENERADO al corregir un campo (Datos Básicos / SAGRILAFT).

@@ -359,6 +359,18 @@ function VacanteCardAprobacion({
             Abrir PDF
           </a>
         </div>
+      ) : vacante.aval_no_requiere ? (
+        <div className="mt-5 flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50/50 p-4">
+          <div className="w-10 h-10 rounded-md bg-slate-100 text-text-muted flex items-center justify-center shrink-0">
+            <FileText size={18} strokeWidth={1.75} />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-text-strong">No requiere aval</p>
+            <p className="text-[11px] text-text-subtle">
+              El líder marcó que este cargo no necesita aval (p. ej. un reemplazo).
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="mt-5 flex items-start gap-3 rounded-md border-2 border-warning-300 bg-warning-50/50 p-4">
           <div className="w-10 h-10 rounded-md bg-warning-100 text-warning-700 flex items-center justify-center shrink-0">

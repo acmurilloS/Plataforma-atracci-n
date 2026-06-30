@@ -198,15 +198,21 @@ export default function VacanteDetallePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
             <div>
               <DatoLabel>Aval adjunto</DatoLabel>
-              <a
-                href={vac.aval_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-700 hover:text-brand-800 hover:underline underline-offset-2"
-              >
-                <FileText size={13} strokeWidth={1.5} />
-                Ver PDF firmado
-              </a>
+              {vac.aval_url ? (
+                <a
+                  href={vac.aval_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-700 hover:text-brand-800 hover:underline underline-offset-2"
+                >
+                  <FileText size={13} strokeWidth={1.5} />
+                  Ver PDF firmado
+                </a>
+              ) : vac.aval_no_requiere ? (
+                <p className="mt-1.5 text-[14px] font-medium text-text-strong">No requiere aval</p>
+              ) : (
+                <p className="mt-1.5 text-[14px] font-medium text-warning-700">Pendiente de adjuntar</p>
+              )}
             </div>
             <Dato
               label="Aval aprobado por GH"

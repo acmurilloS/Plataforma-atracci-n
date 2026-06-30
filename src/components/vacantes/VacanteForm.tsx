@@ -187,6 +187,7 @@ export function VacanteForm() {
       aval_url: '',
       aval_drive_file_id: '',
       aval_pendiente: false,
+      aval_no_requiere: false,
       lider_uid: '',
       lider_nombre: '',
     },
@@ -197,6 +198,7 @@ export function VacanteForm() {
   const unidadId = watch('unidad_id');
   const salario = watch('salario_base');
   const avalUrl = watch('aval_url');
+  const noRequiereAval = watch('aval_no_requiere');
   const tipoSolicitudActual = watch('tipo_solicitud');
 
   const { sedes } = useSedesDeEmpresa(empresaCodigo || null);
@@ -284,8 +286,11 @@ export function VacanteForm() {
     try {
       const payload: VacanteInput = {
         ...data,
-        // Aval pendiente si no se adjuntó PDF en Drive.
-        aval_pendiente: !data.aval_url || data.aval_url.length === 0,
+        // Aval pendiente solo si NO se adjuntó PDF y NO se marcó "no requiere".
+        aval_pendiente: (!data.aval_url || data.aval_url.length === 0) && !data.aval_no_requiere,
+        // Si no requiere aval, no arrastramos URL/archivo.
+        aval_url: data.aval_no_requiere ? '' : data.aval_url,
+        aval_drive_file_id: data.aval_no_requiere ? '' : data.aval_drive_file_id,
         // Limpia campos que no aplican al tipo elegido (evita "basura" en Firestore).
         reemplaza_a_nombre:
           data.tipo_solicitud === 'reemplazo_indefinido' ? data.reemplaza_a_nombre.trim() : '',
@@ -525,34 +530,64 @@ export function VacanteForm() {
           abierta={abiertas.aval}
           onToggle={() => toggle('aval')}
         >
-          <Controller
-            control={control}
-            name="aval_url"
-            render={({ field }) => (
-              <AvalUploader
-                empresaCodigo={empresaCodigo}
-                value={field.value || undefined}
-                driveFileId={watch('aval_drive_file_id') || undefined}
-                onChange={(info) => {
-                  field.onChange(info?.url ?? '');
-                  setValue('aval_drive_file_id', info?.driveFileId ?? '');
-                }}
+          {/* "No requiere aval" (ej. reemplazo): no quedará pendiente en Aprobaciones. */}
+          <label className="flex items-start gap-2.5 cursor-pointer mb-3">
+            <Controller
+              control={control}
+              name="aval_no_requiere"
+              render={({ field }) => (
+                <input
+                  type="checkbox"
+                  checked={!!field.value}
+                  onChange={(e) => {
+                    field.onChange(e.target.checked);
+                    if (e.target.checked) {
+                      setValue('aval_url', '');
+                      setValue('aval_drive_file_id', '');
+                    }
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+              )}
+            />
+            <span className="text-[13px] text-text-body leading-[1.5]">
+              <strong>Este cargo no requiere aval</strong> (p. ej. un reemplazo). No quedará marcado
+              como pendiente de aval.
+            </span>
+          </label>
+
+          {!noRequiereAval && (
+            <>
+              <Controller
+                control={control}
+                name="aval_url"
+                render={({ field }) => (
+                  <AvalUploader
+                    empresaCodigo={empresaCodigo}
+                    value={field.value || undefined}
+                    driveFileId={watch('aval_drive_file_id') || undefined}
+                    onChange={(info) => {
+                      field.onChange(info?.url ?? '');
+                      setValue('aval_drive_file_id', info?.driveFileId ?? '');
+                    }}
+                  />
+                )}
               />
-            )}
-          />
-          {errors.aval_url && (
-            <p className="text-[11px] text-danger-700">{errors.aval_url.message}</p>
-          )}
-          {/* Aval opcional al crear: si no lo tiene, igual puede enviar (aval_pendiente). */}
-          {!avalUrl && (
-            <div className="mt-3 rounded-md border border-warning-500/30 bg-warning-50/40 px-3.5 py-2.5">
-              <p className="text-[12px] text-warning-700 leading-[1.55]">
-                <span className="font-semibold">Aval pendiente.</span> Si aún no tienes el aval
-                firmado, puedes enviar la solicitud igual — quedará marcada como{' '}
-                <span className="font-medium">pendiente de aval</span> y GH/coordinación lo gestiona
-                en el paso 2. Tu vacante no se bloquea por esto.
-              </p>
-            </div>
+              {errors.aval_url && (
+                <p className="text-[11px] text-danger-700">{errors.aval_url.message}</p>
+              )}
+              {/* Aval opcional al crear: si no lo tiene, igual puede enviar (aval_pendiente). */}
+              {!avalUrl && (
+                <div className="mt-3 rounded-md border border-warning-500/30 bg-warning-50/40 px-3.5 py-2.5">
+                  <p className="text-[12px] text-warning-700 leading-[1.55]">
+                    <span className="font-semibold">Aval pendiente.</span> Si aún no tienes el aval
+                    firmado, puedes enviar la solicitud igual — quedará marcada como{' '}
+                    <span className="font-medium">pendiente de aval</span> y GH/coordinación lo
+                    gestiona en el paso 2. Tu vacante no se bloquea por esto.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </Seccion>
 

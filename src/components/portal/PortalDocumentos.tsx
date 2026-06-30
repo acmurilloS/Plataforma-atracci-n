@@ -172,7 +172,7 @@ function SlotRow({
                 : 'Subir documento'}
             <input
               type="file"
-              accept="application/pdf,image/*"
+              accept="application/pdf,image/*,.doc,.docx"
               onChange={onFile}
               className="hidden"
               disabled={subiendo}

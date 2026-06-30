@@ -43,6 +43,31 @@ export const enviarAgradecimientoCandidato = onCall(
     if (!postSnap.exists) throw new HttpsError('not-found', 'Postulación no existe.');
     const post = postSnap.data() as Record<string, unknown>;
 
+    // Anti-revelación (descarte por exámenes médicos = CONFIDENCIAL): el mensaje
+    // NUNCA puede mencionar la causa. Si aparece una palabra prohibida se BLOQUEA
+    // el envío server-side para que el staff lo redacte de forma neutra (reu 26-jun).
+    if (String(post.estado ?? '') === 'descartado_examenes_medicos') {
+      const PROHIBIDAS: { re: RegExp; t: string }[] = [
+        { re: /ex[áa]men/i, t: 'examen' },
+        { re: /m[ée]dic/i, t: 'médico' },
+        { re: /\bsalud\b/i, t: 'salud' },
+        { re: /\bapto\b|\baptitud\b/i, t: 'apto/aptitud' },
+        { re: /diagn[óo]stic/i, t: 'diagnóstico' },
+        { re: /\benfermedad/i, t: 'enfermedad' },
+        { re: /patolog[íi]a/i, t: 'patología' },
+        { re: /\bincapacidad/i, t: 'incapacidad' },
+        { re: /laboratorio/i, t: 'laboratorio' },
+        { re: /\beps\b/i, t: 'EPS' },
+      ];
+      const hit = PROHIBIDAS.find((p) => p.re.test(mensaje));
+      if (hit) {
+        throw new HttpsError(
+          'failed-precondition',
+          `Descarte confidencial: el mensaje no puede mencionar la causa médica (detecté "${hit.t}"). Redáctalo en tono neutro de agradecimiento.`,
+        );
+      }
+    }
+
     const email = String(post.candidato_email ?? '').trim();
     if (!email) {
       throw new HttpsError(
