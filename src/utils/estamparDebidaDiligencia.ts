@@ -80,8 +80,8 @@ const CAMPOS: [CampoKey, number, number, number?][] = [
   ['ciudad_municipio', 318, 131, 82],
   ['fecha_diligenciamiento', 468, 131, 60],
   ['fecha_ingreso', 183, 146, 68],
-  ['cargo', 318, 146, 82],
-  ['tipo_vinculacion', 468, 146, 60],
+  ['cargo', 318, 146, 66],
+  ['tipo_vinculacion', 468, 146, 58],
   // 2. Datos generales
   ['primer_apellido', 183, 173, 72],
   ['segundo_apellido', 318, 173, 82],
@@ -94,8 +94,8 @@ const CAMPOS: [CampoKey, number, number, number?][] = [
   ['pais', 468, 203, 60],
   ['fecha_expedicion_documento', 183, 218, 68],
   ['lugar_expedicion', 318, 218, 82],
-  ['direccion_residencial', 468, 218, 60],
-  ['correo_electronico', 183, 235, 72],
+  ['direccion_residencial', 468, 218, 52],
+  ['correo_electronico', 183, 235, 60],
   // Familiar en la empresa
   ['nombre_apellidos_familiar', 318, 252, 82],
   ['cargo_familiar', 468, 252, 60],
@@ -143,7 +143,7 @@ const PEP_DY = 11.5;
 const PEP_X = { nombre: 100, relacion: 245, identidad: 298, cargo_ocupacion: 380, fecha_desvinculacion: 450 };
 
 /** Firma del integrante: va SOBRE la línea "FIRMA Y CÉDULA DEL INTEGRANTE" (y≈719). */
-const FIRMA = { x: 100, yTop: 694, ancho: 175, altoMax: 24 };
+const FIRMA = { x: 115, yTop: 692, ancho: 175, altoMax: 28 };
 
 export const RUTA_DEBIDA_DILIGENCIA = '/formatos/debida-diligencia.pdf';
 
@@ -167,7 +167,7 @@ export async function estamparDebidaDiligencia(
     if (!s0) return;
     let size2 = size;
     if (maxAncho) {
-      while (size2 > 5 && f.widthOfTextAtSize(s0, size2) > maxAncho) size2 -= 0.5;
+      while (size2 > 4.5 && f.widthOfTextAtSize(s0, size2) > maxAncho) size2 -= 0.5;
     }
     page.drawText(s0, { x, y: H - yTop, size: size2, font: f, color: tinta });
   };
