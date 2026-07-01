@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { recortarFirma } from './recortarFirma';
 
 /**
  * Estampa los datos del integrante + su firma digital sobre el PDF OFICIAL
@@ -213,19 +214,27 @@ export async function estamparFormatoOficial(
 
   if (mapa.firma && firmaPngDataUrl) {
     try {
-      const png = await pdf.embedPng(firmaPngDataUrl);
+      // Recortar la firma a su contenido para que se apoye sobre la línea sin
+      // flotar (el PNG del canvas trae mucho blanco alrededor). Si no se puede,
+      // se usa el original.
+      const rec = await recortarFirma(firmaPngDataUrl);
+      const png = await pdf.embedPng(rec ? rec.url : firmaPngDataUrl);
       const page = paginas[mapa.firma.pagina];
       if (page) {
         const { height } = page.getSize();
+        const altoMax = mapa.firma.altoMax ?? 42;
         let w = mapa.firma.ancho;
         let h = (png.height / png.width) * w;
-        if (mapa.firma.altoMax && h > mapa.firma.altoMax) {
-          h = mapa.firma.altoMax;
+        if (h > altoMax) {
+          h = altoMax;
           w = (png.width / png.height) * h;
         }
+        // Base de la firma sobre la línea (fondo del recuadro + 3pt), centrada en él.
+        const base = mapa.firma.yTop + altoMax + 3;
+        const x = mapa.firma.x + (mapa.firma.ancho - w) / 2;
         page.drawImage(png, {
-          x: mapa.firma.x,
-          y: height - mapa.firma.yTop - h,
+          x,
+          y: height - base,
           width: w,
           height: h,
         });
