@@ -75,41 +75,41 @@ type CampoKey = keyof DebidaDiligenciaEstampado;
 /** Campos de texto: [clave, x, yTop, maxAncho?]. El valor va en la casilla a la derecha de su etiqueta. */
 const CAMPOS: [CampoKey, number, number, number?][] = [
   // 1. Empresa y registro
-  ['tipo_registro', 183, 118, 120],
-  ['departamento', 183, 131, 120],
-  ['ciudad_municipio', 318, 131, 120],
-  ['fecha_diligenciamiento', 468, 131, 62],
-  ['fecha_ingreso', 183, 146, 55],
-  ['cargo', 318, 146, 120],
-  ['tipo_vinculacion', 468, 146, 62],
+  ['tipo_registro', 183, 118, 72],
+  ['departamento', 183, 131, 72],
+  ['ciudad_municipio', 318, 131, 82],
+  ['fecha_diligenciamiento', 468, 131, 60],
+  ['fecha_ingreso', 183, 146, 68],
+  ['cargo', 318, 146, 82],
+  ['tipo_vinculacion', 468, 146, 60],
   // 2. Datos generales
-  ['primer_apellido', 183, 173, 125],
-  ['segundo_apellido', 318, 173, 125],
-  ['nombres', 468, 173, 62],
-  ['identificacion', 183, 188, 125],
-  ['tipo_documento', 318, 188, 125],
-  ['tipo_documento_otro', 468, 188, 62],
-  ['fecha_nacimiento', 183, 203, 55],
-  ['celular', 318, 203, 125],
-  ['pais', 468, 203, 62],
-  ['fecha_expedicion_documento', 183, 218, 55],
-  ['lugar_expedicion', 318, 218, 125],
-  ['direccion_residencial', 468, 218, 62],
-  ['correo_electronico', 183, 235, 125],
+  ['primer_apellido', 183, 173, 72],
+  ['segundo_apellido', 318, 173, 82],
+  ['nombres', 468, 173, 60],
+  ['identificacion', 183, 188, 72],
+  ['tipo_documento', 318, 188, 82],
+  ['tipo_documento_otro', 468, 188, 60],
+  ['fecha_nacimiento', 183, 203, 68],
+  ['celular', 318, 203, 82],
+  ['pais', 468, 203, 60],
+  ['fecha_expedicion_documento', 183, 218, 68],
+  ['lugar_expedicion', 318, 218, 82],
+  ['direccion_residencial', 468, 218, 60],
+  ['correo_electronico', 183, 235, 72],
   // Familiar en la empresa
-  ['nombre_apellidos_familiar', 318, 252, 125],
-  ['cargo_familiar', 468, 252, 62],
-  ['parentesco_familiar', 468, 235, 62],
+  ['nombre_apellidos_familiar', 318, 252, 82],
+  ['cargo_familiar', 468, 252, 60],
+  ['parentesco_familiar', 468, 235, 60],
   // 3. Cónyuge
-  ['conyuge_primer_apellido', 183, 379, 125],
-  ['conyuge_segundo_apellido', 318, 379, 125],
-  ['conyuge_nombres', 468, 379, 62],
-  ['conyuge_identificacion', 183, 393, 125],
-  ['conyuge_tipo_documento', 318, 393, 125],
-  ['conyuge_telefono', 468, 393, 62],
-  ['conyuge_ocupacion', 183, 408, 125],
-  ['conyuge_empleador', 318, 408, 125],
-  ['conyuge_parentesco', 468, 408, 62],
+  ['conyuge_primer_apellido', 183, 379, 72],
+  ['conyuge_segundo_apellido', 318, 379, 82],
+  ['conyuge_nombres', 468, 379, 60],
+  ['conyuge_identificacion', 183, 393, 72],
+  ['conyuge_tipo_documento', 318, 393, 82],
+  ['conyuge_telefono', 468, 393, 60],
+  ['conyuge_ocupacion', 183, 408, 72],
+  ['conyuge_empleador', 318, 408, 82],
+  ['conyuge_parentesco', 468, 408, 60],
   // 4. Financiera (especifique)
   ['operaciones_moneda_extranjera_detalle', 185, 442, 100],
   ['productos_financieros_extranjero_detalle', 382, 442, 145],
@@ -143,7 +143,7 @@ const PEP_DY = 11.5;
 const PEP_X = { nombre: 100, relacion: 245, identidad: 298, cargo_ocupacion: 380, fecha_desvinculacion: 450 };
 
 /** Firma del integrante: va SOBRE la línea "FIRMA Y CÉDULA DEL INTEGRANTE" (y≈719). */
-const FIRMA = { x: 100, yTop: 702, ancho: 150, altoMax: 18 };
+const FIRMA = { x: 100, yTop: 694, ancho: 175, altoMax: 24 };
 
 export const RUTA_DEBIDA_DILIGENCIA = '/formatos/debida-diligencia.pdf';
 
