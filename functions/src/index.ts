@@ -89,6 +89,8 @@ export { revocarPortalCandidato } from './portal/revocarPortalCandidato';
 export { registrarFirmaDocumento } from './portal/registrarFirmaDocumento';
 // El integrante diligencia y firma sus Datos Básicos (DGH-F-05) desde el portal (reu 26-jun).
 export { registrarDatosBasicosPortal } from './portal/registrarDatosBasicosPortal';
+// El integrante diligencia y firma su Debida Diligencia / SAGRILAFT (F-CAR-01) desde el portal (B2).
+export { registrarDebidaDiligenciaPortal } from './portal/registrarDebidaDiligenciaPortal';
 // Corregir un formato controlado (Datos Básicos / SAGRILAFT) + regenerar con trazabilidad (reu 26-jun).
 export { regenerarFormatoOficial } from './formatos/regenerarFormatoOficial';
 // Condiciones laborales: envío al candidato + aceptación en el portal (E, 2026-06-16).

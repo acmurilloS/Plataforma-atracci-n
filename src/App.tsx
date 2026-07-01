@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import type { RolUsuario } from './schemas';
 import CatalogosAdminPage from './pages/admin/CatalogosAdminPage';
 import PanelAdminPage from './pages/admin/PanelAdminPage';
 import UsuariosRolesPage from './pages/admin/UsuariosRolesPage';
@@ -31,6 +32,12 @@ import SolicitudIntegrantePage from './pages/vacantes/SolicitudIntegrantePage';
 import ReferenciasPdfPage from './pages/postulaciones/ReferenciasPdfPage';
 import PoolPage from './pages/pool/PoolPage';
 import VacantesAbiertasPage from './pages/internos/VacantesAbiertasPage';
+
+// Roles que trabajan el proceso de atracción (vacante/postulación). EXCLUYE
+// 'apoyo' (IT/compras/bodega: solo tickets, no ve internos de reclutamiento ni
+// PII del candidato) y a quien no tenga rol. Defensa en profundidad para que
+// esas pantallas no se abran por URL directa; el nav ya filtra por rol.
+const ROLES_PROCESO: RolUsuario[] = ['lider', 'analista', 'coordinador', 'gh', 'admin'];
 
 function AppShell() {
   return (
@@ -73,8 +80,22 @@ export default function App() {
             <Route path="/vacantes" element={<VacantesListaPage />} />
             <Route path="/mis-vacantes" element={<LiderMisVacantesPage />} />
             <Route path="/vacantes/:id" element={<VacanteDetallePage />} />
-            <Route path="/vacantes/:id/perfilamiento" element={<PerfilamientoPage />} />
-            <Route path="/vacantes/:id/publicacion" element={<PublicacionPage />} />
+            <Route
+              path="/vacantes/:id/perfilamiento"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <PerfilamientoPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/vacantes/:id/publicacion"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <PublicacionPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/vacantes/:id/sourcing"
               element={
@@ -83,17 +104,70 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/vacantes/:id/postulaciones" element={<PostulacionesPage />} />
-            <Route path="/vacantes/:id/terna" element={<TernaPage />} />
-            <Route path="/vacantes/:id/concepto-atraccion" element={<ConceptoAtraccionPage />} />
+            <Route
+              path="/vacantes/:id/postulaciones"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <PostulacionesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/vacantes/:id/terna"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <TernaPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/vacantes/:id/concepto-atraccion"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <ConceptoAtraccionPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/vacantes/:id/solicitud-integrante"
-              element={<SolicitudIntegrantePage />}
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <SolicitudIntegrantePage />
+                </ProtectedRoute>
+              }
             />
-            <Route path="/postulaciones/:id" element={<PostulacionDetallePage />} />
-            <Route path="/postulaciones/:id/referencias-pdf" element={<ReferenciasPdfPage />} />
-            <Route path="/postulaciones/:id/autorizacion-datos" element={<AutorizacionDatosPage />} />
-            <Route path="/postulaciones/:id/autorizacion-imagen" element={<AutorizacionImagenPage />} />
+            <Route
+              path="/postulaciones/:id"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <PostulacionDetallePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/postulaciones/:id/referencias-pdf"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <ReferenciasPdfPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/postulaciones/:id/autorizacion-datos"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <AutorizacionDatosPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/postulaciones/:id/autorizacion-imagen"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <AutorizacionImagenPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/aprobaciones-aval"
               element={

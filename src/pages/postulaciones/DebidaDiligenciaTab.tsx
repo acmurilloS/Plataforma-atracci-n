@@ -4,6 +4,8 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  History,
+  Pencil,
   Printer,
   ShieldCheck,
 } from 'lucide-react';
@@ -15,6 +17,7 @@ import { useEmpresas } from '../../hooks/useCatalogos';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { FirmaDigitalBanner } from '../../components/firma/FirmaDigitalBanner';
+import { CorregirDebidaDiligenciaModal } from '../../components/postulaciones/CorregirDebidaDiligenciaModal';
 import { cn } from '../../utils/cn';
 import type {
   CandidatoDoc,
@@ -25,6 +28,17 @@ import type {
   TipoVinculacion,
   VinculadoPep,
 } from '../../schemas';
+
+interface VersionFormato {
+  v: number;
+  fecha?: Timestamp;
+  regenerado_nombre?: string;
+  campos?: { campo: string; antes?: string; despues?: string }[];
+}
+interface FormatosVersionesDoc {
+  id: string;
+  debida_diligencia?: { ultima_version?: number; versiones?: VersionFormato[] };
+}
 
 /**
  * DebidaDiligenciaTab · sistema brand.
@@ -75,14 +89,18 @@ export function DebidaDiligenciaTab({ postulacion }: Props) {
     limit: 1,
   });
   const { doc: candidato } = useDoc<CandidatoDoc>('candidatos', postulacion.candidato_id ?? null);
+  const { doc: versionesDoc } = useDoc<FormatosVersionesDoc>('formatos_versiones', postulacion.id);
   const { crear, actualizar } = useMutacion();
   const { user, perfil, rol } = useAuth();
   const { empresas } = useEmpresas();
   const [err, setErr] = useState<string | null>(null);
   const [seccionAbierta, setSeccionAbierta] = useState<string>('datos_empresa');
+  const [corrigiendo, setCorrigiendo] = useState(false);
 
   const dd = docs[0] ?? null;
   const esCumplimiento = rol === 'gh' || rol === 'admin' || rol === 'coordinador';
+  const puedeCorregir = ['analista', 'gh', 'coordinador', 'admin'].includes(rol ?? '');
+  const versionesDD = versionesDoc?.debida_diligencia?.versiones ?? [];
 
   return (
     <div className="space-y-6">
@@ -105,6 +123,16 @@ export function DebidaDiligenciaTab({ postulacion }: Props) {
         </div>
         {dd && (
           <div className="flex items-center gap-2">
+            {dd.estado !== 'borrador' && puedeCorregir && (
+              <button
+                type="button"
+                onClick={() => setCorrigiendo(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-text-strong hover:bg-slate-50"
+              >
+                <Pencil size={12} strokeWidth={1.75} />
+                Corregir formato
+              </button>
+            )}
             <a
               href="/formatos/debida-diligencia.pdf"
               target="_blank"
@@ -128,6 +156,33 @@ export function DebidaDiligenciaTab({ postulacion }: Props) {
         fecha={(postulacion as unknown as Record<string, Timestamp | undefined>).firma_debida_diligencia_en}
         pdfUrl={(postulacion as unknown as Record<string, string | undefined>).firma_debida_diligencia_url}
       />
+
+      {versionesDD.length > 0 && (
+        <div className="rounded-md border border-slate-200 bg-slate-50/60 px-4 py-3">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-[0.08em] uppercase text-text-muted">
+            <History size={12} strokeWidth={1.75} />
+            Correcciones del formato ({versionesDD.length})
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {[...versionesDD].sort((a, b) => b.v - a.v).map((vr) => (
+              <li key={vr.v} className="text-[12px] text-text-body">
+                <span className="font-medium">v{vr.v}</span>
+                {vr.fecha ? ` · ${formatearFecha(vr.fecha.toDate())}` : ''}
+                {vr.regenerado_nombre ? ` · ${vr.regenerado_nombre}` : ''}
+                {vr.campos?.length ? ` · ${vr.campos.map((c) => c.campo).join(', ')}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {corrigiendo && dd && (
+        <CorregirDebidaDiligenciaModal
+          dato={dd}
+          postulacionId={postulacion.id}
+          onClose={() => setCorrigiendo(false)}
+        />
+      )}
 
       {err && (
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">

@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import type { DocumentReference } from 'firebase-admin/firestore';
 import { db } from '../utils/admin';
+import { leerConfigSeguridadPortal } from './seguridadPortal';
 
 /**
  * verificarCedula · 2º factor del Portal del Candidato (F1).
@@ -9,13 +10,19 @@ import { db } from '../utils/admin';
  * confirmar su cédula (la misma que quedó en el snapshot del token) antes de que
  * el resolver entregue cualquier PII. La cédula se re-valida en cada escritura.
  *
- * Anti fuerza-bruta robusto: TODA la verificación (leer intentos → comparar →
- * escribir el contador / bloqueo) ocurre dentro de UNA transacción sobre el doc
- * del token. Así, peticiones concurrentes se serializan y el contador no se puede
- * "diluir" disparando ráfagas en paralelo (cierra el TOCTOU). La comparación es
- * por dígitos (tolera puntos/espacios).
+ * Anti fuerza-bruta robusto y, sobre todo, INDIVIDUAL: el contador y el bloqueo
+ * viven en el doc del TOKEN del candidato (`portal_candidato_tokens/{token}`), no
+ * en una key compartida. El error de una persona bloquea SOLO su token; las demás
+ * entran normal. TODA la verificación (leer intentos → comparar → escribir el
+ * contador/bloqueo) ocurre dentro de UNA transacción sobre el doc del token: las
+ * peticiones concurrentes se serializan y el contador no se puede "diluir"
+ * disparando ráfagas en paralelo (cierra el TOCTOU). La comparación es por dígitos
+ * (tolera puntos/espacios).
  */
 
+// Valores POR DEFECTO (también usados para el primer render del gate). Los valores
+// EFECTIVOS son configurables en `configuracion_global/portal_seguridad`
+// (max_intentos_cedula / minutos_bloqueo_cedula) y se leen en cada verificación.
 export const MAX_INTENTOS_CEDULA = 5;
 export const MINUTOS_BLOQUEO = 15;
 
@@ -42,7 +49,7 @@ export interface ResultadoCedula {
 /**
  * Verifica la cédula contra el snapshot del token y actualiza los contadores
  * anti fuerza-bruta DENTRO de una transacción (lee el doc fresco, no un snapshot
- * traído por el llamador).
+ * traído por el llamador). Los umbrales son CONFIGURABLES (portal_seguridad).
  *
  * - Token sin `documento_numero` → `sin_cedula_registrada:true` y `ok:false`: no
  *   se puede exigir un 2º factor que no existe, pero TAMPOCO se entrega PII (mejor
@@ -56,6 +63,9 @@ export async function verificarCedula(
   cedulaInput: string | undefined | null,
 ): Promise<ResultadoCedula> {
   const entrada = normalizarCedula(cedulaInput);
+  const cfg = await leerConfigSeguridadPortal();
+  const MAX = cfg.max_intentos_cedula;
+  const MINS = cfg.minutos_bloqueo_cedula;
 
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -69,7 +79,7 @@ export async function verificarCedula(
         sin_cedula_registrada: true,
         bloqueado: false,
         bloqueado_segundos: 0,
-        intentos_restantes: MAX_INTENTOS_CEDULA,
+        intentos_restantes: MAX,
       };
     }
 
@@ -98,7 +108,7 @@ export async function verificarCedula(
         sin_cedula_registrada: false,
         bloqueado: false,
         bloqueado_segundos: 0,
-        intentos_restantes: Math.max(0, MAX_INTENTOS_CEDULA - intentosPrevios),
+        intentos_restantes: Math.max(0, MAX - intentosPrevios),
       };
     }
 
@@ -112,7 +122,7 @@ export async function verificarCedula(
         sin_cedula_registrada: false,
         bloqueado: false,
         bloqueado_segundos: 0,
-        intentos_restantes: MAX_INTENTOS_CEDULA,
+        intentos_restantes: MAX,
       };
     }
 
@@ -121,10 +131,10 @@ export async function verificarCedula(
     const update: Record<string, unknown> = { intentos_cedula: intentos };
     let bloqueado = false;
     let bloqueadoSegundos = 0;
-    if (intentos >= MAX_INTENTOS_CEDULA) {
-      update.bloqueado_hasta = Timestamp.fromMillis(ahora + MINUTOS_BLOQUEO * 60 * 1000);
+    if (intentos >= MAX) {
+      update.bloqueado_hasta = Timestamp.fromMillis(ahora + MINS * 60 * 1000);
       bloqueado = true;
-      bloqueadoSegundos = MINUTOS_BLOQUEO * 60;
+      bloqueadoSegundos = MINS * 60;
     }
     tx.set(ref, update, { merge: true });
 
@@ -134,7 +144,7 @@ export async function verificarCedula(
       sin_cedula_registrada: false,
       bloqueado,
       bloqueado_segundos: bloqueadoSegundos,
-      intentos_restantes: Math.max(0, MAX_INTENTOS_CEDULA - intentos),
+      intentos_restantes: Math.max(0, MAX - intentos),
     };
   });
 }

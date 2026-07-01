@@ -230,8 +230,13 @@ export async function estamparFormatoOficial(
           height: h,
         });
       }
-    } catch {
-      /* la firma es opcional para el estampado */
+    } catch (e) {
+      // La firma en el acuerdo de imagen y voz es OBLIGATORIA (es el único formato
+      // con línea de firma). Antes se tragaba el error en silencio → se guardaba un
+      // documento oficial SIN firma (el bug que reportó Karen). Ahora falla fuerte
+      // para que el candidato reintente, en vez de quedar un firmado sin firma.
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`No se pudo incrustar la firma en el formato oficial (${msg}).`);
     }
   }
 

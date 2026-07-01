@@ -49,6 +49,10 @@ const CONSENT_DEFAULT = {
   politica_url: 'https://equitel.com.co/tratamiento-de-datos-personales',
 };
 
+// Estados en los que la vacante ya NO recibe postulaciones (la landing sigue
+// mostrando la oferta, pero el formulario de postular se deshabilita).
+const ESTADOS_SIN_POSTULACION: string[] = ['cerrada', 'desierta', 'cancelada', 'pausada'];
+
 export default function CarreraPublicaPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -210,6 +214,12 @@ export default function CarreraPublicaPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!vacante || !auth.currentUser) return;
+    // La vacante ya no recibe postulaciones si está cerrada/desierta/cancelada o
+    // pausada. La landing sigue mostrando la oferta, pero no deja postular.
+    if (ESTADOS_SIN_POSTULACION.includes(vacante.estado)) {
+      setErrSubmit('Esta vacante ya no está recibiendo postulaciones.');
+      return;
+    }
     if (!cv) {
       setErrSubmit('Adjunta tu CV en PDF.');
       return;
@@ -770,16 +780,22 @@ export default function CarreraPublicaPage() {
                 </span>
               </label>
 
-              <Button
-                type="submit"
-                variant="brand-primary"
-                size="large"
-                fullWidth
-                loading={enviando}
-                disabled={enviando || !habeasAceptado}
-              >
-                {enviando ? 'Enviando…' : 'Enviar postulación'}
-              </Button>
+              {vacante && ESTADOS_SIN_POSTULACION.includes(vacante.estado) ? (
+                <p className="text-center text-[13px] text-text-muted bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+                  Esta vacante ya no está recibiendo postulaciones. Gracias por tu interés.
+                </p>
+              ) : (
+                <Button
+                  type="submit"
+                  variant="brand-primary"
+                  size="large"
+                  fullWidth
+                  loading={enviando}
+                  disabled={enviando || !habeasAceptado}
+                >
+                  {enviando ? 'Enviando…' : 'Enviar postulación'}
+                </Button>
+              )}
             </form>
           </Card>
         </aside>

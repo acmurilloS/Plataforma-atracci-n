@@ -4,7 +4,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
 import { verificarCedula, MAX_INTENTOS_CEDULA } from './verificarCedula';
-import { chequearRateLimitIp } from './rateLimitIp';
+import { ipBloqueada, registrarFalloIp } from './rateLimitIp';
 import { validarTurnstile } from '../security/validarTurnstile';
 import { esContratado, esEstadoFinalizado, faseDeEstado } from './faseProceso';
 import { CLAVES_APORTA_CANDIDATO, ITEM_POR_CLAVE } from '../documentos/catalogoCarpeta';
@@ -68,13 +68,16 @@ export const resolverPortalToken = onCall(
   });
 
   // ── Anti-bot: cuando el candidato envía la cédula (intento real de acceso),
-  // exige CAPTCHA válido + freno por IP ANTES de tocar la cédula. ─────────────
+  // exige CAPTCHA válido + chequeo (solo-lectura) de la red de seguridad por IP
+  // ANTES de tocar la cédula. La `ip` se calcula una vez y se reutiliza luego
+  // para registrar el fallo (solo si la cédula realmente falló). ──────────────
+  let ip = '';
   if (cedulaInput) {
     const raw = req.rawRequest as unknown as {
       ip?: string;
       headers?: Record<string, string | undefined>;
     };
-    const ip = String(
+    ip = String(
       raw?.ip ?? raw?.headers?.['x-forwarded-for'] ?? '',
     )
       .split(',')[0]
@@ -86,16 +89,25 @@ export const resolverPortalToken = onCall(
       return magro({ captcha_fallido: true });
     }
 
-    const rl = await chequearRateLimitIp(ip);
+    const rl = await ipBloqueada(ip);
     if (!rl.ok) {
       logger.warn('[portal] IP bloqueada por rate limit', { token });
       return magro({ bloqueado: true, bloqueado_segundos: rl.bloqueado_segundos });
     }
   }
 
-  // ── 2º factor: cédula (verificación transaccional anti fuerza-bruta) ────────
+  // ── 2º factor: cédula (bloqueo INDIVIDUAL por token, transaccional) ──────────
   const cedula = await verificarCedula(ref, cedulaInput);
   if (!cedula.ok) {
+    // Solo los FALLOS reales de cédula alimentan la red de seguridad por IP; NO
+    // cuentan: un token sin cédula registrada (dato faltante, no ataque) ni los
+    // reenvíos de un token YA bloqueado (verificarCedula tampoco incrementa su
+    // contador en ese caso → así una persona atascada dándole "enviar" tras su
+    // propio bloqueo no consume el cupo de IP de los demás de su oficina). Un bot
+    // que rota tokens sigue generando fallos frescos no-bloqueados que sí cuentan.
+    if (cedulaInput && !cedula.sin_cedula_registrada && !cedula.bloqueado) {
+      await registrarFalloIp(ip);
+    }
     return magro({
       sin_cedula_registrada: cedula.sin_cedula_registrada,
       cedula_incorrecta: !!cedulaInput && !cedula.bloqueado && !cedula.sin_cedula_registrada,
@@ -115,6 +127,12 @@ export const resolverPortalToken = onCall(
   let condicionesAceptadas = false;
   let firmaDatosBasicos = false;
   let firmaDebidaDiligencia = false;
+  // URLs de los PDF oficiales firmados, para que el candidato pueda descargarlos
+  // (B12). Van solo tras validar la cédula (payload completo, no en el magro).
+  let datosFirmaUrl = '';
+  let imagenFirmaUrl = '';
+  let datosBasicosFirmaUrl = '';
+  let debidaDiligenciaFirmaUrl = '';
   let mensajeDescarte = '';
   let vacanteId = String(t.vacante_id ?? '');
   try {
@@ -131,6 +149,10 @@ export const resolverPortalToken = onCall(
         }
         firmaDatosBasicos = !!pd.firma_datos_basicos_en;
         firmaDebidaDiligencia = !!pd.firma_debida_diligencia_en;
+        datosFirmaUrl = String(pd.consentimiento_datos_firma_url ?? '');
+        imagenFirmaUrl = String(pd.consentimiento_imagen_firma_url ?? '');
+        datosBasicosFirmaUrl = String(pd.firma_datos_basicos_url ?? '');
+        debidaDiligenciaFirmaUrl = String(pd.firma_debida_diligencia_url ?? '');
         mensajeDescarte = String(pd.mensaje_portal_descarte ?? '').trim();
         if (!vacanteId) vacanteId = String(pd.vacante_id ?? '');
       }
@@ -312,10 +334,14 @@ export const resolverPortalToken = onCall(
     contratado: esContratado(estado),
     consentimiento_datos_aceptado: datosAceptado,
     consentimiento_imagen_aceptado: imagenAceptado,
+    consentimiento_datos_firma_url: datosFirmaUrl,
+    consentimiento_imagen_firma_url: imagenFirmaUrl,
+    firma_datos_basicos_url: datosBasicosFirmaUrl,
     condiciones,
     condiciones_aceptadas: condicionesAceptadas,
     firma_datos_basicos: firmaDatosBasicos,
     firma_debida_diligencia: firmaDebidaDiligencia,
+    firma_debida_diligencia_url: debidaDiligenciaFirmaUrl,
     documentos,
     slots,
     citaciones: { entrevista, examen },

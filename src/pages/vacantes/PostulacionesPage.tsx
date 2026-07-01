@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import { storage } from '../../lib/firebase';
+import { useAuth } from '../../hooks/useAuth';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -20,13 +21,25 @@ import type {
   EstadoPostulacion,
   FuentePostulacion,
   PostulacionDoc,
+  ResultadoUltimaPostulacion,
   VacanteDoc,
 } from '../../schemas';
 import { estadoPostulacion, fuentePostulacion } from '../../schemas';
+import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
 import { Button, Card, Pill } from '../../components/brand';
 import { FaseCandidato } from '../../components/postulaciones/FaseCandidato';
 import { RepostularModal } from '../../components/postulaciones/RepostularModal';
 import { cn } from '../../utils/cn';
+
+// Estados terminales (vía el select de estado) que denormalizan el resultado al
+// candidato para el pool. Los descartes de líder (con motivo) los maneja
+// TernaPage; el contratado lo maneja la callable aprobarCarpeta. Ver B6.
+const RESULTADO_POR_ESTADO_TERMINAL: Partial<Record<EstadoPostulacion, ResultadoUltimaPostulacion>> = {
+  filtrado_no_cumple: 'filtrado_no_cumple',
+  pre_entrevistado_no_interesado: 'desistio',
+  desistio_candidato: 'desistio',
+  descartado_examenes_medicos: 'no_apto_medico',
+};
 
 /**
  * PostulacionesPage · sistema brand.
@@ -50,6 +63,7 @@ export default function PostulacionesPage() {
     filtros: id ? [['vacante_id', '==', id]] : [],
   });
   const { crear, actualizar } = useMutacion();
+  const { user } = useAuth();
 
   const [form, setForm] = useState<{
     nombres: string;
@@ -281,6 +295,23 @@ export default function PostulacionesPage() {
       };
       if (marcaCampo) patch[`marcas.${marcaCampo}`] = ahora;
       await actualizar('postulaciones', p.id, patch);
+
+      // B6 · denormaliza el resultado terminal al candidato para el pool. Best-
+      // effort: si falla, no rompe el cambio de estado (ya persistido arriba).
+      const resultado = RESULTADO_POR_ESTADO_TERMINAL[nuevo];
+      if (resultado && p.candidato_id) {
+        try {
+          await actualizarResultadoCandidato({
+            candidato_id: p.candidato_id,
+            resultado,
+            vacante_id: vacante?.id ?? p.vacante_id,
+            vacante_consecutivo: vacante?.consecutivo ?? '',
+            uid: user?.uid ?? '',
+          });
+        } catch (e) {
+          console.warn('[cambiarEstado] no se pudo denormalizar el resultado al candidato', e);
+        }
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos actualizar estado.');
     }

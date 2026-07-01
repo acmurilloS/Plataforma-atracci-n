@@ -25,6 +25,7 @@ import {
 } from '../../components/consentimientos/consentimientoLegal';
 import { FirmaInput } from '../../components/firma/FirmaInput';
 import { DatosBasicosPortalCard } from '../../components/portal/DatosBasicosPortalCard';
+import { DebidaDiligenciaPortalCard } from '../../components/portal/DebidaDiligenciaPortalCard';
 import { estamparFormatoOficial } from '../../utils/estamparFormatoOficial';
 import { MENSAJE_FINALIZADO_DEFAULT, mensajeFase } from '../../portal/faseProceso';
 import { PortalStepper } from '../../components/portal/PortalStepper';
@@ -64,10 +65,14 @@ interface PortalData {
   contratado: boolean;
   consentimiento_datos_aceptado: boolean;
   consentimiento_imagen_aceptado: boolean;
+  consentimiento_datos_firma_url?: string;
+  consentimiento_imagen_firma_url?: string;
+  firma_datos_basicos_url?: string;
   condiciones: Record<string, string> | null;
   condiciones_aceptadas: boolean;
   firma_datos_basicos: boolean;
   firma_debida_diligencia: boolean;
+  firma_debida_diligencia_url?: string;
   documentos: { nombre: string; url: string }[];
   slots: PortalSlot[];
   citaciones: { entrevista: CitaEntrevista | null; examen: CitaExamen | null };
@@ -345,12 +350,14 @@ export default function PortalCandidatoPage() {
             nombreCompleto={data.candidato_nombre}
             documentoNumero={data.documento_numero}
             yaEnviado={data.firma_datos_basicos}
+            firmaUrl={data.firma_datos_basicos_url}
           />
         )}
 
         {tab === 'autorizaciones' && (
           <AutorizacionesTab
             token={token ?? ''}
+            cedula={cedula}
             empresa={empresa}
             empresaCodigo={data.empresa_codigo}
             cargo={data.cargo_nombre}
@@ -358,6 +365,10 @@ export default function PortalCandidatoPage() {
             documentoNumero={data.documento_numero}
             datosAceptado={data.consentimiento_datos_aceptado}
             imagenAceptado={data.consentimiento_imagen_aceptado}
+            datosFirmaUrl={data.consentimiento_datos_firma_url}
+            imagenFirmaUrl={data.consentimiento_imagen_firma_url}
+            debidaDiligenciaEnviada={data.firma_debida_diligencia}
+            debidaDiligenciaFirmaUrl={data.firma_debida_diligencia_url}
             condiciones={data.condiciones}
             condicionesAceptadas={data.condiciones_aceptadas}
             aceptar={aceptar}
@@ -553,6 +564,7 @@ function CedulaGate({
  */
 function AutorizacionesTab({
   token,
+  cedula,
   empresa,
   empresaCodigo,
   cargo,
@@ -560,11 +572,16 @@ function AutorizacionesTab({
   documentoNumero,
   datosAceptado,
   imagenAceptado,
+  datosFirmaUrl,
+  imagenFirmaUrl,
+  debidaDiligenciaEnviada,
+  debidaDiligenciaFirmaUrl,
   condiciones,
   condicionesAceptadas,
   aceptar,
 }: {
   token: string;
+  cedula: string;
   empresa: ReturnType<typeof empresaConsentimiento>;
   empresaCodigo: string;
   cargo: string;
@@ -572,6 +589,10 @@ function AutorizacionesTab({
   documentoNumero: string;
   datosAceptado: boolean;
   imagenAceptado: boolean;
+  datosFirmaUrl?: string;
+  imagenFirmaUrl?: string;
+  debidaDiligenciaEnviada: boolean;
+  debidaDiligenciaFirmaUrl?: string;
   condiciones?: Record<string, string> | null;
   condicionesAceptadas: boolean;
   aceptar: (tipo: 'datos' | 'imagen', url: string, img: string) => Promise<void>;
@@ -644,6 +665,7 @@ function AutorizacionesTab({
         correo={correo}
         bloqueado={!completo}
         aceptado={datosAceptado}
+        firmaUrl={datosFirmaUrl}
         onAceptar={(url, img) => aceptar('datos', url, img)}
       />
       <ConsentimientoCard
@@ -659,7 +681,20 @@ function AutorizacionesTab({
         correo={correo}
         bloqueado={!completo}
         aceptado={imagenAceptado}
+        firmaUrl={imagenFirmaUrl}
         onAceptar={(url, img) => aceptar('imagen', url, img)}
+      />
+      <DebidaDiligenciaPortalCard
+        token={token}
+        cedula={cedula}
+        empresaNombre={empresa.nombre}
+        nombreCompleto={nombreCompleto}
+        documentoNumero={documentoNumero}
+        cargoNombre={cargo}
+        celular={celular}
+        correo={correo}
+        yaEnviado={debidaDiligenciaEnviada}
+        firmaUrl={debidaDiligenciaFirmaUrl}
       />
       {condiciones && (
         <CondicionesCard
@@ -685,6 +720,7 @@ function ConsentimientoCard({
   correo,
   bloqueado,
   aceptado,
+  firmaUrl,
   onAceptar,
 }: {
   tipo: 'datos' | 'imagen';
@@ -699,6 +735,7 @@ function ConsentimientoCard({
   correo: string;
   bloqueado: boolean;
   aceptado: boolean;
+  firmaUrl?: string;
   onAceptar: (firmaUrl: string, firmaImagenUrl: string) => Promise<void>;
 }) {
   const [chk, setChk] = useState(false);
@@ -754,10 +791,22 @@ function ConsentimientoCard({
           <p className="text-[11px] text-text-muted mt-0.5">Ley 1581 de 2012 · Decreto 1377 de 2013</p>
         </div>
         {aceptado && (
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-success-700 bg-success-50 border border-success-500/25 rounded-full px-2.5 py-1">
-            <Check size={13} strokeWidth={2} />
-            Aceptado
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-success-700 bg-success-50 border border-success-500/25 rounded-full px-2.5 py-1">
+              <Check size={13} strokeWidth={2} />
+              Aceptado
+            </span>
+            {firmaUrl && (
+              <a
+                href={firmaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-700 hover:text-brand-800 underline underline-offset-2"
+              >
+                Descargar PDF firmado
+              </a>
+            )}
+          </div>
         )}
       </div>
 

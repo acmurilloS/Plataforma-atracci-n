@@ -17,6 +17,8 @@ interface Props {
   nombreCompleto: string;
   documentoNumero: string;
   yaEnviado: boolean;
+  /** URL del PDF oficial firmado, para descargar (B12). */
+  firmaUrl?: string;
 }
 
 interface Contacto {
@@ -113,6 +115,7 @@ export function DatosBasicosPortalCard({
   nombreCompleto,
   documentoNumero,
   yaEnviado,
+  firmaUrl,
 }: Props) {
   const ini = splitNombre(nombreCompleto);
   const [f, setF] = useState<Record<string, string>>({
@@ -222,6 +225,16 @@ export function DatosBasicosPortalCard({
           Ya diligenciaste y firmaste tus Datos Básicos. El equipo de Atracción los revisará. Si
           necesitas corregir algo, escríbenos por la pestaña ¿Dudas?.
         </p>
+        {firmaUrl && (
+          <a
+            href={firmaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-700 hover:text-brand-800 underline underline-offset-2"
+          >
+            Descargar PDF firmado
+          </a>
+        )}
       </section>
     );
   }

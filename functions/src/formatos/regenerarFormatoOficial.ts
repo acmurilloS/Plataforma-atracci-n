@@ -42,6 +42,24 @@ const CORREGIBLES = [
   'entidad_bancaria',
   'cuenta_banco_numero',
 ];
+// Campos corregibles del doc de Debida Diligencia / SAGRILAFT (identidad + registro).
+const CORREGIBLES_DD = [
+  'departamento',
+  'ciudad_municipio',
+  'cargo',
+  'tipo_vinculacion',
+  'primer_apellido',
+  'segundo_apellido',
+  'nombres',
+  'identificacion',
+  'tipo_documento',
+  'tipo_documento_otro',
+  'celular',
+  'pais',
+  'lugar_expedicion',
+  'direccion_residencial',
+  'correo_electronico',
+];
 
 export const regenerarFormatoOficial = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
@@ -122,6 +140,26 @@ export const regenerarFormatoOficial = onCall({ region: 'us-central1' }, async (
       .get();
     if (!dbi.empty) await dbi.docs[0].ref.update(patch);
     await db.collection('postulaciones').doc(postulacionId).update({ datos_basicos_pdf_url: pdfUrl });
+  } else if (tipo === 'debida_diligencia') {
+    const datosActualizados = (req.data?.datos_actualizados ?? {}) as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+    for (const k of CORREGIBLES_DD) {
+      if (k in datosActualizados) patch[k] = String(datosActualizados[k] ?? '').trim().slice(0, 300);
+    }
+    patch.debida_diligencia_pdf_url = pdfUrl;
+    patch.firma_integrante_url = pdfUrl;
+    patch.actualizado_por = req.auth.uid;
+    patch.actualizado_en = ahora;
+    const dd = await db
+      .collection('debida_diligencia')
+      .where('postulacion_id', '==', postulacionId)
+      .limit(1)
+      .get();
+    if (!dd.empty) await dd.docs[0].ref.update(patch);
+    await db
+      .collection('postulaciones')
+      .doc(postulacionId)
+      .update({ debida_diligencia_pdf_url: pdfUrl, firma_debida_diligencia_url: pdfUrl });
   }
 
   // Evento append-only (read: staff).

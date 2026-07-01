@@ -15,8 +15,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { functions } from '../../lib/firebase';
+import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
+import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import type { PostulacionDoc } from '../../schemas';
@@ -90,6 +92,7 @@ export default function ExamenesMedicosPage() {
     return m;
   }, [postulaciones]);
   const { actualizar } = useMutacion();
+  const { user } = useAuth();
   const [procesando, setProcesando] = useState<string | null>(null);
   const [reenviando, setReenviando] = useState<string | null>(null);
   // Formularios inline (reemplazan los window.prompt) para enviar la orden y
@@ -208,6 +211,20 @@ export default function ExamenesMedicosPage() {
       });
       if (apto) {
         await actualizar('vacantes', ex.vacante_id, { estado: 'en_contratacion' });
+      } else if (ex.candidato_id) {
+        // B6 · no apto médico → denormaliza al candidato (lo saca del pool
+        // futuro). Best-effort: no rompe el registro del concepto.
+        try {
+          await actualizarResultadoCandidato({
+            candidato_id: ex.candidato_id,
+            resultado: 'no_apto_medico',
+            vacante_id: ex.vacante_id,
+            vacante_consecutivo: ex.vacante_consecutivo ?? '',
+            uid: user?.uid ?? '',
+          });
+        } catch (e) {
+          console.warn('[confirmarConcepto] no se pudo denormalizar no_apto_medico', e);
+        }
       }
       setAccion(null);
     } catch (e) {

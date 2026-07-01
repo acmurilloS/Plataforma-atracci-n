@@ -10,16 +10,19 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useSourcing } from '../../hooks/useSourcing';
+import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { cn } from '../../utils/cn';
 import type {
   BusquedaSourcingDoc,
   EstadoPostulacion,
   PostulacionDoc,
+  ResultadoUltimaPostulacion,
   VacanteDoc,
 } from '../../schemas';
 
@@ -74,6 +77,7 @@ export default function SourcingPage() {
     orden: ['iniciada_en', 'desc'],
   });
   const { actualizar } = useMutacion();
+  const { user } = useAuth();
   const { buscarCandidatos, ejecutando, error } = useSourcing();
   const [accionando, setAccionando] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
@@ -101,6 +105,28 @@ export default function SourcingPage() {
         ultima_transicion_estado: ahora,
         [`marcas.${marca}`]: ahora,
       });
+
+      // B6 · si el descarte es terminal, denormaliza el resultado al candidato
+      // para el pool. Best-effort: no rompe la transición ya persistida.
+      const resultado: ResultadoUltimaPostulacion | undefined =
+        nuevo === 'filtrado_no_cumple'
+          ? 'filtrado_no_cumple'
+          : nuevo === 'desistio_candidato'
+            ? 'desistio'
+            : undefined;
+      if (resultado && p.candidato_id) {
+        try {
+          await actualizarResultadoCandidato({
+            candidato_id: p.candidato_id,
+            resultado,
+            vacante_id: vacante?.id ?? p.vacante_id,
+            vacante_consecutivo: vacante?.consecutivo ?? '',
+            uid: user?.uid ?? '',
+          });
+        } catch (err) {
+          console.warn('[transicionar] no se pudo denormalizar el resultado', err);
+        }
+      }
     } catch (e) {
       setErrorAccion(e instanceof Error ? e.message : 'No pudimos actualizar.');
     } finally {
