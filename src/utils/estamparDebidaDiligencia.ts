@@ -7,10 +7,12 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
  * El PDF base es `public/formatos/debida-diligencia.pdf` (Letter 612×792, 1 pág).
  * Solo se rellenan los blancos con `drawText`/`drawImage`.
  *
- * COORDENADAS: medidas con PyMuPDF sobre el PDF real y VERIFICADAS visualmente
- * (render del resultado). El valor va en la casilla a la DERECHA de cada etiqueta;
- * las tres columnas caen en x≈183 / 318 / 468. `yTop` = línea base desde el borde
- * SUPERIOR (mismo sistema que PyMuPDF y `estamparDatosBasicos`).
+ * COORDENADAS: medidas con PyMuPDF sobre el PDF real (bordes de casilla de las
+ * líneas del formato) y VERIFICADAS visualmente. El valor va en la casilla a la
+ * DERECHA de cada etiqueta (columnas x≈183/318/468); las fechas van separadas en
+ * día/mes/año dentro de sus cuadritos. La firma se RECORTA a su contenido (para
+ * que no flote por el espacio en blanco del PNG) y se apoya sobre la línea de firma.
+ * `yTop` = línea base desde el borde SUPERIOR.
  */
 
 export interface DebidaDiligenciaEstampado {
@@ -74,12 +76,10 @@ type CampoKey = keyof DebidaDiligenciaEstampado;
 
 /** Campos de texto: [clave, x, yTop, maxAncho?]. El valor va en la casilla a la derecha de su etiqueta. */
 const CAMPOS: [CampoKey, number, number, number?][] = [
-  // 1. Empresa y registro
+  // 1. Empresa y registro (fechas aparte, ver FECHAS)
   ['tipo_registro', 183, 118, 72],
   ['departamento', 183, 131, 72],
   ['ciudad_municipio', 318, 131, 82],
-  ['fecha_diligenciamiento', 468, 131, 60],
-  ['fecha_ingreso', 183, 146, 68],
   ['cargo', 318, 146, 66],
   ['tipo_vinculacion', 468, 146, 58],
   // 2. Datos generales
@@ -89,10 +89,8 @@ const CAMPOS: [CampoKey, number, number, number?][] = [
   ['identificacion', 183, 188, 72],
   ['tipo_documento', 318, 188, 82],
   ['tipo_documento_otro', 468, 188, 60],
-  ['fecha_nacimiento', 183, 203, 68],
   ['celular', 318, 203, 82],
   ['pais', 468, 203, 60],
-  ['fecha_expedicion_documento', 183, 218, 68],
   ['lugar_expedicion', 318, 218, 82],
   ['direccion_residencial', 468, 218, 52],
   ['correo_electronico', 183, 235, 60],
@@ -114,6 +112,14 @@ const CAMPOS: [CampoKey, number, number, number?][] = [
   ['operaciones_moneda_extranjera_detalle', 185, 442, 100],
   ['productos_financieros_extranjero_detalle', 382, 442, 145],
   ['ingresos_adicionales_observaciones', 382, 460, 145],
+];
+
+/** Fechas en cuadritos día/mes/año: [clave, yTop, xDía, xMes, xAño]. */
+const FECHAS: [CampoKey, number, number, number, number][] = [
+  ['fecha_diligenciamiento', 131, 470, 490, 505],
+  ['fecha_ingreso', 146, 182, 200, 215],
+  ['fecha_nacimiento', 203, 182, 200, 215],
+  ['fecha_expedicion_documento', 218, 182, 200, 215],
 ];
 
 /**
@@ -142,10 +148,74 @@ const PEP_Y0 = 337;
 const PEP_DY = 11.5;
 const PEP_X = { nombre: 100, relacion: 245, identidad: 298, cargo_ocupacion: 380, fecha_desvinculacion: 450 };
 
-/** Firma del integrante: va SOBRE la línea "FIRMA Y CÉDULA DEL INTEGRANTE" (y≈719). */
-const FIRMA = { x: 115, yTop: 692, ancho: 175, altoMax: 28 };
+/**
+ * Firma del integrante: se centra en `xCentro` y se apoya con su base en `yBase`
+ * (sobre la línea "FIRMA Y CÉDULA DEL INTEGRANTE", y≈719). El PNG se recorta a su
+ * contenido antes de incrustarlo, así queda pegado a la línea (sin flotar).
+ */
+const FIRMA = { xCentro: 180, yBase: 717, ancho: 155, altoMax: 30 };
 
 export const RUTA_DEBIDA_DILIGENCIA = '/formatos/debida-diligencia.pdf';
+
+/** 'nuevo_integrante' → 'Nuevo integrante'. */
+function pretty(s?: string): string {
+  const v = String(s ?? '').trim();
+  return v ? v.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : '';
+}
+
+/**
+ * Recorta el PNG de la firma a su contenido (quita el espacio en blanco/
+ * transparente) para que se apoye exacto sobre la línea. Devuelve un dataURL PNG
+ * recortado + dimensiones, o null si no se puede (se usa el original).
+ */
+async function recortarFirma(fuente: ArrayBuffer | string): Promise<{ url: string; w: number; h: number } | null> {
+  try {
+    const blob =
+      typeof fuente === 'string'
+        ? await (await fetch(fuente)).blob()
+        : new Blob([fuente], { type: 'image/png' });
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement('canvas');
+    c.width = bmp.width;
+    c.height = bmp.height;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(bmp, 0, 0);
+    const { data } = ctx.getImageData(0, 0, c.width, c.height);
+    let minx = c.width, miny = c.height, maxx = 0, maxy = 0, found = false;
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        const i = (y * c.width + x) * 4;
+        const a = data[i + 3];
+        const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        if (a > 30 && lum < 200) {
+          found = true;
+          if (x < minx) minx = x;
+          if (x > maxx) maxx = x;
+          if (y < miny) miny = y;
+          if (y > maxy) maxy = y;
+        }
+      }
+    }
+    if (!found) return null;
+    const pad = 3;
+    minx = Math.max(0, minx - pad);
+    miny = Math.max(0, miny - pad);
+    maxx = Math.min(c.width - 1, maxx + pad);
+    maxy = Math.min(c.height - 1, maxy + pad);
+    const cw = maxx - minx + 1;
+    const ch = maxy - miny + 1;
+    const c2 = document.createElement('canvas');
+    c2.width = cw;
+    c2.height = ch;
+    const ctx2 = c2.getContext('2d');
+    if (!ctx2) return null;
+    ctx2.drawImage(c, minx, miny, cw, ch, 0, 0, cw, ch);
+    return { url: c2.toDataURL('image/png'), w: cw, h: ch };
+  } catch {
+    return null;
+  }
+}
 
 export async function estamparDebidaDiligencia(
   datos: DebidaDiligenciaEstampado,
@@ -162,6 +232,8 @@ export async function estamparDebidaDiligencia(
   const { height: H } = page.getSize();
   const tinta = rgb(0.05, 0.05, 0.12);
 
+  const d: DebidaDiligenciaEstampado = { ...datos, tipo_registro: pretty(datos.tipo_registro) };
+
   const draw = (texto: unknown, x: number, yTop: number, maxAncho?: number, size = 8, f = font) => {
     const s0 = texto === undefined || texto === null ? '' : String(texto);
     if (!s0) return;
@@ -173,15 +245,26 @@ export async function estamparDebidaDiligencia(
   };
   const siNo = (v: unknown) => (String(v ?? '').toLowerCase() === 'si' ? 'SÍ' : 'NO');
 
-  for (const [k, x, yTop, maxA] of CAMPOS) draw(datos[k], x, yTop, maxA);
-  for (const [k, x, yTop] of SINO_SIEMPRE) draw(siNo(datos[k]), x, yTop, 40, 8.5, fontB);
+  for (const [k, x, yTop, maxA] of CAMPOS) draw(d[k], x, yTop, maxA);
+
+  // Fechas separadas en día / mes / año dentro de sus cuadritos.
+  for (const [k, yTop, xd, xm, xa] of FECHAS) {
+    const partes = String(d[k] ?? '').split('/');
+    if (partes.length === 3 && partes[0]) {
+      draw(partes[0], xd, yTop);
+      draw(partes[1], xm, yTop);
+      draw(partes[2], xa, yTop, 17);
+    }
+  }
+
+  for (const [k, x, yTop] of SINO_SIEMPRE) draw(siNo(d[k]), x, yTop, 40, 8.5, fontB);
   // Financiera: tapar el "NO" pre-impreso del formato y escribir la respuesta real.
   for (const [k, x, yTop] of SINO_FINANCIERO) {
     page.drawRectangle({ x: x - 3, y: H - yTop - 3, width: 26, height: 11, color: rgb(1, 1, 1) });
-    draw(siNo(datos[k]), x, yTop, 40, 8.5, fontB);
+    draw(siNo(d[k]), x, yTop, 40, 8.5, fontB);
   }
 
-  (datos.vinculados_pep ?? []).slice(0, 3).forEach((v, i) => {
+  (d.vinculados_pep ?? []).slice(0, 3).forEach((v, i) => {
     const y = PEP_Y0 + i * PEP_DY;
     draw(v.nombre, PEP_X.nombre, y, 130, 7);
     draw(v.relacion, PEP_X.relacion, y, 48, 7);
@@ -192,20 +275,23 @@ export async function estamparDebidaDiligencia(
 
   if (firmaPngDataUrl) {
     try {
-      // El portal pasa un data-URI del canvas; la regeneración (corrección) pasa
-      // la URL de descarga del PNG en Storage. pdf-lib NO descarga http(s), así que
-      // si viene una URL la traemos como binario antes de incrustarla.
+      // El portal pasa un data-URI del canvas; la corrección pasa la URL de
+      // descarga del PNG en Storage. pdf-lib NO descarga http(s), así que si viene
+      // una URL la traemos como binario. Luego se recorta al contenido.
       const fuente = /^https?:\/\//i.test(firmaPngDataUrl)
         ? await (await fetch(firmaPngDataUrl)).arrayBuffer()
         : firmaPngDataUrl;
-      const png = await pdf.embedPng(fuente);
+      const rec = await recortarFirma(fuente);
+      const png = await pdf.embedPng(rec ? rec.url : fuente);
       let w = FIRMA.ancho;
       let h = (png.height / png.width) * w;
       if (h > FIRMA.altoMax) {
         h = FIRMA.altoMax;
         w = (png.width / png.height) * h;
       }
-      page.drawImage(png, { x: FIRMA.x, y: H - FIRMA.yTop - h, width: w, height: h });
+      const x = FIRMA.xCentro - w / 2;
+      // y = H - yBase deja la BASE de la imagen sobre la línea de firma.
+      page.drawImage(png, { x, y: H - FIRMA.yBase, width: w, height: h });
     } catch {
       /* la firma es opcional para el estampado */
     }
