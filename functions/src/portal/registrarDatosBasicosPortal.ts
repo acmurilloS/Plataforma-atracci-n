@@ -5,6 +5,7 @@ import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
 import { verificarCedula } from './verificarCedula';
 import { urlPortalDocValida } from './urlPortalDocValida';
+import { upsertFormatoEnCarpeta } from './upsertFormatoEnCarpeta';
 
 /**
  * registrarDatosBasicosPortal · el INTEGRANTE diligencia y firma sus Datos
@@ -176,6 +177,18 @@ export const registrarDatosBasicosPortal = onCall({ region: 'us-central1' }, asy
     updatePost.firma_datos_basicos_url = pdfUrl;
   }
   await db.collection('postulaciones').doc(postulacionId).update(updatePost);
+
+  // Refleja el DGH-F-05 estampado en la carpeta real (documentos_candidato) para
+  // que aparezca "entregado" con Ver PDF y cuente en la completitud.
+  if (pdfUrl) {
+    await upsertFormatoEnCarpeta({
+      postulacionId,
+      clave: 'datos_basicos_integrante',
+      pdfUrl,
+      candidatoId: String(t.candidato_id ?? ''),
+      candidatoNombre: String(t.candidato_nombre ?? ''),
+    });
+  }
 
   if (pdfUrl) {
     await db.collection('documentos_portal').add({

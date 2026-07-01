@@ -5,6 +5,7 @@ import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
 import { verificarCedula } from './verificarCedula';
 import { urlPortalDocValida } from './urlPortalDocValida';
+import { upsertFormatoEnCarpeta } from './upsertFormatoEnCarpeta';
 
 /**
  * registrarDebidaDiligenciaPortal · el INTEGRANTE diligencia y firma su Debida
@@ -190,6 +191,18 @@ export const registrarDebidaDiligenciaPortal = onCall({ region: 'us-central1' },
     updatePost.firma_debida_diligencia_url = pdfUrl;
   }
   await db.collection('postulaciones').doc(postulacionId).update(updatePost);
+
+  // Refleja el F-CAR-01 estampado en la carpeta real (documentos_candidato) para
+  // que aparezca "entregado" con Ver PDF y cuente en la completitud.
+  if (pdfUrl) {
+    await upsertFormatoEnCarpeta({
+      postulacionId,
+      clave: 'debida_diligencia',
+      pdfUrl,
+      candidatoId: String(t.candidato_id ?? ''),
+      candidatoNombre: String(t.candidato_nombre ?? ''),
+    });
+  }
 
   if (pdfUrl) {
     await db.collection('documentos_portal').add({

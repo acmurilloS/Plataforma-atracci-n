@@ -2,6 +2,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { upsertFormatoEnCarpeta } from '../portal/upsertFormatoEnCarpeta';
 
 /**
  * regenerarFormatoOficial · corrige un campo de un formato CONTROLADO por Calidad
@@ -140,6 +141,7 @@ export const regenerarFormatoOficial = onCall({ region: 'us-central1' }, async (
       .get();
     if (!dbi.empty) await dbi.docs[0].ref.update(patch);
     await db.collection('postulaciones').doc(postulacionId).update({ datos_basicos_pdf_url: pdfUrl });
+    await upsertFormatoEnCarpeta({ postulacionId, clave: 'datos_basicos_integrante', pdfUrl });
   } else if (tipo === 'debida_diligencia') {
     const datosActualizados = (req.data?.datos_actualizados ?? {}) as Record<string, unknown>;
     const patch: Record<string, unknown> = {};
@@ -160,6 +162,7 @@ export const regenerarFormatoOficial = onCall({ region: 'us-central1' }, async (
       .collection('postulaciones')
       .doc(postulacionId)
       .update({ debida_diligencia_pdf_url: pdfUrl, firma_debida_diligencia_url: pdfUrl });
+    await upsertFormatoEnCarpeta({ postulacionId, clave: 'debida_diligencia', pdfUrl });
   }
 
   // Evento append-only (read: staff).
