@@ -149,7 +149,9 @@ export const regenerarFormatoOficial = onCall({ region: 'us-central1' }, async (
       if (k in datosActualizados) patch[k] = String(datosActualizados[k] ?? '').trim().slice(0, 300);
     }
     patch.debida_diligencia_pdf_url = pdfUrl;
-    patch.firma_integrante_url = pdfUrl;
+    // NO tocar firma_integrante_url: debe seguir siendo el PNG de la firma para
+    // que las próximas correcciones puedan re-incrustar la firma (si se pisa con
+    // el PDF, el siguiente estampado falla al hacer embedPng de un PDF).
     patch.actualizado_por = req.auth.uid;
     patch.actualizado_en = ahora;
     const dd = await db
