@@ -64,6 +64,8 @@ export { onCarpetaCompletaCheck } from './documentos/onCarpetaCompletaCheck';
 export { onCarpetaEntregada } from './documentos/onCarpetaEntregada';
 // Correo de agradecimiento al candidato descartado (D.3, 2026-06-16).
 export { enviarAgradecimientoCandidato } from './notificaciones/enviarAgradecimientoCandidato';
+// Agradecimiento AUTOMÁTICO al pasar a un estado de descarte (audit #17).
+export { onPostulacionDescartada } from './notificaciones/onPostulacionDescartada';
 // Borrador de mensaje al candidato con IA enchufable (categoría segura, confidencialidad).
 export { maquillarMensajeIA } from './notificaciones/maquillarMensaje';
 // Correos de plan de conexión/dotación al marcar contratado (F.2, 2026-06-16).
