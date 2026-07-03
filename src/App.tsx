@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import type { RolUsuario } from './schemas';
+import { rutaHome } from './utils/rutaHome';
 import CatalogosAdminPage from './pages/admin/CatalogosAdminPage';
 import PanelAdminPage from './pages/admin/PanelAdminPage';
 import UsuariosRolesPage from './pages/admin/UsuariosRolesPage';
@@ -85,6 +86,13 @@ function ShellConRol() {
   return <Layout />;
 }
 
+/** La raíz "/" lleva a cada perfil a SU home (admin→dashboard, etc.). */
+function InicioRedirect() {
+  const { rol, cargando } = useAuth();
+  if (cargando) return null;
+  return <Navigate to={rutaHome(rol)} replace />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -94,7 +102,7 @@ export default function App() {
           <Route path="/carreras/:id" element={<CarreraPublicaPage />} />
           <Route path="/portal/:token" element={<PortalCandidatoPage />} />
           <Route element={<AppShell />}>
-            <Route path="/" element={<Navigate to="/seguimiento" replace />} />
+            <Route path="/" element={<InicioRedirect />} />
             <Route path="/seguimiento" element={<SeguimientoPage />} />
             <Route
               path="/vacantes/nueva"

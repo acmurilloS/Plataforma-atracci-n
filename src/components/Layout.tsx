@@ -1,5 +1,24 @@
-import { LogOut, Settings } from 'lucide-react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useState } from 'react';
+import {
+  BarChart3,
+  Briefcase,
+  FolderCheck,
+  FolderOpen,
+  LayoutGrid,
+  ListChecks,
+  LogOut,
+  Menu,
+  PlusCircle,
+  ShieldCheck,
+  SlidersHorizontal,
+  Stethoscope,
+  Ticket,
+  UserCog,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../utils/cn';
 import type { RolUsuario } from '../schemas';
@@ -7,132 +26,210 @@ import { Campanita } from './Campanita';
 import { BannerActualizacion } from './BannerActualizacion';
 
 /**
- * Layout · sistema brand (Apple-store light + glass minimal).
+ * Layout · sistema brand con BARRA LATERAL izquierda (reu 03-jul).
  *
- * Wrapper `brand-page` activa Inter + letter-spacing + foco brand + body
- * gradient para TODAS las páginas internas. El topbar es glass strong con
- * shadow layered. Nav links cambian a Inter + slate, con underline brand
- * en la ruta activa.
+ * Sidebar fijo con la navegación agrupada (filtrada por rol) + topbar delgada
+ * con el título de la sección y el usuario. Cada perfil ve solo lo suyo; el
+ * saludo personalizado del home lo pone `SaludoInicio` dentro de cada página.
  */
+
+type Grupo = 'Proceso' | 'Analítica' | 'Administración';
 
 interface ItemNav {
   to: string;
   label: string;
+  icon: LucideIcon;
+  grupo: Grupo;
   roles: RolUsuario[];
   end?: boolean;
 }
 
 const ITEMS: ItemNav[] = [
-  { to: '/seguimiento', label: 'Seguimiento', roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'] },
-  { to: '/mis-vacantes', label: 'Mis vacantes', roles: ['lider'] },
-  { to: '/vacantes/nueva', label: 'Nueva', roles: ['lider', 'coordinador', 'admin'] },
-  { to: '/dashboard', label: 'Dashboard', roles: ['coordinador', 'admin', 'gh'] },
-  { to: '/aprobaciones-aval', label: 'Aprobaciones', roles: ['gh', 'coordinador', 'admin'] },
-  { to: '/examenes-medicos', label: 'Exámenes', roles: ['gh', 'coordinador', 'admin'] },
-  { to: '/carpetas', label: 'Carpetas', roles: ['gh', 'analista', 'coordinador', 'admin'] },
-  { to: '/tickets', label: 'Tickets', roles: ['apoyo', 'analista', 'coordinador', 'admin'] },
-  { to: '/pool', label: 'Pool', roles: ['analista', 'coordinador', 'admin'] },
+  { to: '/seguimiento', label: 'Seguimiento', icon: ListChecks, grupo: 'Proceso', roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'] },
+  { to: '/mis-vacantes', label: 'Mis vacantes', icon: Briefcase, grupo: 'Proceso', roles: ['lider'] },
+  { to: '/vacantes/nueva', label: 'Nueva vacante', icon: PlusCircle, grupo: 'Proceso', roles: ['lider', 'coordinador', 'admin'] },
   {
-    // Sin 'lider' (reu Karen 02-jul): un líder no debe ver TODAS las vacantes
-    // abiertas — hay solicitudes confidenciales (ej. reemplazo de un mismo líder).
-    // El líder solo ve Seguimiento, Mis vacantes y Nueva.
+    // Sin 'lider' (reu Karen 02-jul): hay solicitudes confidenciales.
     to: '/vacantes-abiertas',
     label: 'Vacantes abiertas',
+    icon: FolderOpen,
+    grupo: 'Proceso',
     roles: ['analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'],
   },
-  { to: '/admin/usuarios', label: 'Usuarios', roles: ['admin'] },
-  { to: '/admin/catalogos', label: 'Catálogos', roles: ['admin'] },
+  { to: '/pool', label: 'Pool', icon: Users, grupo: 'Proceso', roles: ['analista', 'coordinador', 'admin'] },
+  { to: '/carpetas', label: 'Carpetas', icon: FolderCheck, grupo: 'Proceso', roles: ['gh', 'analista', 'coordinador', 'admin'] },
+  { to: '/aprobaciones-aval', label: 'Aprobaciones', icon: ShieldCheck, grupo: 'Proceso', roles: ['gh', 'coordinador', 'admin'] },
+  { to: '/examenes-medicos', label: 'Exámenes', icon: Stethoscope, grupo: 'Proceso', roles: ['gh', 'coordinador', 'admin'] },
+  { to: '/tickets', label: 'Tickets', icon: Ticket, grupo: 'Proceso', roles: ['apoyo', 'analista', 'coordinador', 'admin'] },
+  { to: '/dashboard', label: 'Dashboard', icon: BarChart3, grupo: 'Analítica', roles: ['coordinador', 'admin', 'gh'] },
+  { to: '/admin', label: 'Panel admin', icon: LayoutGrid, grupo: 'Administración', roles: ['admin'], end: true },
+  { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog, grupo: 'Administración', roles: ['admin'] },
+  { to: '/admin/catalogos', label: 'Catálogos', icon: SlidersHorizontal, grupo: 'Administración', roles: ['admin'] },
 ];
 
-function navLinkClass({ isActive }: { isActive: boolean }) {
+const GRUPOS: Grupo[] = ['Proceso', 'Analítica', 'Administración'];
+
+const ROL_NOMBRE: Record<string, string> = {
+  admin: 'Administrador',
+  coordinador: 'Coordinación',
+  gh: 'Gestión Humana',
+  analista: 'Analista',
+  lider: 'Líder',
+  talentos: 'Conexión de Talentos',
+  apoyo: 'Apoyo',
+};
+
+function itemClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'relative text-[13px] font-medium whitespace-nowrap py-1.5',
-    'transition-colors duration-150 ease-out',
+    'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors duration-150',
     isActive
-      ? 'text-text-strong after:absolute after:left-0 after:right-0 after:-bottom-px after:h-[2px] after:bg-brand-600 after:rounded-full'
-      : 'text-text-muted hover:text-text-strong',
+      ? 'bg-brand-50 text-brand-700'
+      : 'text-text-muted hover:bg-slate-50 hover:text-text-strong',
   );
 }
 
 export function Layout() {
   const { perfil, rol, cerrarSesion } = useAuth();
+  const location = useLocation();
+  const [abierto, setAbierto] = useState(false);
+
   const visibles = rol ? ITEMS.filter((i) => i.roles.includes(rol)) : [];
-  const esAdmin = rol === 'admin';
+  const gruposVisibles = GRUPOS.map((g) => ({
+    grupo: g,
+    items: visibles.filter((i) => i.grupo === g),
+  })).filter((g) => g.items.length > 0);
+
+  const tituloActivo =
+    ITEMS.find((i) => location.pathname === i.to)?.label ?? 'Plataforma de Atracción';
+  const inicial = (perfil?.nombre || '?').charAt(0).toUpperCase();
+
+  const sidebar = (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <Link
+        to="/"
+        onClick={() => setAbierto(false)}
+        className="flex items-center gap-2.5 px-4 h-16 shrink-0 border-b border-slate-100 group"
+      >
+        <img src="/equitel.png" alt="Equitel" className="h-8 w-auto object-contain" draggable={false} />
+        <div className="leading-tight">
+          <p className="text-[13px] font-semibold text-text-strong tracking-[-0.005em] group-hover:text-brand-700 transition-colors">
+            Atracción
+          </p>
+          <p className="text-[9.5px] uppercase tracking-[0.08em] text-text-subtle">Holding Equitel</p>
+        </div>
+      </Link>
+
+      {/* Nav agrupada */}
+      <nav className="flex-1 overflow-y-auto px-2.5 py-4 space-y-4">
+        {gruposVisibles.map(({ grupo, items }) => (
+          <div key={grupo}>
+            <p className="px-3 mb-1 text-[9.5px] font-bold uppercase tracking-[0.10em] text-text-subtle">
+              {grupo}
+            </p>
+            <div className="space-y-0.5">
+              {items.map((i) => (
+                <NavLink
+                  key={i.to}
+                  to={i.to}
+                  end={i.end}
+                  onClick={() => setAbierto(false)}
+                  className={itemClass}
+                >
+                  <i.icon size={16} strokeWidth={1.75} className="shrink-0" />
+                  {i.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Usuario + salir */}
+      <div className="shrink-0 border-t border-slate-100 p-3">
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[13px] font-semibold shrink-0">
+            {inicial}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] font-medium text-text-strong truncate">
+              {perfil?.nombre} {perfil?.apellido}
+            </p>
+            <p className="text-[11px] text-text-subtle truncate">{ROL_NOMBRE[rol ?? ''] ?? rol}</p>
+          </div>
+          <button
+            onClick={() => cerrarSesion()}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+            className="text-text-muted hover:text-text-strong transition-colors p-1.5 rounded-md hover:bg-slate-100 shrink-0"
+          >
+            <LogOut size={15} strokeWidth={1.75} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="brand-page font-brand min-h-screen flex flex-col">
-      <BannerActualizacion />
-      <header className="print:hidden sticky top-0 z-40 brand-glass-strong border-b border-slate-200/60">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          {/* Logo + producto */}
-          <Link to="/" className="flex items-center gap-3 shrink-0 group">
-            <img
-              src="/equitel.png"
-              alt="Equitel"
-              className="h-9 w-auto object-contain"
-              draggable={false}
-            />
-            <div className="hidden sm:block border-l border-slate-200 pl-3">
-              <p className="text-[13px] font-semibold text-text-strong leading-tight tracking-[-0.005em] group-hover:text-brand-700 transition-colors">
-                Plataforma de Atracción
-              </p>
-              <p className="text-[10px] text-text-subtle tracking-[0.02em] leading-tight uppercase">
-                Holding Equitel
-              </p>
-            </div>
-          </Link>
+    <div className="brand-page font-brand min-h-screen flex">
+      {/* Sidebar fijo (desktop) */}
+      <aside className="print:hidden hidden md:flex md:flex-col w-64 shrink-0 border-r border-slate-200 bg-white sticky top-0 h-screen">
+        {sidebar}
+      </aside>
 
-          {/* Nav */}
-          <nav className="flex items-center gap-6 flex-wrap">
-            {visibles.map((i) => (
-              <NavLink key={i.to} to={i.to} end={i.end} className={navLinkClass}>
-                {i.label}
-              </NavLink>
-            ))}
-            {esAdmin && (
-              <NavLink
-                to="/admin"
-                end
-                className={({ isActive }) =>
-                  cn(
-                    'relative flex items-center gap-1.5 text-[13px] font-medium whitespace-nowrap py-1.5',
-                    'transition-colors duration-150 ease-out',
-                    isActive
-                      ? 'text-text-strong after:absolute after:left-0 after:right-0 after:-bottom-px after:h-[2px] after:bg-brand-600 after:rounded-full'
-                      : 'text-text-muted hover:text-text-strong',
-                  )
-                }
-              >
-                <Settings size={13} strokeWidth={1.75} />
-                Admin
-              </NavLink>
-            )}
-
-            {/* Profile cluster */}
-            <div className="flex items-center gap-3 pl-5 ml-1 border-l border-slate-200/80">
-              <Campanita />
-              <div className="hidden md:flex items-center gap-1.5 text-[12px]">
-                <span className="font-medium text-text-strong">
-                  {perfil?.nombre ?? ''}
-                </span>
-                <span className="text-text-subtle">·</span>
-                <span className="text-text-muted capitalize">{rol ?? '—'}</span>
-              </div>
-              <button
-                onClick={cerrarSesion}
-                className="text-text-muted hover:text-text-strong transition-colors p-1 rounded-md hover:bg-slate-100"
-                title="Cerrar sesión"
-                aria-label="Cerrar sesión"
-              >
-                <LogOut size={15} strokeWidth={1.75} />
-              </button>
-            </div>
-          </nav>
+      {/* Sidebar deslizable (móvil) */}
+      {abierto && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setAbierto(false)} />
+          <aside className="relative w-64 max-w-[82%] bg-white border-r border-slate-200 h-full shadow-xl">
+            <button
+              onClick={() => setAbierto(false)}
+              className="absolute top-4 right-3 text-text-muted p-1"
+              aria-label="Cerrar menú"
+            >
+              <X size={18} strokeWidth={1.75} />
+            </button>
+            {sidebar}
+          </aside>
         </div>
-      </header>
-      <main className="flex-1">
-        <Outlet />
-      </main>
+      )}
+
+      {/* Columna principal */}
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+        <BannerActualizacion />
+        <header className="print:hidden sticky top-0 z-40 brand-glass-strong border-b border-slate-200/60">
+          <div className="px-5 md:px-8 h-16 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                onClick={() => setAbierto(true)}
+                className="md:hidden text-text-muted hover:text-text-strong p-1 -ml-1"
+                aria-label="Abrir menú"
+              >
+                <Menu size={20} strokeWidth={1.75} />
+              </button>
+              <h2 className="text-[15px] font-semibold text-text-strong tracking-[-0.01em] truncate">
+                {tituloActivo}
+              </h2>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <Campanita />
+              <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-200/80">
+                <div className="text-right leading-tight">
+                  <p className="text-[12.5px] font-medium text-text-strong">{perfil?.nombre}</p>
+                  <p className="text-[10.5px] text-text-subtle">{ROL_NOMBRE[rol ?? ''] ?? rol}</p>
+                </div>
+                <div className="h-8 w-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[13px] font-semibold">
+                  {inicial}
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

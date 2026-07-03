@@ -9,6 +9,7 @@ import { SemaforoANS } from '../../components/ui/SemaforoANS';
 import { cn } from '../../utils/cn';
 import { diasTranscurridos, esVacanteCerrada } from '../../utils/reportesVacantes';
 import type { PostulacionDoc, VacanteDoc } from '../../schemas';
+import { SaludoInicio } from '../../components/SaludoInicio';
 
 /**
  * DashboardCoordPage · sistema brand.
@@ -80,6 +81,8 @@ export default function DashboardCoordPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">
+      <SaludoInicio />
+
       {/* Hero */}
       <div>
         <Pill tono="brand" dot>

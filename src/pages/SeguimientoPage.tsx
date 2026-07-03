@@ -16,6 +16,7 @@ import { useColeccion, type FiltroTupla } from '../hooks/useColeccion';
 import { cn } from '../utils/cn';
 import type { VacanteDoc } from '../schemas';
 import { Button, KpiCard, Pill } from '../components/brand';
+import { SaludoInicio } from '../components/SaludoInicio';
 
 /**
  * SeguimientoPage · sistema brand.
@@ -115,6 +116,8 @@ export default function SeguimientoPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">
+      <SaludoInicio />
+
       {/* ─── Hero header ──────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-6">
         <div className="max-w-2xl">

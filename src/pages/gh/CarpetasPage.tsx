@@ -24,6 +24,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { DotacionModal } from '../../components/gh/DotacionModal';
+import { SaludoInicio } from '../../components/SaludoInicio';
 import { cn } from '../../utils/cn';
 import {
   CATALOGO_DOCUMENTOS_CARPETA,
@@ -322,6 +323,8 @@ export default function CarpetasPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
+      <SaludoInicio />
+
       {/* Hero */}
       <div>
         <Pill tono="brand" dot>

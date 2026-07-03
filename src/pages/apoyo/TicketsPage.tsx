@@ -20,6 +20,7 @@ import {
   type TicketConexionDoc,
 } from '../../schemas';
 import { Card, Pill, type PillTono } from '../../components/brand';
+import { SaludoInicio } from '../../components/SaludoInicio';
 import { cn } from '../../utils/cn';
 
 /**
@@ -240,6 +241,8 @@ export default function TicketsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">
+      <SaludoInicio />
+
       {/* Hero */}
       <div>
         <Pill tono="brand" dot>
