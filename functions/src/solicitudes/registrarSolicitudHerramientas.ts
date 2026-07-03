@@ -30,11 +30,12 @@ const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 const SOLICITUD_HERRAMIENTAS_SHEET_ID = defineSecret('SOLICITUD_HERRAMIENTAS_SHEET_ID');
 
 /**
- * Pestaña de la hoja donde se agregan las filas. Hoy apunta a la copia de
- * pruebas ("Prueba de registros") que compartió Sebastián. Cuando pasemos a
- * producción, cambiar a la pestaña real (probablemente "Registro").
+ * Pestaña de la hoja REAL "Solicitud de herramientas tecnológicas (respuestas)"
+ * donde IT lleva su seguimiento. Producción = "Registro" (reu Karen 03-jul;
+ * verificado que la pestaña existe en la hoja). La pestaña "Prueba de registros"
+ * queda como respaldo de pruebas.
  */
-const HOJA = 'Prueba de registros';
+const HOJA = 'Registro';
 
 /** Remitente unificado de todo correo saliente de la plataforma. */
 const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
