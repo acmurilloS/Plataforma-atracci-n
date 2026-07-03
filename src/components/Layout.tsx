@@ -213,15 +213,6 @@ export function Layout() {
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <Campanita />
-              <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-200/80">
-                <div className="text-right leading-tight">
-                  <p className="text-[12.5px] font-medium text-text-strong">{perfil?.nombre}</p>
-                  <p className="text-[10.5px] text-text-subtle">{ROL_NOMBRE[rol ?? ''] ?? rol}</p>
-                </div>
-                <div className="h-8 w-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[13px] font-semibold">
-                  {inicial}
-                </div>
-              </div>
             </div>
           </div>
         </header>
