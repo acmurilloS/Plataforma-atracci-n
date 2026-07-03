@@ -48,16 +48,7 @@ const ROL_LABEL: Record<string, string> = {
   apoyo: 'Apoyo',
   talentos: 'Conexión de Talentos',
 };
-const ROLES_ASIGNABLES = ['admin', 'coordinador', 'gh', 'analista', 'lider', 'apoyo', 'talentos'];
-
-const AREAS: { area: string; label: string }[] = [
-  { area: 'it', label: 'Sistemas / IT' },
-  { area: 'compras', label: 'Compras' },
-  { area: 'bodega', label: 'Bodega' },
-  { area: 'contabilidad', label: 'Contabilidad' },
-  { area: 'administrativo', label: 'Administrativo' },
-  { area: 'talentos', label: 'Conexión / Talentos' },
-];
+const ROLES_ASIGNABLES = ['admin', 'coordinador', 'gh', 'analista', 'lider', 'talentos'];
 
 const SETEAR_ROL_URL = 'https://us-central1-ptm-atraccion.cloudfunctions.net/setearRolUsuario';
 
@@ -91,8 +82,7 @@ export default function UsuariosRolesPage() {
   const [filtroRol, setFiltroRol] = useState('');
 
   // Formulario de pre-asignación (invitar rol nuevo por correo).
-  const [rolPre, setRolPre] = useState<'gh' | 'apoyo' | 'talentos'>('gh');
-  const [area, setArea] = useState('');
+  const [rolPre, setRolPre] = useState<'gh' | 'talentos'>('gh');
   const [texto, setTexto] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [errorPre, setErrorPre] = useState('');
@@ -125,19 +115,23 @@ export default function UsuariosRolesPage() {
     [texto],
   );
 
+  // El rol 'apoyo' no se usa en la plataforma (los gestores/IT no llevan usuario,
+  // solo notificación) → se ocultan del listado y no se ofrece como opción.
+  const usuariosVisibles = useMemo(() => usuarios.filter((u) => u.rol !== 'apoyo'), [usuarios]);
+
   const conteos = useMemo(
     () => ({
-      todos: usuarios.length,
-      activos: usuarios.filter((u) => u.activo).length,
-      inactivos: usuarios.filter((u) => !u.activo).length,
+      todos: usuariosVisibles.length,
+      activos: usuariosVisibles.filter((u) => u.activo).length,
+      inactivos: usuariosVisibles.filter((u) => !u.activo).length,
       invitados: invitados.length,
     }),
-    [usuarios, invitados],
+    [usuariosVisibles, invitados],
   );
 
   const usuariosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return usuarios
+    return usuariosVisibles
       .filter((u) => (tab === 'activos' ? u.activo : tab === 'inactivos' ? !u.activo : true))
       .filter((u) => (filtroRol ? u.rol === filtroRol : true))
       .filter((u) =>
@@ -146,7 +140,7 @@ export default function UsuariosRolesPage() {
           : `${u.nombre} ${u.apellido} ${u.email} ${u.empresa_codigo ?? ''}`.toLowerCase().includes(q),
       )
       .sort((a, b) => `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`, 'es'));
-  }, [usuarios, tab, filtroRol, busqueda]);
+  }, [usuariosVisibles, tab, filtroRol, busqueda]);
 
   async function cambiarRol(u: UsuarioAdmin, nuevoRol: string) {
     if (nuevoRol === u.rol || !user) return;
@@ -197,10 +191,6 @@ export default function UsuariosRolesPage() {
   async function marcar() {
     setErrorPre('');
     setResultadoPre(null);
-    if (rolPre === 'apoyo' && !area) {
-      setErrorPre('Elige el área de apoyo.');
-      return;
-    }
     if (correos.length === 0) {
       setErrorPre('Pega al menos un correo.');
       return;
@@ -211,7 +201,6 @@ export default function UsuariosRolesPage() {
       const res = (await fn({
         emails: correos,
         rol: rolPre,
-        area_apoyo: rolPre === 'apoyo' ? area : undefined,
       })) as { data: { creados: number; invalidos: string[] } };
       setResultadoPre(res.data);
       setTexto('');
@@ -459,21 +448,19 @@ export default function UsuariosRolesPage() {
           <p className="text-[10px] font-bold tracking-[0.10em] uppercase">Invitar / pre-asignar rol</p>
         </div>
         <p className="text-[12.5px] text-text-muted mb-4 max-w-2xl">
-          Marca correos con un rol sensible (GH, apoyo o Conexión de Talentos). Cuando la persona
-          entre por primera vez con Google, ya le queda su perfil. <strong>Admin</strong> y{' '}
-          <strong>coordinación</strong> no se asignan por aquí.
+          Marca correos con <strong>Gestión Humana</strong> o <strong>Conexión de Talentos</strong>.
+          Cuando la persona entre por primera vez con Google, ya le queda su perfil. Los{' '}
+          <strong>analistas</strong> y <strong>líderes</strong> eligen su rol al entrar;{' '}
+          <strong>admin</strong> y <strong>coordinación</strong> los asigna un administrador.
         </p>
 
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {(['gh', 'apoyo', 'talentos'] as const).map((r) => (
+            {(['gh', 'talentos'] as const).map((r) => (
               <button
                 key={r}
                 type="button"
-                onClick={() => {
-                  setRolPre(r);
-                  if (r !== 'apoyo') setArea('');
-                }}
+                onClick={() => setRolPre(r)}
                 className={cn(
                   'rounded-lg border px-3.5 py-2 text-[13px] font-medium transition-colors',
                   rolPre === r
@@ -485,20 +472,6 @@ export default function UsuariosRolesPage() {
               </button>
             ))}
           </div>
-
-          {rolPre === 'apoyo' && (
-            <div>
-              <p className="text-[12px] font-medium text-text-muted mb-1.5">Área de apoyo</p>
-              <select value={area} onChange={(e) => setArea(e.target.value)} className={controlClass}>
-                <option value="">Elige un área…</option>
-                {AREAS.map((a) => (
-                  <option key={a.area} value={a.area}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <label className="block">
             <span className="text-[12px] font-medium text-text-muted">
