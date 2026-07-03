@@ -6,6 +6,7 @@ import {
   Calendar,
   CheckCircle2,
   CircleDollarSign,
+  Download,
   FileText,
   Layers,
   ShieldCheck,
@@ -13,6 +14,7 @@ import {
   User2,
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { FlujogramaTimeline } from '../components/FlujogramaTimeline';
 import { PoliticaCriticidadBanner } from '../components/vacantes/PoliticaCriticidadBanner';
 import { BitacoraReprocesos } from '../components/vacantes/BitacoraReprocesos';
@@ -20,10 +22,13 @@ import { SelectorAnalista } from '../components/vacantes/SelectorAnalista';
 import { Button, Card, Pill, type PillTono } from '../components/brand';
 import { useAuth } from '../hooks/useAuth';
 import { useVacantes } from '../hooks/useVacantes';
-import { functions } from '../lib/firebase';
+import { useFestivosTodos } from '../hooks/useCatalogos';
+import { functions, db } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
 import { formatearCOP } from '../utils/moneda';
-import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../schemas';
+import { agruparPostulaciones, construirBaseVacantes } from '../utils/reportesVacantes';
+import { exportarVacanteIndividual } from '../utils/exportarExcel';
+import { TIPO_SOLICITUD_LABEL, type PostulacionDoc, type VacanteDoc } from '../schemas';
 
 /**
  * VacanteDetallePage · sistema brand.
@@ -52,8 +57,14 @@ const ESTADO_TONO: Record<string, PillTono> = {
 export default function VacanteDetallePage() {
   const { id } = useParams<{ id: string }>();
   const { suscribirVacante } = useVacantes();
+  const { rol } = useAuth();
+  const festivos = useFestivosTodos();
   const [vac, setVac] = useState<VacanteDoc | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [descargando, setDescargando] = useState(false);
+
+  const esStaffReporte =
+    rol === 'analista' || rol === 'coordinador' || rol === 'gh' || rol === 'admin';
 
   useEffect(() => {
     if (!id) return;
@@ -64,6 +75,27 @@ export default function VacanteDetallePage() {
       setErr(e instanceof Error ? e.message : 'No pudimos cargar la vacante.');
     }
   }, [id, suscribirVacante]);
+
+  /** Descarga la info de ESTA vacante en Excel (reu Karen 02-jul), con los mismos
+   *  datos de la base (consecutivo, analista, líder, ANS, conteos). */
+  async function descargarInfoVacante() {
+    if (!vac) return;
+    setDescargando(true);
+    setErr(null);
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'postulaciones'), where('vacante_id', '==', vac.id)),
+      );
+      const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PostulacionDoc[];
+      const conteos = agruparPostulaciones(posts);
+      const [fila] = construirBaseVacantes([vac], conteos, festivos, new Date());
+      if (fila) await exportarVacanteIndividual(fila, vac.consecutivo || vac.id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No pudimos generar el Excel de la vacante.');
+    } finally {
+      setDescargando(false);
+    }
+  }
 
   if (err) {
     return (
@@ -126,6 +158,17 @@ export default function VacanteDetallePage() {
           <FileText size={13} strokeWidth={1.75} />
           Solicitud de Integrantes (VIDA-F-01)
         </Link>
+        {esStaffReporte && (
+          <button
+            type="button"
+            onClick={descargarInfoVacante}
+            disabled={descargando}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150 disabled:opacity-60"
+          >
+            <Download size={13} strokeWidth={1.75} />
+            {descargando ? 'Generando…' : 'Descargar información (Excel)'}
+          </button>
+        )}
       </div>
 
       <PoliticaCriticidadBanner criticidad={vac.criticidad} />

@@ -44,3 +44,17 @@ export function exportarBaseVacantes(filas: FilaExcel[]): Promise<void> {
 export function exportarReporteMensual(filas: FilaExcel[]): Promise<void> {
   return descargar(filas, 'Resumen mensual', `Reporte_Mensual_${hoyIso()}.xlsx`);
 }
+
+/**
+ * Descarga la información de UNA vacante (reu Karen 02-jul). Toma la fila ya
+ * calculada de la base (mismos campos: consecutivo, analista, líder, ANS, conteos…)
+ * y la presenta en vertical Campo/Valor, más legible para un solo proceso.
+ */
+export function exportarVacanteIndividual(fila: FilaExcel, consecutivo: string): Promise<void> {
+  const detalle: FilaExcel[] = Object.entries(fila).map(([campo, valor]) => ({
+    Campo: campo,
+    Valor: valor === undefined || valor === null ? '' : valor,
+  }));
+  const slug = (consecutivo || 'detalle').replace(/[^\w-]+/g, '_');
+  return descargar(detalle, 'Vacante', `Vacante_${slug}_${hoyIso()}.xlsx`);
+}

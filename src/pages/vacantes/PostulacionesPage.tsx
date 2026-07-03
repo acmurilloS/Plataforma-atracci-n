@@ -398,7 +398,7 @@ export default function PostulacionesPage() {
               </p>
             </div>
             <p className="text-[13px] text-text-muted mt-2 max-w-2xl leading-relaxed">
-              Selecciona varios PDFs a la vez (Magneto, Drive). Cada archivo crea un integrante
+              Selecciona varios PDFs a la vez (Magneto, Drive). Cada archivo crea un candidato
               provisional + una postulación con el CV adjunto. Luego editas los datos en{' '}
               <span className="font-semibold text-text-body">Abrir →</span>.
             </p>
@@ -630,7 +630,7 @@ export default function PostulacionesPage() {
           <thead className="bg-slate-50 text-text-muted">
             <tr>
               <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-[0.06em] text-left">
-                Integrante
+                Candidato
               </th>
               <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-[0.06em] text-left">
                 Contacto

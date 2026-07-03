@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Printer, Save } from 'lucide-react';
+import { ArrowLeft, Check, Download, Save } from 'lucide-react';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -8,6 +8,10 @@ import { formatearFecha } from '../../utils/fechas';
 import type { SolicitudIntegranteDoc, VacanteDoc } from '../../schemas';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Pill } from '../../components/brand';
+import {
+  estamparSolicitudIntegrante,
+  type SolicitudEstampado,
+} from '../../utils/estamparSolicitudIntegrante';
 
 /**
  * SolicitudIntegrantePage · controles brand + hoja oficial VIDA-F-01 v08.
@@ -78,6 +82,7 @@ export default function SolicitudIntegrantePage() {
   const [form, setForm] = useState<FormSolicitud>(FORM_VACIO);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  const [descargando, setDescargando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -126,6 +131,66 @@ export default function SolicitudIntegrantePage() {
       setErr(e instanceof Error ? e.message : 'No pudimos guardar.');
     } finally {
       setGuardando(false);
+    }
+  }
+
+  /** Genera el formato OFICIAL VIDA-F-01 estampado con los datos reales y lo descarga. */
+  async function descargarOficial() {
+    if (!vacante) return;
+    setDescargando(true);
+    setErr(null);
+    try {
+      const reemplazaNombre =
+        vacante.tipo_solicitud === 'reemplazo_indefinido' && vacante.reemplaza_a_nombre
+          ? vacante.reemplaza_a_nombre
+          : 'NA';
+      const tiempoReemp =
+        vacante.tipo_solicitud === 'necesidad_temporal' && vacante.temporalidad_meses != null
+          ? `${vacante.temporalidad_meses} mes${vacante.temporalidad_meses === 1 ? '' : 'es'}`
+          : 'NA';
+
+      const datos: SolicitudEstampado = {
+        consecutivo: vacante.consecutivo,
+        fecha_solicitud: formatearFecha((vacante.creado_en?.toDate?.() ?? new Date()) as Date),
+        solicitante: vacante.lider_nombre,
+        cargo_solicitante: form.cargo_solicitante,
+        cargo_solicita: vacante.cargo_nombre,
+        empresa: vacante.empresa_nombre,
+        unidad: vacante.unidad_nombre,
+        sede: vacante.sede_nombre,
+        cargo_reporta: form.cargo_reporta,
+        tipo_vinculacion: form.tipo_vinculacion,
+        cargo_reemplazo: vacante.cargo_nombre,
+        reemplaza_a: reemplazaNombre,
+        tiempo_reemplazo: tiempoReemp,
+        preferible_poseer: form.preferible_poseer,
+        disponibilidad_viajar: form.disponibilidad_viajar,
+        trabajo_en: form.trabajo_en,
+        salario_base: vacante.salario_base != null ? vacante.salario_base.toLocaleString('es-CO') : '',
+        rodamiento: vacante.rodamiento ? 'Sí' : 'No',
+        rodamiento_valor: form.rodamiento_valor,
+        comisiones: vacante.comisiones_texto,
+        bonificaciones: form.bonificaciones_texto,
+        garantizado_total: form.garantizado_total,
+        valor_prestacional: form.valor_prestacional,
+        valor_no_prestacional: form.valor_no_prestacional,
+        garantizado_tiempo: form.garantizado_tiempo,
+        observaciones: form.observaciones,
+      };
+
+      const blob = await estamparSolicitudIntegrante(datos);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Solicitud_Integrante_${vacante.consecutivo || vacante.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No pudimos generar el formato oficial.');
+    } finally {
+      setDescargando(false);
     }
   }
 
@@ -187,11 +252,13 @@ export default function SolicitudIntegrantePage() {
               {guardando ? 'Guardando…' : 'Guardar'}
             </Button>
             <Button
-              onClick={() => window.print()}
+              onClick={descargarOficial}
+              disabled={descargando}
+              loading={descargando}
               variant="neutral-secondary"
-              icon={<Printer size={13} strokeWidth={1.75} />}
+              icon={<Download size={13} strokeWidth={1.75} />}
             >
-              Imprimir / PDF
+              {descargando ? 'Generando…' : 'Descargar formato oficial'}
             </Button>
           </div>
         </div>

@@ -34,16 +34,34 @@ export function useSedesDeEmpresa(empresaCodigo: string | null | undefined) {
       return;
     }
     setCargando(true);
-    const q = query(
-      collection(db, 'sedes'),
-      where('empresa_codigo', '==', empresaCodigo),
-      where('activo', '==', true),
-      orderBy('nombre'),
-    );
+    // Reu Karen 02-jul: hay personal de TODAS las empresas en TODAS las ciudades
+    // (Génesis es de Equitel y está en Barranquilla; Juliet en Medellín…). Antes
+    // el selector solo mostraba las sedes de la empresa (Equitel/Ingenergía = solo
+    // Bogotá/Mosquera). Ahora se muestran TODAS las ciudades del holding para
+    // cualquier empresa: se prioriza la sede PROPIA de la empresa cuando existe
+    // (conserva su código en el consecutivo EMPRESA-SEDE) y se completan las
+    // ciudades faltantes con las de otras empresas (dedupe por ciudad).
+    const q = query(collection(db, 'sedes'), orderBy('nombre'));
     return onSnapshot(
       q,
       (snap) => {
-        setSedes(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SedeDoc, 'id'>) })));
+        const todas = snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as Omit<SedeDoc, 'id'>) }))
+          .filter((s) => s.activo !== false);
+        const clave = (s: SedeDoc) => (s.ciudad || s.nombre || '').trim().toLowerCase();
+        const porCiudad = new Map<string, SedeDoc>();
+        // 1) las sedes de la empresa seleccionada primero (mantienen su código)
+        for (const s of todas) {
+          if (s.empresa_codigo === empresaCodigo) porCiudad.set(clave(s), s);
+        }
+        // 2) completar las ciudades que la empresa no tiene, con las de otras
+        for (const s of todas) {
+          const k = clave(s);
+          if (!porCiudad.has(k)) porCiudad.set(k, s);
+        }
+        const arr = Array.from(porCiudad.values());
+        arr.sort((a, b) => (a.ciudad || a.nombre).localeCompare(b.ciudad || b.nombre, 'es'));
+        setSedes(arr);
         setCargando(false);
       },
       () => setCargando(false),

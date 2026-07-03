@@ -33,9 +33,12 @@ const ITEMS: ItemNav[] = [
   { to: '/tickets', label: 'Tickets', roles: ['apoyo', 'analista', 'coordinador', 'admin'] },
   { to: '/pool', label: 'Pool', roles: ['analista', 'coordinador', 'admin'] },
   {
+    // Sin 'lider' (reu Karen 02-jul): un líder no debe ver TODAS las vacantes
+    // abiertas — hay solicitudes confidenciales (ej. reemplazo de un mismo líder).
+    // El líder solo ve Seguimiento, Mis vacantes y Nueva.
     to: '/vacantes-abiertas',
     label: 'Vacantes abiertas',
-    roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin'],
+    roles: ['analista', 'coordinador', 'gh', 'apoyo', 'admin'],
   },
   { to: '/admin/usuarios', label: 'Usuarios', roles: ['admin', 'coordinador'] },
   { to: '/admin/catalogos', label: 'Catálogos', roles: ['admin'] },

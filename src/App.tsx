@@ -208,7 +208,14 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/vacantes-abiertas" element={<VacantesAbiertasPage />} />
+            <Route
+              path="/vacantes-abiertas"
+              element={
+                <ProtectedRoute roles={['analista', 'coordinador', 'gh', 'apoyo', 'admin']}>
+                  <VacantesAbiertasPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/dashboard"
               element={
