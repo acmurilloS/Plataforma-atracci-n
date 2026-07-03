@@ -40,7 +40,7 @@ export const setearRolUsuario = onRequest(
       }
 
       const { uid, rol } = (req.body ?? {}) as { uid?: string; rol?: string };
-      const rolesValidos = ['admin', 'lider', 'analista', 'coordinador', 'gh', 'apoyo'];
+      const rolesValidos = ['admin', 'lider', 'analista', 'coordinador', 'gh', 'apoyo', 'talentos'];
 
       if (!uid || !rol || !rolesValidos.includes(rol)) {
         res.status(400).json({

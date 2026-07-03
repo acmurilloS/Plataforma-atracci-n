@@ -1,0 +1,80 @@
+import { getAuth } from 'firebase-admin/auth';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { db } from '../utils/admin';
+
+/**
+ * listarUsuariosAdmin · admin-only. Devuelve todo lo que la pestaña de Usuarios
+ * necesita para gestión y trazabilidad de acceso (reu 03-jul):
+ *  - `usuarios`: los que ya ENTRARON (tienen doc), con rol, área/empresa, estado
+ *    (activo) y ÚLTIMO LOGIN (de Firebase Auth, que sí lo registra).
+ *  - `invitados`: pre-asignaciones de rol que TODAVÍA no se usan (correos
+ *    marcados por el staff que aún no han ingresado).
+ *
+ * Los timestamps salen en milisegundos (o ISO para los de Auth) para el cliente.
+ */
+export const listarUsuariosAdmin = onCall({ region: 'us-central1' }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  if ((req.auth.token as Record<string, unknown>).rol !== 'admin') {
+    throw new HttpsError('permission-denied', 'Solo un administrador puede ver la gestión de usuarios.');
+  }
+
+  // Metadata de Auth (último login + si la cuenta está deshabilitada) — paginado.
+  const authMeta = new Map<
+    string,
+    { ultimo_login: string | null; deshabilitado: boolean; creado: string | null }
+  >();
+  let pageToken: string | undefined;
+  do {
+    const page = await getAuth().listUsers(1000, pageToken);
+    page.users.forEach((u) => {
+      authMeta.set(u.uid, {
+        ultimo_login: u.metadata.lastSignInTime || null,
+        deshabilitado: u.disabled,
+        creado: u.metadata.creationTime || null,
+      });
+    });
+    pageToken = page.pageToken;
+  } while (pageToken);
+
+  const toMs = (ts: unknown): number | null => {
+    const m = (ts as { toMillis?: () => number })?.toMillis?.();
+    return typeof m === 'number' ? m : null;
+  };
+
+  const snap = await db.collection('usuarios').get();
+  const usuarios = snap.docs.map((d) => {
+    const data = d.data();
+    const meta = authMeta.get(d.id);
+    return {
+      uid: d.id,
+      email: String(data.email ?? ''),
+      nombre: String(data.nombre ?? ''),
+      apellido: String(data.apellido ?? ''),
+      rol: String(data.rol ?? ''),
+      area_apoyo: data.area_apoyo ? String(data.area_apoyo) : null,
+      empresa_codigo: data.empresa_codigo ? String(data.empresa_codigo) : null,
+      activo: data.activo !== false,
+      auth_deshabilitado: meta?.deshabilitado ?? false,
+      ultimo_login: meta?.ultimo_login ?? null,
+      creado_en: toMs(data.creado_en),
+      fuente_rol: data.fuente_rol ? String(data.fuente_rol) : null,
+    };
+  });
+
+  // Pre-asignaciones que aún NO se han usado (invitados que no han entrado).
+  const preSnap = await db.collection('preasignaciones_rol').get();
+  const invitados = preSnap.docs
+    .filter((d) => !d.data().usado_en)
+    .map((d) => {
+      const data = d.data();
+      return {
+        email: String(data.email ?? d.id),
+        rol: String(data.rol ?? ''),
+        area_apoyo: data.area_apoyo ? String(data.area_apoyo) : null,
+        creado_en: toMs(data.creado_en),
+        creado_por: data.creado_por ? String(data.creado_por) : null,
+      };
+    });
+
+  return { usuarios, invitados };
+});

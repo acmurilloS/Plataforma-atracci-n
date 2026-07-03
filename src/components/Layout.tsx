@@ -40,7 +40,7 @@ const ITEMS: ItemNav[] = [
     label: 'Vacantes abiertas',
     roles: ['analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'],
   },
-  { to: '/admin/usuarios', label: 'Usuarios', roles: ['admin', 'coordinador'] },
+  { to: '/admin/usuarios', label: 'Usuarios', roles: ['admin'] },
   { to: '/admin/catalogos', label: 'Catálogos', roles: ['admin'] },
 ];
 

@@ -7,6 +7,9 @@ export { setearRolUsuario } from './auth/setearRolUsuario';
 export { autoasignarRol } from './auth/autoasignarRol';
 // El staff pre-asigna roles sensibles (gh, apoyo) por correo, en lote.
 export { preasignarRoles } from './auth/preasignarRoles';
+// Pestaña de Usuarios (admin): listar con último login + activar/desactivar (reu 03-jul).
+export { listarUsuariosAdmin } from './auth/listarUsuariosAdmin';
+export { cambiarEstadoUsuario } from './auth/cambiarEstadoUsuario';
 
 // Subir PDFs (avales, CVs, docs) a la Shared Drive corporativa de Equitel.
 export { subirArchivoADrive } from './drive/subirArchivoADrive';

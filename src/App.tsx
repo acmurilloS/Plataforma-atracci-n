@@ -58,7 +58,29 @@ function AppShell() {
  * de rol en vez de la app vacía. Con rol asignado, entra normal.
  */
 function ShellConRol() {
-  const { rol, cargando } = useAuth();
+  const { rol, perfil, cargando, cerrarSesion } = useAuth();
+  // Cuenta desactivada por un admin: se bloquea el acceso a la app (además, en
+  // Auth la cuenta queda deshabilitada y la sesión cae en el próximo refresco).
+  if (!cargando && perfil && perfil.activo === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6">
+        <div className="max-w-md text-center space-y-4">
+          <h1 className="text-2xl font-semibold text-text-strong">Cuenta desactivada</h1>
+          <p className="text-[14px] text-text-muted leading-relaxed">
+            Tu acceso a la Plataforma de Atracción fue desactivado. Si crees que es un
+            error, contacta a un administrador.
+          </p>
+          <button
+            type="button"
+            onClick={() => cerrarSesion()}
+            className="inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-text-strong hover:bg-slate-50"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (!cargando && !rol) return <OnboardingRolPage />;
   return <Layout />;
 }
@@ -248,7 +270,7 @@ export default function App() {
             <Route
               path="/admin/usuarios"
               element={
-                <ProtectedRoute roles={['admin', 'coordinador']}>
+                <ProtectedRoute roles={['admin']}>
                   <UsuariosRolesPage />
                 </ProtectedRoute>
               }
