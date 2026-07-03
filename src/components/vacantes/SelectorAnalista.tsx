@@ -47,6 +47,7 @@ export function SelectorAnalista({ value, onChange, disabled }: Props) {
       {analistas.map((a) => (
         <option key={a.id} value={a.id}>
           {a.nombre} {a.apellido}
+          {a.id === value ? ' · actual' : ''}
         </option>
       ))}
     </select>
