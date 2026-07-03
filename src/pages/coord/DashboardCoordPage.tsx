@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Activity, BarChart3, Building2, Clock } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useFestivosTodos } from '../../hooks/useCatalogos';
-import { Card, Pill, type PillTono } from '../../components/brand';
+import { Card, KpiCard, Pill, type PillTono } from '../../components/brand';
 import { ReportesDescarga } from '../../components/dashboard/ReportesDescarga';
 import { SemaforoANS } from '../../components/ui/SemaforoANS';
 import { cn } from '../../utils/cn';
@@ -105,15 +105,15 @@ export default function DashboardCoordPage() {
 
       {/* Hero numbers */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <HeroStat
-          label="Total histórico"
+        <KpiCard
+          eyebrow="Total histórico"
           valor={stats.total}
           caption="Vacantes abiertas desde el inicio del periodo."
           icono={<BarChart3 size={18} strokeWidth={1.75} />}
           tono="neutral"
         />
-        <HeroStat
-          label="Activas"
+        <KpiCard
+          eyebrow="Activas"
           valor={stats.activas}
           caption="En cualquier etapa del flujograma. Si baja repentino, algo se cerró desierto."
           icono={<Activity size={18} strokeWidth={1.75} />}
@@ -196,60 +196,6 @@ export default function DashboardCoordPage() {
           ))}
         </ul>
       </Card>
-    </div>
-  );
-}
-
-function HeroStat({
-  label,
-  valor,
-  caption,
-  icono,
-  tono = 'neutral',
-}: {
-  label: string;
-  valor: number;
-  caption: string;
-  icono?: React.ReactNode;
-  tono?: 'brand' | 'neutral';
-}) {
-  return (
-    <div className="bg-white rounded-md border border-slate-200 p-6 shadow-brand-card">
-      <div className="flex items-start justify-between mb-5">
-        <div className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              'w-1.5 h-1.5 rounded-full',
-              tono === 'brand' ? 'bg-brand-500' : 'bg-slate-400',
-            )}
-          />
-          <p
-            className={cn(
-              'text-[10px] font-bold tracking-[0.10em] uppercase',
-              tono === 'brand' ? 'text-brand-700' : 'text-text-muted',
-            )}
-          >
-            {label}
-          </p>
-        </div>
-        <div
-          className={cn(
-            'w-10 h-10 rounded-md flex items-center justify-center',
-            tono === 'brand' ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-text-muted',
-          )}
-        >
-          {icono}
-        </div>
-      </div>
-      <span
-        className={cn(
-          'text-[64px] font-extralight leading-[0.9] tracking-[-0.05em] tabular-nums',
-          tono === 'brand' ? 'text-brand-700' : 'text-text-strong',
-        )}
-      >
-        {valor}
-      </span>
-      <p className="text-[12px] text-text-subtle font-medium mt-2">{caption}</p>
     </div>
   );
 }

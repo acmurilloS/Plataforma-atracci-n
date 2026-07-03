@@ -93,7 +93,7 @@ export function KpiCard({
     <div
       className={cn(
         'bg-white rounded-md border border-slate-200 p-6 shadow-brand-card',
-        'transition-shadow duration-200 ease-out hover:shadow-brand-card-hover',
+        'transition-all duration-200 ease-out hover:shadow-brand-card-hover hover:-translate-y-0.5',
         className,
       )}
     >

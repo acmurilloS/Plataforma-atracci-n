@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { CalendarRange, Download, FileSpreadsheet, Filter } from 'lucide-react';
+import { CalendarRange, ChevronDown, Download, FileSpreadsheet, Filter } from 'lucide-react';
 import { Button, Card } from '../brand';
+import { cn } from '../../utils/cn';
 import { useColeccion } from '../../hooks/useColeccion';
 import { formatearFecha } from '../../utils/fechas';
 import {
@@ -36,6 +37,7 @@ const selectClass =
   'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500';
 
 export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
+  const [abierto, setAbierto] = useState(false);
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [empresa, setEmpresa] = useState('');
@@ -149,19 +151,38 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
 
   return (
     <Card padding="lg">
-      <div className="flex items-center gap-2 mb-1 text-text-muted">
-        <FileSpreadsheet size={14} strokeWidth={1.75} />
-        <p className="text-[10px] font-bold tracking-[0.10em] uppercase">
-          Reportes · descarga a Excel
-        </p>
-      </div>
-      <p className="text-[13px] text-text-muted leading-[1.55] mb-5 max-w-2xl">
-        Base de toda la atracción con tiempos en días hábiles (ANS de terna: 15 hábiles, meta 10) y
-        resumen mensual. Filtra antes de descargar.
-      </p>
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        className="w-full flex items-center justify-between gap-3 text-left group"
+        aria-expanded={abierto}
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-text-muted">
+            <FileSpreadsheet size={14} strokeWidth={1.75} />
+            <p className="text-[10px] font-bold tracking-[0.10em] uppercase">
+              Reportes · descarga a Excel
+            </p>
+          </div>
+          <p className="text-[13px] text-text-muted leading-[1.55] mt-1">
+            Descarga a Excel la base de la atracción (días hábiles + ANS) y el resumen mensual, con
+            filtros.
+          </p>
+        </div>
+        <ChevronDown
+          size={18}
+          strokeWidth={1.75}
+          className={cn(
+            'shrink-0 text-text-muted transition-transform duration-200 group-hover:text-text-strong',
+            abierto && 'rotate-180',
+          )}
+        />
+      </button>
 
-      {/* Filtros */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+      {abierto && (
+        <div className="mt-6">
+          {/* Filtros */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
         <label className="block">
           <span className="text-[11px] font-medium text-text-muted">Desde (apertura)</span>
           <input
@@ -273,7 +294,9 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
           </Button>
         </div>
       </div>
-      {error && <p className="mt-3 text-[12px] text-danger-700">{error}</p>}
+          {error && <p className="mt-3 text-[12px] text-danger-700">{error}</p>}
+        </div>
+      )}
     </Card>
   );
 }
