@@ -24,7 +24,7 @@ const DOMINIO = '@equitel.com.co';
 /** Lo único que un usuario puede ELEGIR por sí mismo en el primer ingreso. */
 const ROLES_AUTOSERVICIO = ['lider', 'analista'];
 /** Roles válidos que el staff puede dejar PRE-ASIGNADOS (se honran al ingresar). */
-const ROLES_PREASIGNABLES = ['gh', 'apoyo'];
+const ROLES_PREASIGNABLES = ['gh', 'apoyo', 'talentos'];
 
 export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');

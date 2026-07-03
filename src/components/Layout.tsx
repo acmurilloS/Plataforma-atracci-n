@@ -23,7 +23,7 @@ interface ItemNav {
 }
 
 const ITEMS: ItemNav[] = [
-  { to: '/seguimiento', label: 'Seguimiento', roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin'] },
+  { to: '/seguimiento', label: 'Seguimiento', roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'] },
   { to: '/mis-vacantes', label: 'Mis vacantes', roles: ['lider'] },
   { to: '/vacantes/nueva', label: 'Nueva', roles: ['lider', 'coordinador', 'admin'] },
   { to: '/dashboard', label: 'Dashboard', roles: ['coordinador', 'admin', 'gh'] },
@@ -38,7 +38,7 @@ const ITEMS: ItemNav[] = [
     // El líder solo ve Seguimiento, Mis vacantes y Nueva.
     to: '/vacantes-abiertas',
     label: 'Vacantes abiertas',
-    roles: ['analista', 'coordinador', 'gh', 'apoyo', 'admin'],
+    roles: ['analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'],
   },
   { to: '/admin/usuarios', label: 'Usuarios', roles: ['admin', 'coordinador'] },
   { to: '/admin/catalogos', label: 'Catálogos', roles: ['admin'] },

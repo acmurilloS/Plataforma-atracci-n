@@ -32,7 +32,11 @@ const AREAS: { area: string; label: string }[] = [
   { area: 'talentos', label: 'Conexión / Talentos' },
 ];
 
-const ROL_LABEL: Record<string, string> = { gh: 'Gestión Humana', apoyo: 'Apoyo' };
+const ROL_LABEL: Record<string, string> = {
+  gh: 'Gestión Humana',
+  apoyo: 'Apoyo',
+  talentos: 'Conexión de Talentos',
+};
 
 const controlClass = cn(
   'block w-full bg-slate-50 border border-slate-200 rounded-md',
@@ -41,7 +45,7 @@ const controlClass = cn(
 );
 
 export default function UsuariosRolesPage() {
-  const [rol, setRol] = useState<'gh' | 'apoyo'>('gh');
+  const [rol, setRol] = useState<'gh' | 'apoyo' | 'talentos'>('gh');
   const [area, setArea] = useState('');
   const [texto, setTexto] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -114,7 +118,7 @@ export default function UsuariosRolesPage() {
 
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {(['gh', 'apoyo'] as const).map((r) => (
+            {(['gh', 'apoyo', 'talentos'] as const).map((r) => (
               <button
                 key={r}
                 type="button"

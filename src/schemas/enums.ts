@@ -1,6 +1,17 @@
 import { z } from 'zod';
 
-export const rolUsuario = z.enum(['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin']);
+export const rolUsuario = z.enum([
+  'lider',
+  'analista',
+  'coordinador',
+  'gh',
+  'apoyo',
+  'admin',
+  // Conexión de Talentos (José Hoyos, reu 03-jul): perfil ACOTADO de solo
+  // lectura — ve Seguimiento, Vacantes abiertas y el Perfilamiento del cargo,
+  // sin editar nada (no tiene permisos de escritura en el proceso).
+  'talentos',
+]);
 export type RolUsuario = z.infer<typeof rolUsuario>;
 
 export const areaApoyo = z.enum([

@@ -15,7 +15,7 @@ import { db } from '../utils/admin';
  */
 
 const STAFF = ['admin', 'coordinador'];
-const ROLES_PERMITIDOS = ['gh', 'apoyo'];
+const ROLES_PERMITIDOS = ['gh', 'apoyo', 'talentos'];
 const AREAS_APOYO = ['it', 'compras', 'bodega', 'contabilidad', 'administrativo', 'talentos'];
 const RE_EMAIL = /^[^@\s]+@equitel\.com\.co$/;
 

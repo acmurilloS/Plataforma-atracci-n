@@ -90,7 +90,10 @@ const textareaClass = inputClass + ' resize-none leading-relaxed';
 export default function PerfilamientoPage() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
-  const { perfil, user } = useAuth();
+  const { perfil, user, rol } = useAuth();
+  // Conexión de Talentos (José) ve el perfilamiento en SOLO LECTURA (reu 03-jul):
+  // no edita ni dispara nada; las firestore.rules además bloquean su escritura.
+  const soloLectura = rol === 'talentos';
   const { doc: vacante, cargando: cargandoVac } = useDoc<VacanteDoc>('vacantes', id);
   const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
   const { docs: procesos } = useColeccion<ProcesoDoc>('procesos', {
@@ -347,7 +350,15 @@ export default function PerfilamientoPage() {
 
       <PoliticaCriticidadBanner criticidad={vacante.criticidad} />
 
-      <form onSubmit={onSubmit} className="space-y-6">
+      {soloLectura && (
+        <div className="rounded-md border border-brand-200 bg-brand-50/50 px-4 py-3 text-[13px] text-text-body">
+          Vista de <strong>solo lectura</strong> (Conexión de Talentos): puedes consultar el
+          perfilamiento del cargo, pero no editarlo.
+        </div>
+      )}
+
+      <form onSubmit={onSubmit}>
+        <fieldset disabled={soloLectura} className="space-y-6 border-0 p-0 m-0 min-w-0">
         {/* ─── Criterios y mercado ──────────────────────────────── */}
         <Card padding="lg">
           <div className="flex items-center gap-2 mb-5">
@@ -652,7 +663,7 @@ export default function PerfilamientoPage() {
           </div>
         )}
 
-        {criterios.trim().length >= 20 && (
+        {!soloLectura && criterios.trim().length >= 20 && (
           <div className="rounded-md border border-brand-200 bg-gradient-to-br from-brand-50/40 to-white px-5 py-4 flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="w-9 h-9 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
@@ -687,21 +698,24 @@ export default function PerfilamientoPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 gap-3 flex-wrap">
-          <p className="text-[11px] text-text-subtle">
-            Al guardar, la vacante pasa a estado <code className="font-mono text-text-body">lista_para_publicar</code> y
-            se disparan los pre-avisos a IT / talentos / compras / contabilidad.
-          </p>
-          <Button
-            type="submit"
-            variant="brand-primary"
-            size="large"
-            disabled={enviando}
-            loading={enviando}
-          >
-            {enviando ? 'Guardando…' : 'Guardar y pasar a publicación →'}
-          </Button>
-        </div>
+        {!soloLectura && (
+          <div className="flex items-center justify-between pt-2 gap-3 flex-wrap">
+            <p className="text-[11px] text-text-subtle">
+              Al guardar, la vacante pasa a estado <code className="font-mono text-text-body">lista_para_publicar</code> y
+              se disparan los pre-avisos a IT / talentos / compras / contabilidad.
+            </p>
+            <Button
+              type="submit"
+              variant="brand-primary"
+              size="large"
+              disabled={enviando}
+              loading={enviando}
+            >
+              {enviando ? 'Guardando…' : 'Guardar y pasar a publicación →'}
+            </Button>
+          </div>
+        )}
+        </fieldset>
       </form>
     </div>
   );

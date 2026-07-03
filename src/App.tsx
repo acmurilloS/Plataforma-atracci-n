@@ -39,6 +39,11 @@ import VacantesAbiertasPage from './pages/internos/VacantesAbiertasPage';
 // esas pantallas no se abran por URL directa; el nav ya filtra por rol.
 const ROLES_PROCESO: RolUsuario[] = ['lider', 'analista', 'coordinador', 'gh', 'admin'];
 
+// Perfilamiento: además del proceso, lo puede VER (solo lectura) 'talentos'
+// (José Hoyos · Conexión de Talentos, reu 03-jul). No edita: la página se
+// renderiza read-only para su rol y las firestore.rules bloquean su escritura.
+const ROLES_PERFILAMIENTO: RolUsuario[] = [...ROLES_PROCESO, 'talentos'];
+
 function AppShell() {
   return (
     <ProtectedRoute>
@@ -83,7 +88,7 @@ export default function App() {
             <Route
               path="/vacantes/:id/perfilamiento"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={ROLES_PERFILAMIENTO}>
                   <PerfilamientoPage />
                 </ProtectedRoute>
               }
@@ -211,7 +216,7 @@ export default function App() {
             <Route
               path="/vacantes-abiertas"
               element={
-                <ProtectedRoute roles={['analista', 'coordinador', 'gh', 'apoyo', 'admin']}>
+                <ProtectedRoute roles={['analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos']}>
                   <VacantesAbiertasPage />
                 </ProtectedRoute>
               }
