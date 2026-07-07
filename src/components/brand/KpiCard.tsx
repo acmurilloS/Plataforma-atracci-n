@@ -23,6 +23,8 @@ interface KpiCardProps {
     valor: number;
     total: number;
   };
+  /** Si se pasa, la card se vuelve clicable (drill-down). */
+  onClick?: () => void;
   className?: string;
 }
 
@@ -84,16 +86,33 @@ export function KpiCard({
   icono,
   tono = 'neutral',
   progreso,
+  onClick,
   className,
 }: KpiCardProps) {
   const t = TONO[tono];
   const porcentaje = progreso ? Math.min(100, Math.round((progreso.valor / Math.max(1, progreso.total)) * 100)) : null;
+  const clicable = !!onClick;
 
   return (
     <div
+      onClick={onClick}
+      role={clicable ? 'button' : undefined}
+      tabIndex={clicable ? 0 : undefined}
+      onKeyDown={
+        clicable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       className={cn(
         'bg-white rounded-md border border-slate-200 p-6 shadow-brand-card',
         'transition-all duration-200 ease-out hover:shadow-brand-card-hover hover:-translate-y-0.5',
+        clicable &&
+          'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-brand-300',
         className,
       )}
     >

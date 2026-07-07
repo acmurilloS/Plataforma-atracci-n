@@ -33,7 +33,7 @@ import { BannerActualizacion } from './BannerActualizacion';
  * saludo personalizado del home lo pone `SaludoInicio` dentro de cada página.
  */
 
-type Grupo = 'Proceso' | 'Analítica' | 'Administración';
+type Grupo = 'Proceso' | 'Administración';
 
 interface ItemNav {
   to: string;
@@ -45,6 +45,7 @@ interface ItemNav {
 }
 
 const ITEMS: ItemNav[] = [
+  { to: '/dashboard', label: 'Dashboard', icon: BarChart3, grupo: 'Proceso', roles: ['coordinador', 'admin', 'gh'] },
   { to: '/seguimiento', label: 'Seguimiento', icon: ListChecks, grupo: 'Proceso', roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'] },
   { to: '/mis-vacantes', label: 'Mis vacantes', icon: Briefcase, grupo: 'Proceso', roles: ['lider'] },
   { to: '/vacantes/nueva', label: 'Nueva vacante', icon: PlusCircle, grupo: 'Proceso', roles: ['lider', 'coordinador', 'admin'] },
@@ -61,13 +62,12 @@ const ITEMS: ItemNav[] = [
   { to: '/aprobaciones-aval', label: 'Aprobaciones', icon: ShieldCheck, grupo: 'Proceso', roles: ['gh', 'coordinador', 'admin'] },
   { to: '/examenes-medicos', label: 'Exámenes', icon: Stethoscope, grupo: 'Proceso', roles: ['gh', 'coordinador', 'admin'] },
   { to: '/tickets', label: 'Tickets', icon: Ticket, grupo: 'Proceso', roles: ['apoyo', 'analista', 'coordinador', 'admin'] },
-  { to: '/dashboard', label: 'Dashboard', icon: BarChart3, grupo: 'Analítica', roles: ['coordinador', 'admin', 'gh'] },
   { to: '/admin', label: 'Panel admin', icon: LayoutGrid, grupo: 'Administración', roles: ['admin'], end: true },
   { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog, grupo: 'Administración', roles: ['admin'] },
   { to: '/admin/catalogos', label: 'Catálogos', icon: SlidersHorizontal, grupo: 'Administración', roles: ['admin'] },
 ];
 
-const GRUPOS: Grupo[] = ['Proceso', 'Analítica', 'Administración'];
+const GRUPOS: Grupo[] = ['Proceso', 'Administración'];
 
 const ROL_NOMBRE: Record<string, string> = {
   admin: 'Administrador',

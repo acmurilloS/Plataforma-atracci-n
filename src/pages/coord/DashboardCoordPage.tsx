@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -7,6 +7,7 @@ import {
   BarChart3,
   Building2,
   CheckCircle2,
+  Layers,
   UserCheck,
 } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
@@ -18,6 +19,7 @@ import { cn } from '../../utils/cn';
 import { diasTranscurridos, esVacanteCerrada } from '../../utils/reportesVacantes';
 import type { PostulacionDoc, VacanteDoc } from '../../schemas';
 import { SaludoInicio } from '../../components/SaludoInicio';
+import { DrillDownVacantes, type DrillItem } from '../../components/dashboard/DrillDownVacantes';
 
 /**
  * DashboardCoordPage · vista ejecutiva (coordinación / admin).
@@ -53,6 +55,8 @@ const CRITICIDAD_TONO: Record<string, PillTono> = {
 const FASE_RECLUTAMIENTO = ['borrador', 'aprobada', 'lista_para_publicar', 'publicada', 'en_proceso', 'pausada'];
 const FASE_TERNA = ['terna_enviada', 'seleccionado'];
 const FASE_CONTRATACION = ['en_contratacion'];
+
+type DrillMode = 'vencidas' | 'en_riesgo' | 'reclutamiento' | 'terna' | 'contratacion' | 'contratadas';
 
 function fechaDe(ts: unknown): Date | null {
   return (ts as { toDate?: () => Date } | null | undefined)?.toDate?.() ?? null;
@@ -132,37 +136,114 @@ export default function DashboardCoordPage() {
     return n;
   }, [postulaciones]);
 
+  // Drill-down: al hundir una card, se abre el modal con esos ítems.
+  const [drill, setDrill] = useState<DrillMode | null>(null);
+
+  const drillView = useMemo(() => {
+    if (!drill) return null;
+    const semaf = (dias: number) => (
+      <SemaforoANS dias={dias} umbralAmbar={10} umbralCritico={15} etiqueta="Días hábiles desde la apertura" />
+    );
+    const base = (v: VacanteDoc): DrillItem => ({
+      id: v.id,
+      to: `/vacantes/${v.id}`,
+      titulo: v.cargo_nombre,
+      sub: `${v.consecutivo} · ${v.empresa_codigo}/${v.sede_codigo}`,
+    });
+
+    if (drill === 'vencidas' || drill === 'en_riesgo') {
+      const venc = drill === 'vencidas';
+      const arr = activasFull.filter(({ dias }) => (venc ? dias > 15 : dias > 10 && dias <= 15));
+      return {
+        titulo: venc ? 'ANS vencidas' : 'ANS en riesgo',
+        descripcion: venc ? 'más de 15 días hábiles a terna' : 'entre 10 y 15 días hábiles',
+        tono: venc ? ('danger' as const) : ('warning' as const),
+        icono: venc ? <AlertCircle size={20} strokeWidth={1.75} /> : <AlertTriangle size={20} strokeWidth={1.75} />,
+        items: arr.map(({ v, dias }) => ({ ...base(v), right: semaf(dias) })),
+      };
+    }
+
+    if (drill === 'reclutamiento' || drill === 'terna' || drill === 'contratacion') {
+      const grupo =
+        drill === 'reclutamiento' ? FASE_RECLUTAMIENTO : drill === 'terna' ? FASE_TERNA : FASE_CONTRATACION;
+      const label =
+        drill === 'reclutamiento' ? 'Reclutamiento' : drill === 'terna' ? 'Terna / decisión' : 'Contratación';
+      const arr = vacantes.filter((v) => grupo.includes(v.estado));
+      return {
+        titulo: `Fase · ${label}`,
+        descripcion: 'vacantes activas en esta fase',
+        tono: 'info' as const,
+        icono: <Layers size={20} strokeWidth={1.75} />,
+        items: arr.map((v) => ({
+          ...base(v),
+          right: (
+            <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
+              {v.estado.replace(/_/g, ' ')}
+            </Pill>
+          ),
+        })),
+      };
+    }
+
+    // contratadas del mes
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const arr = postulaciones.filter((p) => {
+      if (p.estado !== 'contratado') return false;
+      const d =
+        fechaDe((p as { marcas?: { contratado_en?: unknown } }).marcas?.contratado_en) ??
+        fechaDe((p as { ultima_transicion_estado?: unknown }).ultima_transicion_estado);
+      return !!d && d.getFullYear() === y && d.getMonth() === m;
+    });
+    return {
+      titulo: 'Contratadas este mes',
+      descripcion: 'cerradas con contratación',
+      tono: 'success' as const,
+      icono: <UserCheck size={20} strokeWidth={1.75} />,
+      items: arr.map((p) => ({
+        id: p.id,
+        to: `/postulaciones/${p.id}`,
+        titulo: String((p as { candidato_nombre?: string }).candidato_nombre ?? 'Candidato'),
+        sub: String((p as { cargo_nombre?: string }).cargo_nombre ?? ''),
+      })),
+    };
+  }, [drill, activasFull, vacantes, postulaciones]);
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-12">
       <SaludoInicio />
 
       {/* ── ROW 1 · Pipeline (oscuro) + 3 KPIs ─────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-6">
-        <PipelineHeroCard activas={stats.activas} total={stats.total} buckets={buckets} />
+        <PipelineHeroCard activas={stats.activas} total={stats.total} buckets={buckets} onFase={setDrill} />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <KpiCard
             eyebrow="ANS vencidas"
             valor={ansCounts.vencidas}
-            caption={ansCounts.vencidas ? 'Más de 15 días hábiles a terna' : 'Todo en tiempo'}
+            caption={ansCounts.vencidas ? 'Toca para ver el detalle' : 'Todo en tiempo'}
             icono={<AlertCircle size={18} strokeWidth={1.75} />}
             tono="danger"
             progreso={{ valor: ansCounts.vencidas, total: Math.max(1, stats.activas) }}
+            onClick={ansCounts.vencidas ? () => setDrill('vencidas') : undefined}
           />
           <KpiCard
             eyebrow="En riesgo"
             valor={ansCounts.enRiesgo}
-            caption={ansCounts.enRiesgo ? 'Entre 10 y 15 días hábiles' : 'Sin riesgo cercano'}
+            caption={ansCounts.enRiesgo ? 'Toca para ver el detalle' : 'Sin riesgo cercano'}
             icono={<AlertTriangle size={18} strokeWidth={1.75} />}
             tono="warning"
             progreso={{ valor: ansCounts.enRiesgo, total: Math.max(1, stats.activas) }}
+            onClick={ansCounts.enRiesgo ? () => setDrill('en_riesgo') : undefined}
           />
           <KpiCard
             eyebrow="Contratadas · mes"
             valor={contratadasMes}
-            caption="Cerradas con contratación este mes"
+            caption={contratadasMes ? 'Toca para ver quiénes' : 'Sin contrataciones este mes'}
             icono={<UserCheck size={18} strokeWidth={1.75} />}
             tono="success"
+            onClick={contratadasMes ? () => setDrill('contratadas') : undefined}
           />
         </div>
       </div>
@@ -282,6 +363,8 @@ export default function DashboardCoordPage() {
 
       {/* ── Reportes (colapsable) ──────────────────────────────────── */}
       <ReportesDescarga vacantes={vacantes} postulaciones={postulaciones} festivos={festivos} />
+
+      {drillView && <DrillDownVacantes {...drillView} onClose={() => setDrill(null)} />}
     </div>
   );
 }
@@ -316,10 +399,12 @@ function PipelineHeroCard({
   activas,
   total,
   buckets,
+  onFase,
 }: {
   activas: number;
   total: number;
   buckets: { reclutamiento: number; terna: number; contratacion: number };
+  onFase?: (m: 'reclutamiento' | 'terna' | 'contratacion') => void;
 }) {
   return (
     <div className="relative overflow-hidden rounded-md bg-slate-900 p-8 text-white shadow-brand-card">
@@ -353,19 +438,62 @@ function PipelineHeroCard({
         </div>
 
         <div className="grid grid-cols-3 gap-2.5">
-          <PipeCell label="Reclutamiento" value={buckets.reclutamiento} dotClass="bg-info-500" />
-          <PipeCell label="Terna" value={buckets.terna} dotClass="bg-warning-500" />
-          <PipeCell label="Contratación" value={buckets.contratacion} dotClass="bg-brand-500" />
+          <PipeCell
+            label="Reclutamiento"
+            value={buckets.reclutamiento}
+            dotClass="bg-info-500"
+            onClick={onFase ? () => onFase('reclutamiento') : undefined}
+          />
+          <PipeCell
+            label="Terna"
+            value={buckets.terna}
+            dotClass="bg-warning-500"
+            onClick={onFase ? () => onFase('terna') : undefined}
+          />
+          <PipeCell
+            label="Contratación"
+            value={buckets.contratacion}
+            dotClass="bg-brand-500"
+            onClick={onFase ? () => onFase('contratacion') : undefined}
+          />
         </div>
       </div>
     </div>
   );
 }
 
-function PipeCell({ label, value, dotClass }: { label: string; value: number; dotClass: string }) {
+function PipeCell({
+  label,
+  value,
+  dotClass,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  dotClass: string;
+  onClick?: () => void;
+}) {
+  const clicable = !!onClick && value > 0;
   return (
     <div
-      className="rounded-lg px-4 py-3.5"
+      onClick={clicable ? onClick : undefined}
+      role={clicable ? 'button' : undefined}
+      tabIndex={clicable ? 0 : undefined}
+      onKeyDown={
+        clicable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        'rounded-lg px-4 py-3.5 transition-all duration-200',
+        clicable &&
+          'cursor-pointer hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40',
+      )}
       style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)' }}
     >
       <div className="flex items-center gap-1.5 mb-2">
