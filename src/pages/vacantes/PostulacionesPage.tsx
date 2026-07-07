@@ -29,6 +29,7 @@ import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCan
 import { Button, Card, Pill } from '../../components/brand';
 import { FaseCandidato } from '../../components/postulaciones/FaseCandidato';
 import { RepostularModal } from '../../components/postulaciones/RepostularModal';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
 // Estados terminales (vía el select de estado) que denormalizan el resultado al
@@ -361,23 +362,18 @@ export default function PostulacionesPage() {
       </Link>
 
       {/* ─── Hero ─────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-6">
-        <div className="max-w-2xl">
-          <Pill tono="brand" dot>
-            Pasos 5 – 11 · Analista
-          </Pill>
-          <h1
-            className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-            style={{ textWrap: 'balance' }}
-          >
-            Postulaciones
-          </h1>
-          <p className="mt-3 flex items-center gap-1.5 text-[14px] text-text-muted">
+      <EncabezadoPagina
+        icono={<Users size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Pasos 5 – 11 · Analista"
+        titulo="Postulaciones"
+        descripcion={
+          <span className="inline-flex items-center gap-1.5">
             <Building2 size={13} strokeWidth={1.5} className="text-text-subtle" />
             {vacante.cargo_nombre} · {vacante.empresa_nombre} · {vacante.sede_nombre}
-          </p>
-        </div>
-      </div>
+          </span>
+        }
+      />
 
       {/* ─── Stats inline ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

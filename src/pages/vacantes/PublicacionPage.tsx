@@ -20,6 +20,7 @@ import { formatearFecha } from '../../utils/fechas';
 import { BuscarCandidatosIAModal } from '../../components/vacantes/BuscarCandidatosIAModal';
 import { ActivarReferidosModal } from '../../components/vacantes/ActivarReferidosModal';
 import { Button, Card, Pill } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import type { VacanteDoc } from '../../schemas';
 
 /**
@@ -187,22 +188,19 @@ export default function PublicacionPage() {
       </Link>
 
       {/* ─── Hero ─────────────────────────────────────────────── */}
-      <div>
-        <Pill tono="brand" dot>
-          Paso 4 · Analista
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Publicación y divulgación
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          Registra cada canal donde publicaste la oferta de{' '}
-          <span className="font-semibold text-text-body">{vacante.cargo_nombre}</span>. El link
-          propio del portal funciona como receptor único de las postulaciones.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<Megaphone size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Paso 4 · Analista"
+        titulo="Publicación y divulgación"
+        descripcion={
+          <>
+            Registra cada canal donde publicaste la oferta de{' '}
+            <span className="font-semibold text-text-body">{vacante.cargo_nombre}</span>. El link
+            propio del portal funciona como receptor único de las postulaciones.
+          </>
+        }
+      />
 
       {/* ─── Link propio (hero card) ──────────────────────────── */}
       <div className="rounded-brand-card border border-brand-200 bg-gradient-to-br from-brand-50/60 via-white to-white p-7 shadow-brand-card">

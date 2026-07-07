@@ -29,6 +29,7 @@ import {
 import { AlertasUnicornio } from '../../components/vacantes/AlertasUnicornio';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 import { Button, Card, Pill } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 import type { CargoDoc, VacanteDoc } from '../../schemas';
 import type { ProcesoDoc } from '../../schemas/procesoSchema';
@@ -330,23 +331,19 @@ export default function PerfilamientoPage() {
       </Link>
 
       {/* ─── Hero ──────────────────────────────────────────────── */}
-      <div>
-        <Pill tono="brand" dot>
-          Paso 3 · Analista + Líder
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Perfilamiento del cargo
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          {vacante.cargo_nombre} · {vacante.empresa_nombre} · {vacante.sede_nombre}.
-          Define qué busca el líder, qué empresas son competencia y qué
-          herramientas necesita el ingreso para que IT/compras/talentos
-          arranquen desde hoy.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<Target size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Paso 3 · Analista + Líder"
+        titulo="Perfilamiento del cargo"
+        descripcion={
+          <>
+            {vacante.cargo_nombre} · {vacante.empresa_nombre} · {vacante.sede_nombre}. Define qué
+            busca el líder, qué empresas son competencia y qué herramientas necesita el ingreso para
+            que IT/compras/talentos arranquen desde hoy.
+          </>
+        }
+      />
 
       <PoliticaCriticidadBanner criticidad={vacante.criticidad} />
 

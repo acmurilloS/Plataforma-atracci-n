@@ -17,6 +17,7 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { useSourcing } from '../../hooks/useSourcing';
 import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 import type {
   BusquedaSourcingDoc,
@@ -157,24 +158,21 @@ export default function SourcingPage() {
       </Link>
 
       {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Paso 4.5 · Búsqueda activa con IA
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Integrantes sourceados
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          {vacante.cargo_nombre} ·{' '}
-          <span className="tabular-nums font-semibold text-text-body">
-            {ordenados.length} pendientes de validar
-          </span>
-          . Promover a postulado los mueve al flujo normal del paso 5.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<Sparkles size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Paso 4.5 · Búsqueda activa con IA"
+        titulo="Integrantes sourceados"
+        descripcion={
+          <>
+            {vacante.cargo_nombre} ·{' '}
+            <span className="tabular-nums font-semibold text-text-body">
+              {ordenados.length} pendientes de validar
+            </span>
+            . Promover a postulado los mueve al flujo normal del paso 5.
+          </>
+        }
+      />
 
       {/* Buscar más con IA */}
       <Card padding="lg" className="border-brand-200 bg-gradient-to-br from-brand-50/40 to-white">

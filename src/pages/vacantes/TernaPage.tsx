@@ -33,6 +33,7 @@ import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCan
 import { DescarteModal } from '../../components/vacantes/DescarteModal';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 import { Button, Card, Pill } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
 /**
@@ -313,30 +314,27 @@ export default function TernaPage() {
       </Link>
 
       {/* ─── Hero ─────────────────────────────────────────────── */}
-      <div>
-        <Pill tono="brand" dot>
-          Pasos 12 – 14 · Líder + Analista
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Terna y decisión
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          {vacante.cargo_nombre} · {vacante.empresa_nombre} · {vacante.sede_nombre}.{' '}
-          <span className="tabular-nums font-semibold text-text-body">
-            {enTerna.length} {enTerna.length === 1 ? 'integrante finalista' : 'integrantes finalistas'}
-          </span>
-          {minCandidatos > 0 && (
-            <>
-              {' '}
-              · mínimo política <strong>{vacante.criticidad}</strong>:{' '}
-              <span className="tabular-nums">{minCandidatos}</span>
-            </>
-          )}
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<Users size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Pasos 12 – 14 · Líder + Analista"
+        titulo="Terna y decisión"
+        descripcion={
+          <>
+            {vacante.cargo_nombre} · {vacante.empresa_nombre} · {vacante.sede_nombre}.{' '}
+            <span className="tabular-nums font-semibold text-text-body">
+              {enTerna.length} {enTerna.length === 1 ? 'integrante finalista' : 'integrantes finalistas'}
+            </span>
+            {minCandidatos > 0 && (
+              <>
+                {' '}
+                · mínimo política <strong>{vacante.criticidad}</strong>:{' '}
+                <span className="tabular-nums">{minCandidatos}</span>
+              </>
+            )}
+          </>
+        }
+      />
 
       {err && (
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
