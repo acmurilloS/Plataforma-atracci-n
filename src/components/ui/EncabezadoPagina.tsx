@@ -30,7 +30,7 @@ export function EncabezadoPagina({
   tono?: Tono;
   eyebrow?: string;
   titulo: string;
-  descripcion?: string;
+  descripcion?: ReactNode;
   accion?: ReactNode;
 }) {
   const t = TONO[tono];

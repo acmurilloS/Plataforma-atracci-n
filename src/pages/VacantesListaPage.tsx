@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Building2, Plus, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, Building2, LayoutList, Plus, Search, Sparkles } from 'lucide-react';
 import {
   collection,
   limit,
@@ -13,6 +13,7 @@ import { formatearFecha } from '../utils/fechas';
 import { formatearCOP } from '../utils/moneda';
 import type { VacanteDoc } from '../schemas';
 import { Button, Card, Pill, type PillTono } from '../components/brand';
+import { EncabezadoPagina } from '../components/ui/EncabezadoPagina';
 import { cn } from '../utils/cn';
 
 /**
@@ -109,32 +110,28 @@ export default function VacantesListaPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
-      {/* Hero */}
-      <div className="flex items-start justify-between gap-6 flex-wrap">
-        <div>
-          <Pill tono="brand" dot>
-            Operación
-          </Pill>
-          <h1
-            className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-            style={{ textWrap: 'balance' }}
-          >
-            Todas las vacantes
-          </h1>
-          <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
+      <EncabezadoPagina
+        icono={<LayoutList size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Operación"
+        titulo="Todas las vacantes"
+        descripcion={
+          <>
             Vista de coordinación, GH y admin.{' '}
             <span className="tabular-nums font-semibold text-text-body">
               {vacantes.length} mostradas
             </span>{' '}
             · 100 más recientes. Filtra por estado, empresa o buscador libre.
-          </p>
-        </div>
-        <Link to="/vacantes/nueva">
-          <Button variant="brand-primary" icon={<Plus size={13} strokeWidth={1.75} />}>
-            Nueva vacante
-          </Button>
-        </Link>
-      </div>
+          </>
+        }
+        accion={
+          <Link to="/vacantes/nueva">
+            <Button variant="brand-primary" icon={<Plus size={13} strokeWidth={1.75} />}>
+              Nueva vacante
+            </Button>
+          </Link>
+        }
+      />
 
       {/* Filtros sunken */}
       <Card padding="md">

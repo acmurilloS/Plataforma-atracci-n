@@ -6,6 +6,7 @@ import { formatearFecha } from '../../utils/fechas';
 import { formatearCOP } from '../../utils/moneda';
 import type { VacanteDoc } from '../../schemas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
 /**
@@ -45,19 +46,13 @@ export default function MisVacantesPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
-      {/* Hero */}
-      <div className="flex items-start justify-between gap-6 flex-wrap">
-        <div className="max-w-2xl">
-          <Pill tono="brand" dot>
-            Líder
-          </Pill>
-          <h1
-            className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-            style={{ textWrap: 'balance' }}
-          >
-            Mis vacantes
-          </h1>
-          <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-xl">
+      <EncabezadoPagina
+        icono={<Briefcase size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Líder"
+        titulo="Mis vacantes"
+        descripcion={
+          <>
             Todas las solicitudes que has abierto y su estado actual en el flujograma.
             {ternasPendientes.length > 0 && (
               <>
@@ -69,14 +64,16 @@ export default function MisVacantesPage() {
                 .
               </>
             )}
-          </p>
-        </div>
-        <Link to="/vacantes/nueva">
-          <Button variant="brand-primary" icon={<Plus size={14} strokeWidth={1.75} />}>
-            Nueva vacante
-          </Button>
-        </Link>
-      </div>
+          </>
+        }
+        accion={
+          <Link to="/vacantes/nueva">
+            <Button variant="brand-primary" icon={<Plus size={14} strokeWidth={1.75} />}>
+              Nueva vacante
+            </Button>
+          </Link>
+        }
+      />
 
       {/* Alertas de terna pendiente · paso 13 con reloj 48h */}
       {ternasPendientes.length > 0 && (

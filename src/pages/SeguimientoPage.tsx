@@ -15,9 +15,10 @@ import { useAuth } from '../hooks/useAuth';
 import { useColeccion, type FiltroTupla } from '../hooks/useColeccion';
 import { cn } from '../utils/cn';
 import type { VacanteDoc } from '../schemas';
-import { Button, KpiCard, Pill } from '../components/brand';
+import { Button, KpiCard } from '../components/brand';
 import { SaludoInicio } from '../components/SaludoInicio';
 import { CargandoPagina } from '../components/ui/CargandoPagina';
+import { EncabezadoPagina } from '../components/ui/EncabezadoPagina';
 
 /**
  * SeguimientoPage · sistema brand.
@@ -122,31 +123,22 @@ export default function SeguimientoPage() {
       <SaludoInicio />
 
       {/* ─── Hero header ──────────────────────────────────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-6">
-        <div className="max-w-2xl">
-          <Pill tono="brand" dot>
-            Seguimiento global
-          </Pill>
-          <h1
-            className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-            style={{ textWrap: 'balance' }}
-          >
-            ¿Cómo va cada vacante?
-          </h1>
-          <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-xl">
-            Todas las solicitudes del proceso de atracción con su etapa actual,
-            responsable y tiempo desde apertura. Click en cualquier card para
-            abrir el detalle.
-          </p>
-        </div>
-        {puedeCrear && (
-          <Link to="/vacantes/nueva">
-            <Button variant="brand-primary" icon={<Plus size={13} strokeWidth={1.75} />}>
-              Nueva vacante
-            </Button>
-          </Link>
-        )}
-      </div>
+      <EncabezadoPagina
+        icono={<Activity size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Seguimiento global"
+        titulo="¿Cómo va cada vacante?"
+        descripcion="Todas las solicitudes del proceso de atracción con su etapa actual, responsable y tiempo desde apertura. Click en cualquier card para abrir el detalle."
+        accion={
+          puedeCrear ? (
+            <Link to="/vacantes/nueva">
+              <Button variant="brand-primary" icon={<Plus size={13} strokeWidth={1.75} />}>
+                Nueva vacante
+              </Button>
+            </Link>
+          ) : undefined
+        }
+      />
 
       {/* ─── KPIs principales (hero numbers) ─────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

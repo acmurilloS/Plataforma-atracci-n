@@ -7,7 +7,7 @@ import { CargosTab } from '../../components/admin/CargosTab';
 import { SeedTab } from '../../components/admin/SeedTab';
 import { ReferidosTab } from '../../components/admin/ReferidosTab';
 import { IntegracionesTab } from '../../components/admin/IntegracionesTab';
-import { Pill } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
 /**
@@ -33,22 +33,13 @@ export default function CatalogosAdminPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
-      {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Admin · catálogos
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Catálogos
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          Administra empresas, sedes, unidades y cargos del holding. Los cambios se reflejan en
-          vivo en los formularios de creación de vacante.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<Layers size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Admin · catálogos"
+        titulo="Catálogos"
+        descripcion="Administra empresas, sedes, unidades y cargos del holding. Los cambios se reflejan en vivo en los formularios de creación de vacante."
+      />
 
       {/* Tabs */}
       <div className="border-b border-slate-200 flex gap-1 overflow-x-auto">

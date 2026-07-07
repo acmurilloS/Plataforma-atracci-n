@@ -15,6 +15,7 @@ import {
 import { auth } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
 /**
@@ -97,22 +98,13 @@ export default function PanelAdminPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
-      {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Admin
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Panel de admin
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          Hub central para navegar todas las vistas sin hacer logout/login. Cambia de rol con un
-          click, accede al emulador o copia credenciales para abrir en otra ventana.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<LayoutGrid size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Admin"
+        titulo="Panel de admin"
+        descripcion="Hub central para navegar todas las vistas sin hacer logout/login. Cambia de rol con un click, accede al emulador o copia credenciales para abrir en otra ventana."
+      />
 
       {/* Cambiar usuario */}
       <Card padding="lg">
