@@ -24,6 +24,7 @@ import { cn } from '../utils/cn';
 import type { RolUsuario } from '../schemas';
 import { Campanita } from './Campanita';
 import { BannerActualizacion } from './BannerActualizacion';
+import { BuscadorGlobal } from './BuscadorGlobal';
 
 /**
  * Layout · sistema brand con BARRA LATERAL izquierda (reu 03-jul).
@@ -120,6 +121,11 @@ export function Layout() {
         </div>
       </Link>
 
+      {/* Buscador global (⌘K) */}
+      <div className="px-2.5 pt-3">
+        <BuscadorGlobal />
+      </div>
+
       {/* Nav agrupada */}
       <nav className="flex-1 overflow-y-auto px-2.5 py-4 space-y-4">
         {gruposVisibles.map(({ grupo, items }) => (
@@ -151,7 +157,7 @@ export function Layout() {
           <img src="/steve.png" alt="Steve" className="h-9 w-9 object-contain shrink-0" draggable={false} />
           <div className="leading-tight">
             <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-text-subtle">Powered by</p>
-            <p className="text-[13px] font-semibold text-text-strong">Steve</p>
+            <p className="text-[13px] font-semibold text-text-strong">Doge</p>
           </div>
         </div>
       </div>
