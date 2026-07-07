@@ -17,6 +17,7 @@ import {
 import { functions } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
+import { CargandoPagina } from '../../components/ui/CargandoPagina';
 import { useMutacion } from '../../hooks/useMutacion';
 import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
 import { formatearFecha } from '../../utils/fechas';
@@ -245,6 +246,8 @@ export default function ExamenesMedicosPage() {
       no_aptos: docs.filter((d) => d.estado === 'no_apto').length,
     };
   }, [docs]);
+
+  if (cargando && docs.length === 0) return <CargandoPagina />;
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">

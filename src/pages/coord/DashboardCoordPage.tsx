@@ -20,6 +20,7 @@ import { diasTranscurridos, esVacanteCerrada } from '../../utils/reportesVacante
 import type { PostulacionDoc, VacanteDoc } from '../../schemas';
 import { SaludoInicio } from '../../components/SaludoInicio';
 import { DrillDownVacantes, type DrillItem } from '../../components/dashboard/DrillDownVacantes';
+import { CargandoPagina } from '../../components/ui/CargandoPagina';
 
 /**
  * DashboardCoordPage · vista ejecutiva (coordinación / admin).
@@ -209,6 +210,9 @@ export default function DashboardCoordPage() {
       })),
     };
   }, [drill, activasFull, vacantes, postulaciones]);
+
+  // Primera carga (caché fría): esqueleto en vez de números en 0.
+  if (cargando && vacantes.length === 0) return <CargandoPagina />;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-12">

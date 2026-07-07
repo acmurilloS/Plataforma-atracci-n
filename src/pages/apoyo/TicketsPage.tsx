@@ -21,6 +21,7 @@ import {
 } from '../../schemas';
 import { Card, Pill, type PillTono } from '../../components/brand';
 import { SaludoInicio } from '../../components/SaludoInicio';
+import { CargandoPagina } from '../../components/ui/CargandoPagina';
 import { cn } from '../../utils/cn';
 
 /**
@@ -238,6 +239,8 @@ export default function TicketsPage() {
       setProcesando(null);
     }
   }
+
+  if (cargando && tickets.length === 0) return <CargandoPagina />;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">

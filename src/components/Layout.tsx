@@ -145,26 +145,14 @@ export function Layout() {
         ))}
       </nav>
 
-      {/* Usuario + salir */}
+      {/* Powered by Steve */}
       <div className="shrink-0 border-t border-slate-100 p-3">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[13px] font-semibold shrink-0">
-            {inicial}
+        <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-slate-50 transition-colors">
+          <img src="/steve.png" alt="Steve" className="h-9 w-9 object-contain shrink-0" draggable={false} />
+          <div className="leading-tight">
+            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-text-subtle">Powered by</p>
+            <p className="text-[13px] font-semibold text-text-strong">Steve</p>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[12.5px] font-medium text-text-strong truncate">
-              {perfil?.nombre} {perfil?.apellido}
-            </p>
-            <p className="text-[11px] text-text-subtle truncate">{ROL_NOMBRE[rol ?? ''] ?? rol}</p>
-          </div>
-          <button
-            onClick={() => cerrarSesion()}
-            title="Cerrar sesión"
-            aria-label="Cerrar sesión"
-            className="text-text-muted hover:text-text-strong transition-colors p-1.5 rounded-md hover:bg-slate-100 shrink-0"
-          >
-            <LogOut size={15} strokeWidth={1.75} />
-          </button>
         </div>
       </div>
     </div>
@@ -211,8 +199,25 @@ export function Layout() {
                 {tituloActivo}
               </h2>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2.5 shrink-0">
               <Campanita />
+              <div className="flex items-center gap-2 pl-2.5 border-l border-slate-200/80">
+                <div className="hidden sm:block text-right leading-tight">
+                  <p className="text-[12.5px] font-medium text-text-strong">{perfil?.nombre}</p>
+                  <p className="text-[10.5px] text-text-subtle">{ROL_NOMBRE[rol ?? ''] ?? rol}</p>
+                </div>
+                <div className="h-9 w-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[13px] font-semibold">
+                  {inicial}
+                </div>
+                <button
+                  onClick={() => cerrarSesion()}
+                  title="Cerrar sesión"
+                  aria-label="Cerrar sesión"
+                  className="text-text-muted hover:text-text-strong transition-colors p-1.5 rounded-md hover:bg-slate-100"
+                >
+                  <LogOut size={15} strokeWidth={1.75} />
+                </button>
+              </div>
             </div>
           </div>
         </header>

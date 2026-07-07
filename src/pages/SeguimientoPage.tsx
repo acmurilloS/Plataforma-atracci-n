@@ -17,6 +17,7 @@ import { cn } from '../utils/cn';
 import type { VacanteDoc } from '../schemas';
 import { Button, KpiCard, Pill } from '../components/brand';
 import { SaludoInicio } from '../components/SaludoInicio';
+import { CargandoPagina } from '../components/ui/CargandoPagina';
 
 /**
  * SeguimientoPage · sistema brand.
@@ -113,6 +114,8 @@ export default function SeguimientoPage() {
       porFase,
     };
   }, [vacantes]);
+
+  if (cargando && vacantes.length === 0) return <CargandoPagina />;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">
