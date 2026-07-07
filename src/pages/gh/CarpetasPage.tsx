@@ -25,6 +25,8 @@ import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { DotacionModal } from '../../components/gh/DotacionModal';
 import { SaludoInicio } from '../../components/SaludoInicio';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
+import { FolderCheck } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import {
   CATALOGO_DOCUMENTOS_CARPETA,
@@ -325,23 +327,13 @@ export default function CarpetasPage() {
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
       <SaludoInicio />
 
-      {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Pasos 18 – 19 · Analista + GH
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Carpetas digitales
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          Vista consolidada de los documentos del integrante apto médico. Los archivos viven en
-          la postulación (tab Documentos, paso 10) — aquí GH solo valida que todo esté completo
-          antes de cerrar la vacante y disparar los tickets del paso 20.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<FolderCheck size={26} strokeWidth={1.6} />}
+        tono="success"
+        eyebrow="Pasos 18 – 19 · Analista + GH"
+        titulo="Carpetas digitales"
+        descripcion="Documentos del integrante apto médico. Los archivos viven en la postulación (tab Documentos, paso 10) — aquí GH valida que todo esté completo antes de cerrar la vacante y disparar los tickets del paso 20."
+      />
 
       {/* Aptos sin carpeta · alerta */}
       {postSinCarpeta.length > 0 && (

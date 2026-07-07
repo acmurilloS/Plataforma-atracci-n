@@ -22,6 +22,8 @@ import {
 import { Card, Pill, type PillTono } from '../../components/brand';
 import { SaludoInicio } from '../../components/SaludoInicio';
 import { CargandoPagina } from '../../components/ui/CargandoPagina';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
+import { Ticket } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 /**
@@ -246,23 +248,17 @@ export default function TicketsPage() {
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">
       <SaludoInicio />
 
-      {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Paso 20 · Módulo 8 · Apoyo
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Tickets de conexión
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          {esApoyo
+      <EncabezadoPagina
+        icono={<Ticket size={26} strokeWidth={1.6} />}
+        tono="info"
+        eyebrow="Paso 20 · Módulo 8 · Apoyo"
+        titulo="Tickets de conexión"
+        descripcion={
+          esApoyo
             ? `Cola de tu área (${AREA_LABEL[areaForzada as AreaApoyo] ?? '—'}): accesos, dotación, puesto físico, usuarios contables, inducción.`
-            : 'Cola por área: IT, compras, bodega, contabilidad, talentos y administrativo CJ.'}
-        </p>
-      </div>
+            : 'Cola por área: IT, compras, bodega, contabilidad, talentos y administrativo CJ.'
+        }
+      />
 
       {err && (
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">

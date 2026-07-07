@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Sparkles, Users } from 'lucide-react';
 import { useColeccion } from '../../hooks/useColeccion';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { formatearFecha } from '../../utils/fechas';
 import {
   dominioCandidato,
@@ -130,23 +131,13 @@ export default function PoolPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-10">
-      {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Módulo 11 · Base cross-vacante
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Pool propio de integrantes
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-3xl">
-          Búsqueda cross-vacante de integrantes que ya pasaron por procesos. Cuando se abre una
-          vacante similar a una anterior, en vez de empezar desde cero, sugiere integrantes
-          reciclables del pool.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<Users size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Módulo 11 · Base cross-vacante"
+        titulo="Pool propio de integrantes"
+        descripcion="Búsqueda cross-vacante de integrantes que ya pasaron por procesos. Cuando se abre una vacante similar a una anterior, en vez de empezar desde cero, sugiere integrantes reciclables del pool."
+      />
 
       {/* Empty state honesto · el pool madura con uso */}
       {!cargando && stats.total < 10 && (

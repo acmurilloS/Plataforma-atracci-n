@@ -8,6 +8,7 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { formatearCOP } from '../../utils/moneda';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../../schemas';
 
@@ -124,22 +125,13 @@ export default function AprobacionAvalPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
-      {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Paso 2 · GH / Coordinación
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Aprobación de aval y condiciones
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          Revisa el aval firmado por Alejandro, valida la banda salarial y aprueba o rechaza cada
-          vacante en borrador. Solo después de aprobar pasa a perfilamiento.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<ShieldCheck size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Paso 2 · GH / Coordinación"
+        titulo="Aprobación de aval y condiciones"
+        descripcion="Revisa el aval firmado por Alejandro, valida la banda salarial y aprueba o rechaza cada vacante en borrador. Solo después de aprobar pasa a perfilamiento."
+      />
 
       {err && (
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">

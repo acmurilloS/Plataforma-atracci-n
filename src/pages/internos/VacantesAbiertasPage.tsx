@@ -8,7 +8,8 @@ import { postularComoInterno } from '../../utils/postularComoInterno';
 import type { VacanteDoc } from '../../schemas';
 import { Modal } from '../../components/ui';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
-import { Button, Card, Pill } from '../../components/brand';
+import { Button, Card } from '../../components/brand';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
 /**
@@ -76,23 +77,13 @@ export default function VacantesAbiertasPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
-      {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Movilidad interna
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Vacantes abiertas en el holding
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-3xl">
-          Postúlate a una vacante de cualquiera de las 4 empresas del holding. Tu candidatura
-          queda marcada como interna y va por el mismo flujo que las externas — pero el
-          analista la ve identificada.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<Briefcase size={26} strokeWidth={1.6} />}
+        tono="brand"
+        eyebrow="Movilidad interna"
+        titulo="Vacantes abiertas en el holding"
+        descripcion="Postúlate a una vacante de cualquiera de las 4 empresas del holding. Tu candidatura queda marcada como interna y va por el mismo flujo que las externas — pero el analista la ve identificada."
+      />
 
       {resultado && (
         <div

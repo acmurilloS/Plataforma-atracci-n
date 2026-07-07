@@ -18,6 +18,7 @@ import { functions } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
 import { CargandoPagina } from '../../components/ui/CargandoPagina';
+import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { useMutacion } from '../../hooks/useMutacion';
 import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
 import { formatearFecha } from '../../utils/fechas';
@@ -251,22 +252,13 @@ export default function ExamenesMedicosPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
-      {/* Hero */}
-      <div>
-        <Pill tono="brand" dot>
-          Pasos 15 – 17 · GH
-        </Pill>
-        <h1
-          className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
-          style={{ textWrap: 'balance' }}
-        >
-          Exámenes médicos
-        </h1>
-        <p className="mt-3 text-[15px] text-text-muted leading-[1.55] max-w-2xl">
-          Cuando el líder aprueba un integrante, se dispara automáticamente la solicitud. GH
-          envía la orden al centro médico y registra el concepto recibido.
-        </p>
-      </div>
+      <EncabezadoPagina
+        icono={<Stethoscope size={26} strokeWidth={1.6} />}
+        tono="info"
+        eyebrow="Pasos 15 – 17 · GH"
+        titulo="Exámenes médicos"
+        descripcion="Cuando el líder aprueba un integrante, se dispara automáticamente la solicitud. GH envía la orden al centro médico y registra el concepto recibido."
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
