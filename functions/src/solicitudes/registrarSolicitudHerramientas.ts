@@ -4,7 +4,7 @@ import { logger } from 'firebase-functions/v2';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { db } from '../utils/admin';
-import { agregarFilaSheet } from '../sheets/cliente';
+import { agregarFilaSheet, valorExisteEnColumna } from '../sheets/cliente';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { emailAnalistaDeVacante } from '../notificaciones/emailAnalista';
 
@@ -310,7 +310,20 @@ export const registrarSolicitudHerramientas = onCall(
     const personaContacto = (sol.persona_contacto || liderNombre || '').trim();
     const tipoReemplazoLabel = TIPO_REEMPLAZO_LABEL[tipoSolicitud] ?? tipoSolicitud;
 
-    // 1) Escribir la fila en la hoja de IT.
+    // 1) Escribir la fila en la hoja de IT — idempotente por consecutivo.
+    //
+    // La fila se escribe ANTES de marcar el flag `solicitud_herramientas_enviada_en`
+    // (paso 3). Como esos dos pasos no son transaccionales, un intento previo pudo
+    // escribir la fila pero no alcanzar a marcar el flag (p.ej. el update posterior
+    // falló o la función murió). En ese caso un re-guardado del perfilamiento
+    // llegaría aquí de nuevo. Para NO duplicar la fila, primero comprobamos si el
+    // consecutivo ya está en la columna C de la hoja: si está, reconciliamos
+    // (saltamos el append) y seguimos a marcar el flag; si no, escribimos. El
+    // consecutivo de la plataforma (EMPRESA-SEDE-AÑO-NUM) es único y no colisiona
+    // con las filas manuales del formulario viejo de IT.
+    //
+    // Si el append falla lanzamos SIN marcar el flag → el próximo intento reintenta
+    // y, como no se escribió ninguna fila, no duplica.
     const sheetId = (process.env.SOLICITUD_HERRAMIENTAS_SHEET_ID ?? '')
       .replace(/^﻿/, '')
       .trim();
@@ -321,22 +334,38 @@ export const registrarSolicitudHerramientas = onCall(
       );
     }
     try {
-      await agregarFilaSheet({
-        spreadsheetId: sheetId,
-        hoja: HOJA,
-        valores: construirFila({
-          correoSolicitante,
-          consecutivo,
-          empresa,
-          unidad,
-          cargo,
-          ciudad,
-          sol,
-          liderNombre,
-          tipoSolicitud,
-          reemplazaA,
-        }),
-      });
+      const yaEnHoja = consecutivo
+        ? await valorExisteEnColumna({
+            spreadsheetId: sheetId,
+            hoja: HOJA,
+            columna: 'C',
+            valor: consecutivo,
+          })
+        : false;
+
+      if (yaEnHoja) {
+        logger.info(
+          '[registrarSolicitudHerramientas] consecutivo ya en la hoja, se omite fila (reconciliación de idempotencia)',
+          { consecutivo, vacante_id },
+        );
+      } else {
+        await agregarFilaSheet({
+          spreadsheetId: sheetId,
+          hoja: HOJA,
+          valores: construirFila({
+            correoSolicitante,
+            consecutivo,
+            empresa,
+            unidad,
+            cargo,
+            ciudad,
+            sol,
+            liderNombre,
+            tipoSolicitud,
+            reemplazaA,
+          }),
+        });
+      }
     } catch (e) {
       logger.error('[registrarSolicitudHerramientas] error escribiendo hoja', {
         err: e instanceof Error ? e.message : String(e),

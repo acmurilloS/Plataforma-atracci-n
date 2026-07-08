@@ -93,3 +93,33 @@ export async function leerHojaSheet(opts: {
   // numbers que vienen sin formato (ej. cédulas como número en el Sheet).
   return values.map((fila) => fila.map((c) => (c == null ? '' : String(c))));
 }
+
+/**
+ * ¿Existe ya una fila cuyo valor en la columna indicada coincide EXACTO con
+ * `valor` (trim)? Usado para idempotencia: antes de hacer append de una fila
+ * cuyo identificador único (p.ej. el consecutivo de la vacante) ya podría estar
+ * en la hoja, comprobamos que no esté para no duplicar.
+ *
+ * Lee solo esa columna desde `desdeFila` (default 2, salta el encabezado), así
+ * que es barato aunque la hoja tenga miles de filas.
+ */
+export async function valorExisteEnColumna(opts: {
+  spreadsheetId: string;
+  hoja: string;
+  /** Letra de columna, ej. 'C'. */
+  columna: string;
+  valor: string;
+  /** Fila desde la que empezar a leer (default 2, salta encabezado). */
+  desdeFila?: number;
+}): Promise<boolean> {
+  const { spreadsheetId, hoja, columna, valor, desdeFila = 2 } = opts;
+  const objetivo = valor.trim();
+  if (!objetivo) return false;
+
+  const filas = await leerHojaSheet({
+    spreadsheetId,
+    hoja,
+    rango: `${hoja}!${columna}${desdeFila}:${columna}`,
+  });
+  return filas.some((f) => (f[0] ?? '').trim() === objetivo);
+}
