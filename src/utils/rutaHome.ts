@@ -12,6 +12,10 @@ export function rutaHome(rol: RolUsuario | null | undefined): string {
       return '/dashboard';
     case 'gh':
       return '/carpetas';
+    case 'documentacion':
+      return '/carpetas';
+    case 'gestor':
+      return '/examenes-medicos';
     case 'apoyo':
       return '/tickets';
     case 'lider':

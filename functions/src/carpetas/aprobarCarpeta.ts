@@ -27,7 +27,7 @@ import { db } from '../utils/admin';
  * callable es el único camino.
  */
 
-const ROLES_AUTORIZADOS = ['analista', 'coordinador', 'gh', 'admin'];
+const ROLES_AUTORIZADOS = ['analista', 'coordinador', 'gh', 'documentacion', 'admin'];
 
 export const aprobarCarpeta = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');

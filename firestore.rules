@@ -12,6 +12,12 @@ service cloud.firestore {
     function isLider() { return signedIn() && rol() == 'lider'; }
     function isAnalista() { return signedIn() && rol() == 'analista'; }
     function isApoyo() { return signedIn() && rol() == 'apoyo'; }
+    // Documentación (Carla, reu 09-jul): rol acotado a Carpetas. Trabaja los
+    // documentos de la carpeta igual que GH, pero no es "staff" (no ve avales,
+    // exámenes ni el resto). Gestor SST sube exámenes vía callable (Admin SDK),
+    // por eso no necesita write directo en las reglas.
+    function isDocumentacion() { return signedIn() && rol() == 'documentacion'; }
+    function isGestor() { return signedIn() && rol() == 'gestor'; }
     function staff() { return isAdmin() || isCoord() || isGH(); }
 
     // Registro público (landing) → el candidato entra con Auth anónima. Para ese
@@ -181,7 +187,7 @@ service cloud.firestore {
       // directamente — solo la Cloud Function `aprobarCarpeta` (Admin SDK, que
       // valida unicidad de 1 contratado por vacante). Así es imposible tener 2
       // contratados aunque se salten la UI. El resto de updates no cambia.
-      allow update: if (staff() || isAnalista())
+      allow update: if (staff() || isAnalista() || isDocumentacion())
         && !(request.resource.data.estado == 'contratado'
              && resource.data.estado != 'contratado')
         // Igual que 'contratado': 'repostulado' SOLO lo setea la callable
@@ -209,7 +215,7 @@ service cloud.firestore {
     }
     match /documentos_candidato/{id} {
       allow read: if signedIn();
-      allow write: if staff() || isAnalista();
+      allow write: if staff() || isAnalista() || isDocumentacion();
     }
     match /informes/{id} {
       allow read: if signedIn();
@@ -235,7 +241,7 @@ service cloud.firestore {
     }
     match /carpetas_digitales/{id} {
       allow read: if signedIn();
-      allow write: if staff() || isAnalista();
+      allow write: if staff() || isAnalista() || isDocumentacion();
     }
     match /tickets_conexion/{id} {
       allow get: if staff() || isAnalista()

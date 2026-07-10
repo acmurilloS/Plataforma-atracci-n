@@ -15,7 +15,7 @@ import { db } from '../utils/admin';
  */
 
 const STAFF = ['admin', 'coordinador'];
-const ROLES_PERMITIDOS = ['gh', 'apoyo', 'talentos'];
+const ROLES_PERMITIDOS = ['gh', 'apoyo', 'talentos', 'gestor', 'documentacion'];
 const AREAS_APOYO = ['it', 'compras', 'bodega', 'contabilidad', 'administrativo', 'talentos'];
 const RE_EMAIL = /^[^@\s]+@equitel\.com\.co$/;
 
@@ -30,7 +30,7 @@ export const preasignarRoles = onCall({ region: 'us-central1' }, async (req) => 
   if (!ROLES_PERMITIDOS.includes(rol)) {
     throw new HttpsError(
       'invalid-argument',
-      'Solo puedes pre-asignar los roles gh o apoyo por esta vía.',
+      `Rol no permitido por esta vía. Válidos: ${ROLES_PERMITIDOS.join(', ')}.`,
     );
   }
 

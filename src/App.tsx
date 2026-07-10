@@ -247,7 +247,7 @@ export default function App() {
             <Route
               path="/examenes-medicos"
               element={
-                <ProtectedRoute roles={['gh', 'admin', 'coordinador']}>
+                <ProtectedRoute roles={['gh', 'gestor', 'admin', 'coordinador']}>
                   <ExamenesMedicosPage />
                 </ProtectedRoute>
               }
@@ -255,7 +255,7 @@ export default function App() {
             <Route
               path="/carpetas"
               element={
-                <ProtectedRoute roles={['gh', 'analista', 'admin', 'coordinador']}>
+                <ProtectedRoute roles={['gh', 'documentacion', 'analista', 'admin', 'coordinador']}>
                   <CarpetasPage />
                 </ProtectedRoute>
               }

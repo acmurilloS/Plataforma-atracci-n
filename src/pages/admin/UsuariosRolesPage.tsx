@@ -47,8 +47,10 @@ const ROL_LABEL: Record<string, string> = {
   lider: 'Líder',
   apoyo: 'Apoyo',
   talentos: 'Conexión de Talentos',
+  gestor: 'Gestor SST',
+  documentacion: 'Documentación',
 };
-const ROLES_ASIGNABLES = ['admin', 'coordinador', 'gh', 'analista', 'lider', 'talentos'];
+const ROLES_ASIGNABLES = ['admin', 'coordinador', 'gh', 'analista', 'lider', 'talentos', 'gestor', 'documentacion'];
 
 const SETEAR_ROL_URL = 'https://us-central1-ptm-atraccion.cloudfunctions.net/setearRolUsuario';
 
@@ -82,7 +84,7 @@ export default function UsuariosRolesPage() {
   const [filtroRol, setFiltroRol] = useState('');
 
   // Formulario de pre-asignación (invitar rol nuevo por correo).
-  const [rolPre, setRolPre] = useState<'gh' | 'talentos'>('gh');
+  const [rolPre, setRolPre] = useState<'gh' | 'talentos' | 'gestor' | 'documentacion'>('gh');
   const [texto, setTexto] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [errorPre, setErrorPre] = useState('');
@@ -448,7 +450,8 @@ export default function UsuariosRolesPage() {
           <p className="text-[10px] font-bold tracking-[0.10em] uppercase">Invitar / pre-asignar rol</p>
         </div>
         <p className="text-[12.5px] text-text-muted mb-4 max-w-2xl">
-          Marca correos con <strong>Gestión Humana</strong> o <strong>Conexión de Talentos</strong>.
+          Marca correos con <strong>Gestión Humana</strong>, <strong>Conexión de Talentos</strong>,{' '}
+          <strong>Gestor SST</strong> (solo Exámenes) o <strong>Documentación</strong> (solo Carpetas).
           Cuando la persona entre por primera vez con Google, ya le queda su perfil. Los{' '}
           <strong>analistas</strong> y <strong>líderes</strong> eligen su rol al entrar;{' '}
           <strong>admin</strong> y <strong>coordinación</strong> los asigna un administrador.
@@ -456,7 +459,7 @@ export default function UsuariosRolesPage() {
 
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {(['gh', 'talentos'] as const).map((r) => (
+            {(['gh', 'talentos', 'gestor', 'documentacion'] as const).map((r) => (
               <button
                 key={r}
                 type="button"

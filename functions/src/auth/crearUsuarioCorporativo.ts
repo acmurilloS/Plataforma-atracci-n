@@ -54,7 +54,7 @@ export const crearUsuarioCorporativo = onRequest(
           area_apoyo?: string;
         };
 
-      const rolesValidos = ['admin', 'lider', 'analista', 'coordinador', 'gh', 'apoyo'];
+      const rolesValidos = ['admin', 'lider', 'analista', 'coordinador', 'gh', 'apoyo', 'talentos', 'gestor', 'documentacion'];
 
       if (!email || !nombre || !apellido || !rol || !rolesValidos.includes(rol)) {
         res.status(400).json({

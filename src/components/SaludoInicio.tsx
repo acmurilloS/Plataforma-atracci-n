@@ -16,6 +16,8 @@ const ROL_TEXTO: Record<string, string> = {
   lider: 'Tus vacantes',
   talentos: 'Conexión de Talentos',
   apoyo: 'Tus tickets',
+  gestor: 'Exámenes médicos',
+  documentacion: 'Carpetas',
 };
 
 function saludoHora(): string {

@@ -11,6 +11,13 @@ export const rolUsuario = z.enum([
   // lectura — ve Seguimiento, Vacantes abiertas y el Perfilamiento del cargo,
   // sin editar nada (no tiene permisos de escritura en el proceso).
   'talentos',
+  // Gestor SST (reu Karen 09-jul): los 3 gestores de Seguridad y Salud en el
+  // Trabajo suben el resultado de exámenes médicos en la plataforma. Rol ACOTADO
+  // a Exámenes (calcado de 'apoyo', que solo ve Tickets).
+  'gestor',
+  // Documentación (Carla, reu Karen 09-jul): trabaja SOLO las Carpetas. Rol
+  // acotado — no ve aprobaciones ni exámenes.
+  'documentacion',
 ]);
 export type RolUsuario = z.infer<typeof rolUsuario>;
 

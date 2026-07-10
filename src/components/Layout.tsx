@@ -63,9 +63,9 @@ const ITEMS: ItemNav[] = [
     roles: ['analista', 'coordinador', 'apoyo', 'admin', 'talentos'],
   },
   { to: '/pool', label: 'Pool', icon: Users, grupo: 'Proceso', roles: ['analista', 'coordinador', 'admin'] },
-  { to: '/carpetas', label: 'Carpetas', icon: FolderCheck, grupo: 'Proceso', roles: ['gh', 'analista', 'coordinador', 'admin'] },
+  { to: '/carpetas', label: 'Carpetas', icon: FolderCheck, grupo: 'Proceso', roles: ['gh', 'documentacion', 'analista', 'coordinador', 'admin'] },
   { to: '/aprobaciones-aval', label: 'Aprobaciones', icon: ShieldCheck, grupo: 'Proceso', roles: ['gh', 'coordinador', 'admin'] },
-  { to: '/examenes-medicos', label: 'Exámenes', icon: Stethoscope, grupo: 'Proceso', roles: ['gh', 'coordinador', 'admin'] },
+  { to: '/examenes-medicos', label: 'Exámenes', icon: Stethoscope, grupo: 'Proceso', roles: ['gh', 'gestor', 'coordinador', 'admin'] },
   { to: '/tickets', label: 'Tickets', icon: Ticket, grupo: 'Proceso', roles: ['apoyo', 'analista', 'coordinador', 'admin'] },
   { to: '/admin', label: 'Panel admin', icon: LayoutGrid, grupo: 'Administración', roles: ['admin'], end: true },
   { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog, grupo: 'Administración', roles: ['admin'] },
@@ -82,6 +82,8 @@ const ROL_NOMBRE: Record<string, string> = {
   lider: 'Líder',
   talentos: 'Conexión de Talentos',
   apoyo: 'Apoyo',
+  gestor: 'Gestor SST',
+  documentacion: 'Documentación',
 };
 
 function itemClass({ isActive }: { isActive: boolean }) {
