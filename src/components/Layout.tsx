@@ -46,17 +46,21 @@ interface ItemNav {
 }
 
 const ITEMS: ItemNav[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: BarChart3, grupo: 'Proceso', roles: ['coordinador', 'admin', 'gh'] },
-  { to: '/seguimiento', label: 'Seguimiento', icon: ListChecks, grupo: 'Proceso', roles: ['lider', 'analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'] },
+  // GH (rol 'gh') NO ve dashboard/seguimiento/vacantes (reu Karen 09-jul,
+  // validado con Mari): don Diego no debe ver la gestión interna del equipo de
+  // atracción ni procesos confidenciales. GH solo ve Aprobaciones, Carpetas y
+  // Exámenes.
+  { to: '/dashboard', label: 'Dashboard', icon: BarChart3, grupo: 'Proceso', roles: ['coordinador', 'admin'] },
+  { to: '/seguimiento', label: 'Seguimiento', icon: ListChecks, grupo: 'Proceso', roles: ['lider', 'analista', 'coordinador', 'apoyo', 'admin', 'talentos'] },
   { to: '/mis-vacantes', label: 'Mis vacantes', icon: Briefcase, grupo: 'Proceso', roles: ['lider'] },
   { to: '/vacantes/nueva', label: 'Nueva vacante', icon: PlusCircle, grupo: 'Proceso', roles: ['lider', 'coordinador', 'admin'] },
   {
-    // Sin 'lider' (reu Karen 02-jul): hay solicitudes confidenciales.
+    // Sin 'lider' (reu Karen 02-jul) ni 'gh' (reu 09-jul): solicitudes confidenciales.
     to: '/vacantes-abiertas',
     label: 'Vacantes abiertas',
     icon: FolderOpen,
     grupo: 'Proceso',
-    roles: ['analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos'],
+    roles: ['analista', 'coordinador', 'apoyo', 'admin', 'talentos'],
   },
   { to: '/pool', label: 'Pool', icon: Users, grupo: 'Proceso', roles: ['analista', 'coordinador', 'admin'] },
   { to: '/carpetas', label: 'Carpetas', icon: FolderCheck, grupo: 'Proceso', roles: ['gh', 'analista', 'coordinador', 'admin'] },

@@ -35,10 +35,22 @@ import PoolPage from './pages/pool/PoolPage';
 import VacantesAbiertasPage from './pages/internos/VacantesAbiertasPage';
 
 // Roles que trabajan el proceso de atracción (vacante/postulación). EXCLUYE
-// 'apoyo' (IT/compras/bodega: solo tickets, no ve internos de reclutamiento ni
-// PII del candidato) y a quien no tenga rol. Defensa en profundidad para que
-// esas pantallas no se abran por URL directa; el nav ya filtra por rol.
-const ROLES_PROCESO: RolUsuario[] = ['lider', 'analista', 'coordinador', 'gh', 'admin'];
+// 'apoyo' (IT/compras/bodega: solo tickets) y 'gh' (Gestión Humana solo ve
+// Aprobaciones/Carpetas/Exámenes — reu Karen 09-jul, validado con Mari: no ven
+// el pipeline de reclutamiento ni la gestión interna del equipo de atracción).
+// Defensa en profundidad para que esas pantallas no se abran por URL directa;
+// el nav ya filtra por rol.
+const ROLES_PROCESO: RolUsuario[] = ['lider', 'analista', 'coordinador', 'admin'];
+
+// Todo el que NO es GH ni sin-rol: para Seguimiento (GH queda fuera).
+const ROLES_SEGUIMIENTO: RolUsuario[] = [
+  'lider',
+  'analista',
+  'coordinador',
+  'apoyo',
+  'admin',
+  'talentos',
+];
 
 // Perfilamiento: además del proceso, lo puede VER (solo lectura) 'talentos'
 // (José Hoyos · Conexión de Talentos, reu 03-jul). No edita: la página se
@@ -103,7 +115,14 @@ export default function App() {
           <Route path="/portal/:token" element={<PortalCandidatoPage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<InicioRedirect />} />
-            <Route path="/seguimiento" element={<SeguimientoPage />} />
+            <Route
+              path="/seguimiento"
+              element={
+                <ProtectedRoute roles={ROLES_SEGUIMIENTO}>
+                  <SeguimientoPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/vacantes/nueva"
               element={
@@ -112,9 +131,23 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/vacantes" element={<VacantesListaPage />} />
+            <Route
+              path="/vacantes"
+              element={
+                <ProtectedRoute roles={['analista', 'coordinador', 'admin']}>
+                  <VacantesListaPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/mis-vacantes" element={<LiderMisVacantesPage />} />
-            <Route path="/vacantes/:id" element={<VacanteDetallePage />} />
+            <Route
+              path="/vacantes/:id"
+              element={
+                <ProtectedRoute roles={ROLES_PROCESO}>
+                  <VacanteDetallePage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/vacantes/:id/perfilamiento"
               element={
@@ -246,7 +279,7 @@ export default function App() {
             <Route
               path="/vacantes-abiertas"
               element={
-                <ProtectedRoute roles={['analista', 'coordinador', 'gh', 'apoyo', 'admin', 'talentos']}>
+                <ProtectedRoute roles={['analista', 'coordinador', 'apoyo', 'admin', 'talentos']}>
                   <VacantesAbiertasPage />
                 </ProtectedRoute>
               }
@@ -254,7 +287,7 @@ export default function App() {
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute roles={['coordinador', 'admin', 'gh']}>
+                <ProtectedRoute roles={['coordinador', 'admin']}>
                   <DashboardCoordPage />
                 </ProtectedRoute>
               }
