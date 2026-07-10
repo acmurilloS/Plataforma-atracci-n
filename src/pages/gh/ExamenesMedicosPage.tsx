@@ -467,17 +467,19 @@ export default function ExamenesMedicosPage() {
                   </Button>
                 )}
 
-                {ex.estado === 'enviada' && puedeSubirResultado && !abierto && (
-                  <Button
-                    onClick={() => abrirResultado(ex)}
-                    disabled={procesando === ex.id}
-                    variant="brand-primary"
-                    size="medium"
-                    icon={<Upload size={13} strokeWidth={1.75} />}
-                  >
-                    Subir resultado
-                  </Button>
-                )}
+                {(ex.estado === 'enviada' || ex.estado === 'solicitada') &&
+                  puedeSubirResultado &&
+                  !abierto && (
+                    <Button
+                      onClick={() => abrirResultado(ex)}
+                      disabled={procesando === ex.id}
+                      variant="brand-primary"
+                      size="medium"
+                      icon={<Upload size={13} strokeWidth={1.75} />}
+                    >
+                      Subir resultado
+                    </Button>
+                  )}
 
                 {ex.estado === 'en_revision_cd' && puedeDecidir && !abierto && (
                   <Button

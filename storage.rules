@@ -72,10 +72,14 @@ service firebase.storage {
 
     // Resultado del examen médico + acta de recomendaciones (PDF/imagen) que los
     // gestores SST (o GH) suben en la plataforma (reu Karen 09-jul). Dato médico
-    // sensible: solo usuarios internos con rol suben/leen.
+    // sensible (Habeas Data): solo los actores del flujo médico leen/suben — NO
+    // lider/apoyo/talentos/documentacion ni el anónimo de la landing.
     match /resultados_examenes/{examen}/{file} {
-      allow read: if tieneRol();
-      allow write: if tieneRol() && esPdfOImagen() && request.resource.size < 15 * 1024 * 1024;
+      allow read: if request.auth != null
+        && request.auth.token.rol in ['gh', 'coordinador', 'admin', 'analista', 'gestor'];
+      allow write: if request.auth != null
+        && request.auth.token.rol in ['gh', 'coordinador', 'admin', 'gestor']
+        && esPdfOImagen() && request.resource.size < 15 * 1024 * 1024;
     }
 
     // Formato oficial REGENERADO al corregir un campo (Datos Básicos / SAGRILAFT).

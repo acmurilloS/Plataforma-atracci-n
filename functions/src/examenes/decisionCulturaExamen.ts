@@ -24,6 +24,7 @@ export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (re
   if (!ROLES_DECIDE.includes(rol)) {
     throw new HttpsError('permission-denied', 'Solo Cultura y Desarrollo decide la novedad.');
   }
+  const uid = req.auth.uid;
 
   const examenId = String(req.data?.examen_id ?? '').trim();
   const decision = String(req.data?.decision ?? '').trim();
@@ -49,27 +50,42 @@ export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (re
   const ahora = FieldValue.serverTimestamp();
   const continua = decision === 'continua';
 
-  await exRef.update({
-    estado: continua ? 'apto' : 'no_apto',
-    apto: continua,
-    decision_cd: decision,
-    decision_cd_por: req.auth.uid,
-    decision_cd_en: ahora,
-    decision_cd_obs: observaciones || null,
-    actualizado_en: ahora,
-    actualizado_por: req.auth.uid,
+  // Transacción: re-valida que el examen siga 'en_revision_cd' (anti doble-submit)
+  // y solo transiciona la postulación/vacante si la postulación sigue en
+  // 'en_examenes_medicos' (no resucita una que ya desistió). Examen + postulación
+  // + vacante quedan atómicos.
+  await db.runTransaction(async (tx) => {
+    const exFresh = await tx.get(exRef);
+    if (String(exFresh.data()?.estado ?? '') !== 'en_revision_cd') {
+      throw new HttpsError('failed-precondition', 'Este examen ya fue resuelto.');
+    }
+    const postRef = postId ? db.collection('postulaciones').doc(postId) : null;
+    const postSnap = postRef ? await tx.get(postRef) : null;
+    const postEnExamenes =
+      !!postSnap && String(postSnap.data()?.estado ?? '') === 'en_examenes_medicos';
+
+    tx.update(exRef, {
+      estado: continua ? 'apto' : 'no_apto',
+      apto: continua,
+      decision_cd: decision,
+      decision_cd_por: uid,
+      decision_cd_en: ahora,
+      decision_cd_obs: observaciones || null,
+      actualizado_en: ahora,
+      actualizado_por: uid,
+    });
+    if (postRef && postEnExamenes) {
+      tx.update(postRef, {
+        estado: continua ? 'en_contratacion' : 'descartado_examenes_medicos',
+        ultima_transicion_estado: ahora,
+        [`marcas.${continua ? 'apto_medico_en' : 'descartado_examenes_medicos_en'}`]: ahora,
+      });
+      if (continua && vacanteId) {
+        tx.update(db.collection('vacantes').doc(vacanteId), { estado: 'en_contratacion' });
+      }
+    }
   });
 
-  if (postId) {
-    await db.collection('postulaciones').doc(postId).update({
-      estado: continua ? 'en_contratacion' : 'descartado_examenes_medicos',
-      ultima_transicion_estado: ahora,
-      [`marcas.${continua ? 'apto_medico_en' : 'descartado_examenes_medicos_en'}`]: ahora,
-    });
-  }
-  if (continua && vacanteId) {
-    await db.collection('vacantes').doc(vacanteId).update({ estado: 'en_contratacion' });
-  }
   if (!continua && candidatoId) {
     // no_apto médico → denormaliza al candidato (mismo shape que
     // actualizarResultadoCandidato del cliente): lo saca del pool futuro.

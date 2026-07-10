@@ -236,8 +236,23 @@ service cloud.firestore {
       allow write: if staff() || isAnalista();
     }
     match /examenes_medicos/{id} {
-      allow read: if signedIn();
-      allow write: if staff() || isAnalista();
+      // Dato médico sensible (Habeas Data): solo los actores del flujo lo leen
+      // (staff + analista + gestor). El anónimo de la landing y roles ajenos
+      // (lider/apoyo/talentos/documentacion) quedan fuera.
+      allow read: if staff() || isAnalista() || isGestor();
+      // El doc lo crea la Cloud Function (paso 15). El cliente solo puede hacer el
+      // paso 16 (enviar orden): NUNCA fijar el concepto/decisión ni las transiciones
+      // server-only — esas van por registrarResultadoExamen / decisionCulturaExamen
+      // (Admin SDK), para que GH no pueda puentear a Diego cuando hay novedad.
+      allow create: if false;
+      allow update: if (staff() || isAnalista())
+        && !(request.resource.data.estado in ['apto', 'no_apto', 'en_revision_cd'])
+        && request.resource.data.get('apto', null) == resource.data.get('apto', null)
+        && request.resource.data.get('resultado_url', null) == resource.data.get('resultado_url', null)
+        && request.resource.data.get('novedad', null) == resource.data.get('novedad', null)
+        && request.resource.data.get('observaciones_gestor', null) == resource.data.get('observaciones_gestor', null)
+        && request.resource.data.get('decision_cd', null) == resource.data.get('decision_cd', null);
+      allow delete: if false;
     }
     match /carpetas_digitales/{id} {
       allow read: if signedIn();

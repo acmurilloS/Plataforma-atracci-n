@@ -21,6 +21,12 @@ const DIEGO_CULTURA = 'dortiz@equitel.com.co';
 // Suben el resultado: los gestores SST + GH (Diego/Paola) + coordinación + admin.
 const ROLES_SUBIR = ['gestor', 'gh', 'coordinador', 'admin'];
 
+// Estados en los que se puede registrar el resultado. NO incluye 'en_revision_cd'
+// (con novedad → la decisión la toma SOLO don Diego vía decisionCulturaExamen; si
+// se permitiera re-subir aquí, GH/gestor podría puentear a C&D marcando sin_novedad)
+// ni 'apto'/'no_apto' (ya resuelto).
+const ESTADOS_SUBIBLES = ['solicitada', 'enviada'];
+
 /**
  * registrarResultadoExamen · el GESTOR SST (o GH) sube en la plataforma el
  * resultado del examen médico (reu Karen 09-jul). Reemplaza el "concepto por
@@ -67,8 +73,13 @@ export const registrarResultadoExamen = onCall(
     if (!exSnap.exists) throw new HttpsError('not-found', 'La solicitud de exámenes no existe.');
     const ex = exSnap.data() as Record<string, unknown>;
     const estadoActual = String(ex.estado ?? '');
-    if (estadoActual === 'apto' || estadoActual === 'no_apto') {
-      throw new HttpsError('failed-precondition', 'Este examen ya tiene concepto final.');
+    if (!ESTADOS_SUBIBLES.includes(estadoActual)) {
+      throw new HttpsError(
+        'failed-precondition',
+        estadoActual === 'en_revision_cd'
+          ? 'Este examen está en revisión de Cultura y Desarrollo; la decisión la toma C&D.'
+          : 'Este examen ya tiene resultado/concepto registrado.',
+      );
     }
 
     const postId = String(ex.postulacion_id ?? '');
@@ -93,22 +104,38 @@ export const registrarResultadoExamen = onCall(
 
     if (sinNovedad) {
       // Sin novedad = apto. Auto-avanza a contratación (lógica movida del cliente).
+      // Transacción: re-valida el estado del examen (anti doble-submit) y solo mueve
+      // la postulación/vacante si la postulación sigue en 'en_examenes_medicos' (no
+      // resucita una que ya desistió/se descartó). Examen + postulación + vacante
+      // quedan atómicos → nunca hay estado partido si algo falla.
       patch.estado = 'apto';
       patch.apto = true;
-      await exRef.update(patch);
-      if (postId) {
-        await db.collection('postulaciones').doc(postId).update({
-          estado: 'en_contratacion',
-          ultima_transicion_estado: ahora,
-          'marcas.apto_medico_en': ahora,
-        });
-      }
-      if (vacanteId) {
-        await db.collection('vacantes').doc(vacanteId).update({ estado: 'en_contratacion' });
-      }
+      await db.runTransaction(async (tx) => {
+        const exFresh = await tx.get(exRef);
+        if (!ESTADOS_SUBIBLES.includes(String(exFresh.data()?.estado ?? ''))) {
+          throw new HttpsError('failed-precondition', 'El examen ya fue procesado.');
+        }
+        const postRef = postId ? db.collection('postulaciones').doc(postId) : null;
+        const postSnap = postRef ? await tx.get(postRef) : null;
+        const postEnExamenes =
+          !!postSnap && String(postSnap.data()?.estado ?? '') === 'en_examenes_medicos';
+
+        tx.update(exRef, patch);
+        if (postRef && postEnExamenes) {
+          tx.update(postRef, {
+            estado: 'en_contratacion',
+            ultima_transicion_estado: ahora,
+            'marcas.apto_medico_en': ahora,
+          });
+          if (vacanteId) {
+            tx.update(db.collection('vacantes').doc(vacanteId), { estado: 'en_contratacion' });
+          }
+        }
+      });
     } else {
       // Con novedad = decide Cultura y Desarrollo (Diego). No transiciona la
       // postulación todavía (queda en_examenes_medicos hasta que Diego decida).
+      // Un solo doc → escritura atómica de por sí.
       patch.estado = 'en_revision_cd';
       patch.apto = null;
       await exRef.update(patch);
