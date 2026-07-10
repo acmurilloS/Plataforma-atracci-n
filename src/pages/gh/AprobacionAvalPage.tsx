@@ -75,6 +75,7 @@ export default function AprobacionAvalPage() {
         estado: 'aprobada',
         aval_aprobado_por: user.uid,
         aval_aprobado_en: ahora,
+        aval_observaciones: nota.trim() || null,
       });
       await crear('notificaciones', {
         destinatario_uid: v.lider_uid,
@@ -105,6 +106,7 @@ export default function AprobacionAvalPage() {
       await actualizar('vacantes', v.id, {
         estado: 'cancelada',
         razon_cierre: `GH rechazó: ${motivo}`,
+        aval_rechazo_motivo: motivo,
         cerrada_en: ahora,
       });
       await crear('notificaciones', {
@@ -505,6 +507,11 @@ function VacanteRowHistorica({
               </>
             )}
           </p>
+          {!rechazada && vacante.aval_observaciones && (
+            <p className="text-[12px] text-text-muted mt-1 italic">
+              Observaciones: {vacante.aval_observaciones}
+            </p>
+          )}
         </div>
         <Link
           to={`/vacantes/${vacante.id}`}

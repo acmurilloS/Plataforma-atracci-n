@@ -104,6 +104,17 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
   fecha_entrevista_pactada: Timestamp | null;
   aval_aprobado_por: string | null;
   aval_aprobado_en: Timestamp | null;
+  /**
+   * Observaciones que deja quien aprueba (GH / Diego) al aprobar en la pantalla
+   * de Aprobaciones (reu Karen 09-jul). Antes la "nota" se perdía (solo iba al
+   * mensaje al líder). null si aprobó sin observaciones. Opcional por retrocompat.
+   */
+  aval_observaciones?: string | null;
+  /**
+   * Motivo del rechazo en campo propio y consultable (además de embeberlo en
+   * `razon_cierre` por retrocompat con el filtro de "Rechazadas"). Opcional.
+   */
+  aval_rechazo_motivo?: string | null;
   proceso_activo_id: string | null;
   analista_uid: string | null;
   analista_nombre: string | null;

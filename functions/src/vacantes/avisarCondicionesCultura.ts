@@ -13,6 +13,7 @@ import {
 } from '../notificaciones/plantillasMensajes';
 
 const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**
  * Destinatario en Cultura y Desarrollo (Diego Ortiz).
@@ -129,9 +130,20 @@ export async function avisarCondicionesCultura(
     </p>
     <p style="margin:0 0 8px;">El líder registró las siguientes condiciones:</p>
     <table style="border-collapse:collapse;font-size:14px;margin:0 0 18px;">${filasHtml}</table>
-    <p style="margin:0 0 14px;">
-      ¿Nos puedes confirmar por favor si estas condiciones están correctas para continuar con el
-      proceso?
+    <p style="margin:0 0 18px;">
+      Revisa y <strong>aprueba o rechaza</strong> las condiciones directamente en la plataforma.
+      Ahí puedes dejar tus observaciones y todo queda registrado para el equipo de Atracción.
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">
+      <tr><td style="border-radius:8px;background:#be1e0d;">
+        <a href="${APP_URL}/aprobaciones-aval" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
+          Revisar y aprobar en la plataforma →
+        </a>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 14px;font-size:13px;color:#64748b;">
+      Ingresa con tu correo Equitel (@equitel.com.co). Si prefieres, también puedes responder este
+      correo y el equipo lo registra por ti.
     </p>
     <p style="margin:0;">Gracias.</p>
   `.trim();
