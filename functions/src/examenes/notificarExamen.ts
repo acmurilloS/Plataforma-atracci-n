@@ -40,8 +40,9 @@ export async function crearNotificacionExamen(opts: {
 
 /**
  * UIDs del staff de atracción a avisar por un evento de examen: el analista de
- * la vacante + los coordinadores activos (Karen y Mari son coordinación → ya
- * quedan cubiertos). No incluye a GH/gestor: ellos ya operan la pantalla.
+ * la vacante + coordinadores + admins activos. Karen y Mari (Maribel González)
+ * tienen cuenta ADMIN, así que se incluye admin para que "les salga" el aviso
+ * como pidió Karen en la reu. No incluye a GH/gestor: ellos ya operan la pantalla.
  */
 export async function destinatariosExamen(vacanteId: string): Promise<string[]> {
   const uids = new Set<string>();
@@ -56,17 +57,20 @@ export async function destinatariosExamen(vacanteId: string): Promise<string[]> 
       msg: e instanceof Error ? e.message : String(e),
     });
   }
-  try {
-    const cs = await db
-      .collection('usuarios')
-      .where('rol', '==', 'coordinador')
-      .where('activo', '==', true)
-      .get();
-    cs.forEach((c) => uids.add(c.id));
-  } catch (e) {
-    logger.warn('[notificarExamen] no se pudieron leer coordinadores', {
-      msg: e instanceof Error ? e.message : String(e),
-    });
+  for (const rol of ['coordinador', 'admin']) {
+    try {
+      const cs = await db
+        .collection('usuarios')
+        .where('rol', '==', rol)
+        .where('activo', '==', true)
+        .get();
+      cs.forEach((c) => uids.add(c.id));
+    } catch (e) {
+      logger.warn('[notificarExamen] no se pudieron leer usuarios por rol', {
+        rol,
+        msg: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
   return [...uids];
 }
