@@ -53,6 +53,10 @@ export { onExamenMedicoCreate } from './examenes/onExamenMedicoCreate';
 export { reenviarOrdenGestores } from './examenes/reenviarOrdenGestores';
 // Correo de la orden de exámenes al candidato (paso 16, 2026-06-16).
 export { enviarOrdenExamenCandidato } from './examenes/enviarOrdenExamenCandidato';
+// El gestor SST sube el resultado + novedad + acta (reu Karen 09-jul).
+export { registrarResultadoExamen } from './examenes/registrarResultadoExamen';
+// Don Diego (C&D) decide continúa / no-continúa una novedad (reu Karen 09-jul).
+export { decisionCulturaExamen } from './examenes/decisionCulturaExamen';
 
 // Correo al candidato con el agendamiento de su entrevista (pasos 8/13, 2026-06-12).
 export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';

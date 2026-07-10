@@ -5,6 +5,7 @@ import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { leerConfigExamenes } from './configExamenes';
 
 const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**
  * Gestores SST que tramitan las órdenes de exámenes médicos.
@@ -163,11 +164,22 @@ export async function enviarOrdenAGestores(
       <p style="font-size:14px; margin:0 0 14px;">
         <strong>Tiempo de respuesta esperado:</strong> ${escapeHtml(cfg.tiempo_esperado)}.
       </p>
+      <p style="font-size:14px; margin:0 0 14px;">
+        Cuando tengas el resultado, súbelo directamente en la plataforma (PDF) y marca si viene
+        <strong>sin novedad</strong> o <strong>con novedad</strong>. Si es con novedad, don Diego lo revisa y decide.
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;">
+        <tr><td style="border-radius:8px;background:#be1e0d;">
+          <a href="${APP_URL}/examenes-medicos" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
+            Subir el resultado en la plataforma →
+          </a>
+        </td></tr>
+      </table>
       <p style="font-size:13px; color:#333; background:#fff8e1; padding:8px 10px; border-left:3px solid #f0b400;">
-        <strong>Para responder:</strong> si respondes a este correo, tu respuesta llega directamente a
+        Ingresa con tu correo Equitel (@equitel.com.co). Si respondes este correo, tu respuesta llega a
         ${escapeHtml(analistaNombre || 'el analista que lleva el proceso')}${
           analistaEmail ? ` (${escapeHtml(analistaEmail)})` : ''
-        }. Los gestores no tienen acceso a la plataforma.
+        }.
       </p>
       <p>Cordialmente;</p>
       <p style="font-size:12px; color:#777;">

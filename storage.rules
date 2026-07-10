@@ -70,6 +70,14 @@ service firebase.storage {
       allow write: if tieneRol() && esPdfOImagen() && request.resource.size < 8 * 1024 * 1024;
     }
 
+    // Resultado del examen médico + acta de recomendaciones (PDF/imagen) que los
+    // gestores SST (o GH) suben en la plataforma (reu Karen 09-jul). Dato médico
+    // sensible: solo usuarios internos con rol suben/leen.
+    match /resultados_examenes/{examen}/{file} {
+      allow read: if tieneRol();
+      allow write: if tieneRol() && esPdfOImagen() && request.resource.size < 15 * 1024 * 1024;
+    }
+
     // Formato oficial REGENERADO al corregir un campo (Datos Básicos / SAGRILAFT).
     // Lo sube el staff (con rol); cada versión queda con su propio archivo, el
     // anterior NO se borra (trazabilidad de Calidad). Registro en formatos_versiones.
