@@ -530,11 +530,18 @@ export default function CarpetasPage() {
                   porcentaje={completitud.gh.porcentaje}
                   tenue
                 />
-                {completitud.porcentaje === 100 && completitud.pendientesGH.length > 0 && (
+                {/* Nombra SIEMPRE los documentos que le tocan a GH mientras falten.
+                    Antes solo salían con CyD al 100%: hasta ese momento la barra
+                    decía "0 de 4" sin decir CUÁLES, y el badge "GH" vivía dentro
+                    del detalle colapsado — GH no tenía cómo saber qué le iban a
+                    pedir (reportado por JC, 15-jul). */}
+                {completitud.pendientesGH.length > 0 && (
                   <div className="rounded-md border border-warning-500/30 bg-warning-50/60 px-3 py-2 text-[11px] text-warning-800">
-                    <span className="font-semibold">Pendiente de Gestión Humana:</span>{' '}
-                    {completitud.pendientesGH.join(', ')}. GH ya recibió el aviso para
-                    cargarlos/validarlos.
+                    <span className="font-semibold">Los carga Gestión Humana:</span>{' '}
+                    {completitud.pendientesGH.join(', ')}.{' '}
+                    {completitud.porcentaje === 100
+                      ? 'GH ya recibió el aviso para cargarlos/validarlos.'
+                      : 'Se cargan en la postulación → tab Documentos; el aviso a GH sale cuando Cultura y Desarrollo termine su parte.'}
                   </div>
                 )}
               </div>
@@ -553,7 +560,9 @@ export default function CarpetasPage() {
               >
                 <span className="inline-flex items-center gap-2 text-text-body">
                   <FileText size={13} strokeWidth={1.75} className="text-text-subtle" />
-                  {abierta ? 'Ocultar detalle de documentos' : 'Ver detalle de los 18 documentos'}
+                  {abierta
+                    ? 'Ocultar detalle de documentos'
+                    : `Ver detalle de los ${CATALOGO_DOCUMENTOS_CARPETA.length} documentos`}
                 </span>
                 <ChevronDown
                   size={14}
