@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { onRequest } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { puedeGestionarUsuarios } from './permisos';
 
 /**
  * crearUsuarioCorporativo · admin-only HTTPS.
@@ -38,8 +39,8 @@ export const crearUsuarioCorporativo = onRequest(
       }
 
       const decoded = await getAuth().verifyIdToken(idToken);
-      if (decoded.rol !== 'admin') {
-        res.status(403).json({ error: 'Solo admin.' });
+      if (!puedeGestionarUsuarios(decoded as unknown as Record<string, unknown>)) {
+        res.status(403).json({ error: 'No tienes permiso para crear usuarios.' });
         return;
       }
 

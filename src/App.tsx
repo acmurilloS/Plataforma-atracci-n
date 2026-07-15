@@ -57,6 +57,13 @@ const ROLES_SEGUIMIENTO: RolUsuario[] = [
 // renderiza read-only para su rol y las firestore.rules bloquean su escritura.
 const ROLES_PERFILAMIENTO: RolUsuario[] = [...ROLES_PROCESO, 'talentos'];
 
+// Detalle de la POSTULACIÓN: además del proceso, entran 'gh' (Diego/Paola) y
+// 'documentacion' (Carla) porque ahí es donde SUBEN y verifican los documentos
+// de la carpeta (contrato, ARL, EPS, caja) — Carpetas enlaza aquí con "Ir al tab
+// Documentos". NO ven el pipeline: PostulacionDetallePage les muestra solo los
+// tabs de carpeta (documentos / diligencia / datos básicos).
+const ROLES_POSTULACION_DETALLE: RolUsuario[] = [...ROLES_PROCESO, 'gh', 'documentacion'];
+
 function AppShell() {
   return (
     <ProtectedRoute>
@@ -207,7 +214,7 @@ export default function App() {
             <Route
               path="/postulaciones/:id"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={ROLES_POSTULACION_DETALLE}>
                   <PostulacionDetallePage />
                 </ProtectedRoute>
               }
@@ -303,7 +310,7 @@ export default function App() {
             <Route
               path="/admin/catalogos"
               element={
-                <ProtectedRoute roles={['admin']}>
+                <ProtectedRoute roles={['admin']} seccion="catalogos">
                   <CatalogosAdminPage />
                 </ProtectedRoute>
               }
@@ -311,7 +318,7 @@ export default function App() {
             <Route
               path="/admin/usuarios"
               element={
-                <ProtectedRoute roles={['admin']}>
+                <ProtectedRoute roles={['admin']} seccion="usuarios">
                   <UsuariosRolesPage />
                 </ProtectedRoute>
               }

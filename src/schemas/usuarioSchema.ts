@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { areaApoyo, codigoEmpresaSede, rolUsuario } from './enums';
+import { areaApoyo, codigoEmpresaSede, rolUsuario, seccionAdmin } from './enums';
 import type { CamposAuditoria } from './auditoria';
 
 export const usuarioInputSchema = z.object({
@@ -12,6 +12,13 @@ export const usuarioInputSchema = z.object({
   sede_codigo: codigoEmpresaSede.nullable(),
   unidad_id: z.string().nullable(),
   activo: z.boolean().default(true),
+  /**
+   * Override por-usuario: secciones de administración que este usuario puede
+   * usar aunque su rol no sea 'admin' (ver `seccionAdmin`). Opcional; ausente o
+   * vacío = sin permisos extra. Se refleja también como custom claim para que
+   * las Cloud Functions y las reglas de Firestore lo respeten.
+   */
+  secciones_admin: z.array(seccionAdmin).optional(),
 });
 
 export type UsuarioInput = z.infer<typeof usuarioInputSchema>;

@@ -1,6 +1,7 @@
 import { getAuth } from 'firebase-admin/auth';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { puedeGestionarUsuarios } from './permisos';
 
 /**
  * listarUsuariosAdmin · admin-only. Devuelve todo lo que la pestaña de Usuarios
@@ -14,8 +15,8 @@ import { db } from '../utils/admin';
  */
 export const listarUsuariosAdmin = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
-  if ((req.auth.token as Record<string, unknown>).rol !== 'admin') {
-    throw new HttpsError('permission-denied', 'Solo un administrador puede ver la gestión de usuarios.');
+  if (!puedeGestionarUsuarios(req.auth.token as Record<string, unknown>)) {
+    throw new HttpsError('permission-denied', 'No tienes permiso para ver la gestión de usuarios.');
   }
 
   // Metadata de Auth (último login + si la cuenta está deshabilitada) — paginado.

@@ -59,6 +59,16 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number];
 
+/**
+ * Tabs de CARPETA. GH (Diego/Paola) y Documentación (Carla) entran a esta página
+ * SOLO para su parte: subir/verificar los documentos de la carpeta (contrato,
+ * ARL, EPS, caja), la debida diligencia y los datos básicos. NO ven el pipeline
+ * de reclutamiento (pruebas / entrevistas / referencias / informe) — reu Karen
+ * 09-jul, validado con Mari.
+ */
+const TABS_CARPETA: readonly Tab[] = ['documentos', 'diligencia', 'datos básicos'];
+const ROLES_SOLO_CARPETA = ['gh', 'documentacion'];
+
 function tabEsOpcional(tab: Tab, criticidad: Criticidad | null): boolean {
   if (!criticidad) return false;
   const p = politicaParaCriticidad(criticidad);
@@ -127,6 +137,12 @@ export default function PostulacionDetallePage() {
   const puedeEditarDatos = ['analista', 'coordinador', 'gh', 'admin'].includes(rol ?? '');
   const [editarDatosAbierto, setEditarDatosAbierto] = useState(false);
   const [tab, setTab] = useState<Tab>('pruebas');
+  // GH / Documentación solo ven los tabs de carpeta. Como el `rol` llega async,
+  // corregimos en render: si el tab actual no les corresponde, cae al primero
+  // permitido (documentos) — sin efectos ni parpadeo.
+  const soloCarpeta = ROLES_SOLO_CARPETA.includes(rol ?? '');
+  const tabsVisibles: readonly Tab[] = soloCarpeta ? TABS_CARPETA : TABS;
+  const tabActivo: Tab = tabsVisibles.includes(tab) ? tab : tabsVisibles[0];
   const [enviandoPortal, setEnviandoPortal] = useState(false);
   const [copiadoEnlace, setCopiadoEnlace] = useState(false);
   const [agradecerAbierto, setAgradecerAbierto] = useState(false);
@@ -914,9 +930,9 @@ export default function PostulacionDetallePage() {
       {/* ─── Tabs ────────────────────────────────────────────── */}
       <div className="border-b border-slate-200">
         <nav className="flex gap-6 flex-wrap -mb-px">
-          {TABS.map((t) => {
+          {tabsVisibles.map((t) => {
             const opcional = tabEsOpcional(t, criticidad);
-            const activo = tab === t;
+            const activo = tabActivo === t;
             return (
               <button
                 key={t}
@@ -942,21 +958,21 @@ export default function PostulacionDetallePage() {
 
       {/* ─── Contenido tabs ──────────────────────────────────── */}
       <div>
-        {tab === 'pruebas' && (
+        {tabActivo === 'pruebas' && (
           <PruebasTab postulacion={post} pruebasSugeridas={cargo?.pruebas_sugeridas ?? []} />
         )}
-        {tab === 'entrevistas' && (
+        {tabActivo === 'entrevistas' && (
           <EntrevistasTab
             postulacion={post}
             liderUid={vacante?.lider_uid ?? null}
             liderNombre={vacante?.lider_nombre ?? null}
           />
         )}
-        {tab === 'referencias' && <ReferenciasTab postulacion={post} />}
-        {tab === 'documentos' && <DocumentosTab postulacion={post} />}
-        {tab === 'informe' && <InformeTab postulacion={post} />}
-        {tab === 'diligencia' && <DebidaDiligenciaTab postulacion={post} />}
-        {tab === 'datos básicos' && <DatosBasicosTab postulacion={post} />}
+        {tabActivo === 'referencias' && <ReferenciasTab postulacion={post} />}
+        {tabActivo === 'documentos' && <DocumentosTab postulacion={post} />}
+        {tabActivo === 'informe' && <InformeTab postulacion={post} />}
+        {tabActivo === 'diligencia' && <DebidaDiligenciaTab postulacion={post} />}
+        {tabActivo === 'datos básicos' && <DatosBasicosTab postulacion={post} />}
       </div>
     </div>
   );

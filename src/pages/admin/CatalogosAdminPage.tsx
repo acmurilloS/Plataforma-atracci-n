@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { Building2, MapPin, Layers, Briefcase, Database, Users2, Cloud } from 'lucide-react';
+import {
+  Building2,
+  MapPin,
+  Layers,
+  Briefcase,
+  Database,
+  Users2,
+  Cloud,
+  type LucideIcon,
+} from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 import { EmpresasTab } from '../../components/admin/EmpresasTab';
 import { SedesTab } from '../../components/admin/SedesTab';
 import { UnidadesTab } from '../../components/admin/UnidadesTab';
@@ -13,22 +23,29 @@ import { cn } from '../../utils/cn';
 /**
  * CatalogosAdminPage · sistema brand.
  *
- * 5 tabs (empresas, sedes, unidades, cargos, seed) con underline brand-600
- * y icono dedicado por tab para escaneo rápido.
+ * 7 tabs con underline brand-600 e icono dedicado por tab. Las pestañas de
+ * datos del holding (empresas, sedes, unidades, cargos) las ve cualquiera con
+ * acceso a esta página; Seed, Integraciones y Referidos son SOLO para admin
+ * pleno (`soloAdmin`) — un usuario que entra por el permiso 'catalogos'
+ * (p.ej. Karen coordinadora) no las ve.
  */
 
-const TABS = [
+type Tab = 'empresas' | 'sedes' | 'unidades' | 'cargos' | 'referidos' | 'integraciones' | 'seed';
+
+const TABS: { key: Tab; label: string; icono: LucideIcon; soloAdmin?: boolean }[] = [
   { key: 'empresas', label: 'Empresas', icono: Building2 },
   { key: 'sedes', label: 'Sedes', icono: MapPin },
   { key: 'unidades', label: 'Unidades', icono: Layers },
   { key: 'cargos', label: 'Cargos', icono: Briefcase },
-  { key: 'referidos', label: 'Referidos', icono: Users2 },
-  { key: 'integraciones', label: 'Integraciones', icono: Cloud },
-  { key: 'seed', label: 'Seed', icono: Database },
-] as const;
-type Tab = (typeof TABS)[number]['key'];
+  { key: 'referidos', label: 'Referidos', icono: Users2, soloAdmin: true },
+  { key: 'integraciones', label: 'Integraciones', icono: Cloud, soloAdmin: true },
+  { key: 'seed', label: 'Seed', icono: Database, soloAdmin: true },
+];
 
 export default function CatalogosAdminPage() {
+  const { rol } = useAuth();
+  const esAdmin = rol === 'admin';
+  const tabsVisibles = TABS.filter((t) => esAdmin || !t.soloAdmin);
   const [tab, setTab] = useState<Tab>('empresas');
 
   return (
@@ -43,7 +60,7 @@ export default function CatalogosAdminPage() {
 
       {/* Tabs */}
       <div className="border-b border-slate-200 flex gap-1 overflow-x-auto">
-        {TABS.map((t) => {
+        {tabsVisibles.map((t) => {
           const Ico = t.icono;
           const activo = tab === t.key;
           return (
@@ -69,9 +86,10 @@ export default function CatalogosAdminPage() {
         {tab === 'sedes' && <SedesTab />}
         {tab === 'unidades' && <UnidadesTab />}
         {tab === 'cargos' && <CargosTab />}
-        {tab === 'referidos' && <ReferidosTab />}
-        {tab === 'integraciones' && <IntegracionesTab />}
-        {tab === 'seed' && <SeedTab />}
+        {/* Solo admin pleno — el permiso 'catalogos' no da acceso a estas. */}
+        {tab === 'referidos' && esAdmin && <ReferidosTab />}
+        {tab === 'integraciones' && esAdmin && <IntegracionesTab />}
+        {tab === 'seed' && esAdmin && <SeedTab />}
       </div>
     </div>
   );

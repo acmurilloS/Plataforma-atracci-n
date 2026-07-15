@@ -20,6 +20,18 @@ service cloud.firestore {
     function isGestor() { return signedIn() && rol() == 'gestor'; }
     function staff() { return isAdmin() || isCoord() || isGH(); }
 
+    // Override POR-USUARIO: secciones de admin concedidas a un usuario no-admin
+    // vía el custom claim `secciones_admin` (lista). Ej.: Karen (coordinadora)
+    // tiene 'catalogos' para editar empresas/sedes/unidades/cargos sin ser admin.
+    // NO cubre seed/integraciones/referidos (esos escriben en configuracion_global,
+    // que sigue siendo isAdmin()).
+    function tieneSeccion(s) {
+      return signedIn()
+        && 'secciones_admin' in request.auth.token
+        && (s in request.auth.token.secciones_admin);
+    }
+    function puedeCatalogos() { return isAdmin() || isGH() || tieneSeccion('catalogos'); }
+
     // Registro público (landing) → el candidato entra con Auth anónima. Para ese
     // origen exigimos consentimiento de tratamiento de datos (Ley 1581 / Habeas
     // Data); los flujos internos (no anónimos) no se ven afectados.
@@ -44,20 +56,20 @@ service cloud.firestore {
     // ===== Catálogos =====
     match /empresas/{id} {
       allow read: if signedIn();
-      allow create: if (isAdmin() || isGH()) && nuevoConAuditoria();
-      allow update: if (isAdmin() || isGH()) && preservaCreador();
+      allow create: if puedeCatalogos() && nuevoConAuditoria();
+      allow update: if puedeCatalogos() && preservaCreador();
       allow delete: if false;
     }
     match /sedes/{id} {
       allow read: if signedIn();
-      allow create: if (isAdmin() || isGH()) && nuevoConAuditoria();
-      allow update: if (isAdmin() || isGH()) && preservaCreador();
+      allow create: if puedeCatalogos() && nuevoConAuditoria();
+      allow update: if puedeCatalogos() && preservaCreador();
       allow delete: if false;
     }
     match /unidades/{id} {
       allow read: if signedIn();
-      allow create: if (isAdmin() || isGH()) && nuevoConAuditoria();
-      allow update: if (isAdmin() || isGH()) && preservaCreador();
+      allow create: if puedeCatalogos() && nuevoConAuditoria();
+      allow update: if puedeCatalogos() && preservaCreador();
       allow delete: if false;
     }
     match /cargos_catalogo/{id} {
@@ -66,7 +78,7 @@ service cloud.firestore {
       // "Nueva vacante" cuando el suyo no está en el catálogo. Maribel (GH)
       // refina banda/criticidad después desde /admin/catalogos.
       allow create: if signedIn() && nuevoConAuditoria();
-      allow update: if (isAdmin() || isGH()) && preservaCreador();
+      allow update: if puedeCatalogos() && preservaCreador();
       allow delete: if false;
     }
     match /festivos/{id} {

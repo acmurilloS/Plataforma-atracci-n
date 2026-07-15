@@ -3,15 +3,21 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2, ShieldOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { Card, Pill } from './brand';
-import type { RolUsuario } from '../schemas';
+import type { RolUsuario, SeccionAdmin } from '../schemas';
 
 interface Props {
   children: ReactNode;
   roles?: RolUsuario[];
+  /**
+   * Sección de admin que también concede acceso a esta ruta aunque el rol no
+   * esté en `roles` (override por-usuario, ver `secciones_admin`). Ej.: Karen
+   * (coordinadora) entra a /admin/usuarios por la sección 'usuarios'.
+   */
+  seccion?: SeccionAdmin;
 }
 
-export function ProtectedRoute({ children, roles }: Props) {
-  const { user, rol, cargando } = useAuth();
+export function ProtectedRoute({ children, roles, seccion }: Props) {
+  const { user, rol, perfil, cargando } = useAuth();
   const location = useLocation();
 
   if (cargando) {
@@ -25,7 +31,9 @@ export function ProtectedRoute({ children, roles }: Props) {
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-  if (roles && (!rol || !roles.includes(rol))) {
+  const permitidoPorSeccion =
+    !!seccion && (perfil?.secciones_admin ?? []).includes(seccion);
+  if (roles && (!rol || !roles.includes(rol)) && !permitidoPorSeccion) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50/40">
         <div className="max-w-md">

@@ -21,6 +21,21 @@ export const rolUsuario = z.enum([
 ]);
 export type RolUsuario = z.infer<typeof rolUsuario>;
 
+/**
+ * Secciones de administración que se pueden conceder a un usuario NO-admin,
+ * de forma individual (override por-usuario). Pensado para casos puntuales:
+ * p.ej. Karen (coordinadora) necesita gestionar Usuarios y Catálogos sin ser
+ * admin plena (sin Panel admin / seed / integraciones). No abre el rol a todos
+ * los coordinadores — es un permiso que se pone persona por persona.
+ *
+ *  - 'usuarios'  → /admin/usuarios (gestión de roles, activar/desactivar).
+ *  - 'catalogos' → /admin/catalogos, SOLO las pestañas de datos del holding
+ *                  (empresas, sedes, unidades, cargos). Seed, Integraciones y
+ *                  Referidos siguen siendo admin-only aunque tenga la sección.
+ */
+export const seccionAdmin = z.enum(['usuarios', 'catalogos']);
+export type SeccionAdmin = z.infer<typeof seccionAdmin>;
+
 export const areaApoyo = z.enum([
   'it',
   'compras',

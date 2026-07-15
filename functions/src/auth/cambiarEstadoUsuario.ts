@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { puedeGestionarUsuarios } from './permisos';
 
 /**
  * cambiarEstadoUsuario · admin-only. Activa o DESACTIVA una cuenta (reu 03-jul).
@@ -14,8 +15,8 @@ import { db } from '../utils/admin';
  */
 export const cambiarEstadoUsuario = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
-  if ((req.auth.token as Record<string, unknown>).rol !== 'admin') {
-    throw new HttpsError('permission-denied', 'Solo un administrador puede activar o desactivar usuarios.');
+  if (!puedeGestionarUsuarios(req.auth.token as Record<string, unknown>)) {
+    throw new HttpsError('permission-denied', 'No tienes permiso para activar o desactivar usuarios.');
   }
 
   const uid = String(req.data?.uid ?? '').trim();

@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { onRequest } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { puedeGestionarUsuarios } from './permisos';
 
 /**
  * setearRolUsuario · admin-only HTTPS.
@@ -34,8 +35,8 @@ export const setearRolUsuario = onRequest(
       }
 
       const decoded = await getAuth().verifyIdToken(idToken);
-      if (decoded.rol !== 'admin') {
-        res.status(403).json({ error: 'Solo admin puede cambiar roles.' });
+      if (!puedeGestionarUsuarios(decoded as unknown as Record<string, unknown>)) {
+        res.status(403).json({ error: 'No tienes permiso para cambiar roles.' });
         return;
       }
 
@@ -56,7 +57,16 @@ export const setearRolUsuario = onRequest(
         return;
       }
 
-      await getAuth().setCustomUserClaims(uid, { rol });
+      // Preserva el override por-usuario `secciones_admin` (setCustomUserClaims
+      // REEMPLAZA todos los claims): si no lo re-inyectamos, cambiar el rol le
+      // borraría a alguien (p.ej. Karen) su permiso de Usuarios/Catálogos.
+      const target = await getAuth().getUser(uid);
+      const prevClaims = (target.customClaims ?? {}) as Record<string, unknown>;
+      const nuevosClaims: Record<string, unknown> = { rol };
+      if (Array.isArray(prevClaims.secciones_admin)) {
+        nuevosClaims.secciones_admin = prevClaims.secciones_admin;
+      }
+      await getAuth().setCustomUserClaims(uid, nuevosClaims);
       await db.collection('usuarios').doc(uid).update({
         rol,
         actualizado_en: FieldValue.serverTimestamp(),

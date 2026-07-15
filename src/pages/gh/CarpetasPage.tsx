@@ -616,6 +616,14 @@ export default function CarpetasPage() {
                                         opcional
                                       </span>
                                     )}
+                                    {/* Marca los 4 documentos que carga Gestión Humana
+                                        (contrato, ARL, EPS, caja) para que se vea de una
+                                        cuáles son suyos — reu Karen 09-jul. */}
+                                    {cat.responsable === 'gh' && (
+                                      <span className="ml-2 rounded-full bg-info-50 text-info-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em]">
+                                        GH
+                                      </span>
+                                    )}
                                   </p>
                                   {doc?.verificado_por_nombre && verificadoOk && (
                                     <p className="text-[10px] text-text-subtle mt-0.5">

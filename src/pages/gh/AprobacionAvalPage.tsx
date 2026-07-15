@@ -26,7 +26,12 @@ const inputClass =
   'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong placeholder:text-text-subtle transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 resize-none leading-relaxed';
 
 export default function AprobacionAvalPage() {
-  const { user, perfil } = useAuth();
+  const { user, perfil, rol } = useAuth();
+  // GH (Diego/Paola) NO tiene acceso al detalle de la vacante (reu Karen 09-jul:
+  // no ven el pipeline de reclutamiento). La card de aprobación ya trae todo lo
+  // necesario para decidir, así que a ellos se les oculta el link (si no, caían
+  // en "Sin permisos"). Coordinación y admin sí pueden abrirlo.
+  const puedeVerDetalle = rol === 'coordinador' || rol === 'admin';
   const { actualizar, crear } = useMutacion();
   const [procesando, setProcesando] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -199,6 +204,7 @@ export default function AprobacionAvalPage() {
               key={v.id}
               vacante={v}
               procesando={procesando === v.id}
+              puedeVerDetalle={puedeVerDetalle}
               onAprobar={(n) => aprobar(v, n)}
               onRechazar={(n) => rechazar(v, n)}
             />
@@ -209,7 +215,12 @@ export default function AprobacionAvalPage() {
       {filtro !== 'pendientes' && (
         <div className="space-y-2">
           {visibles.map((v) => (
-            <VacanteRowHistorica key={v.id} vacante={v} rechazada={filtro === 'rechazadas'} />
+            <VacanteRowHistorica
+              key={v.id}
+              vacante={v}
+              rechazada={filtro === 'rechazadas'}
+              puedeVerDetalle={puedeVerDetalle}
+            />
           ))}
         </div>
       )}
@@ -251,11 +262,13 @@ function TabBtn({
 function VacanteCardAprobacion({
   vacante,
   procesando,
+  puedeVerDetalle,
   onAprobar,
   onRechazar,
 }: {
   vacante: VacanteDoc;
   procesando: boolean;
+  puedeVerDetalle: boolean;
   onAprobar: (nota: string) => void;
   onRechazar: (motivo: string) => void;
 }) {
@@ -295,13 +308,15 @@ function VacanteCardAprobacion({
             )}
           </p>
         </div>
-        <Link
-          to={`/vacantes/${vacante.id}`}
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline whitespace-nowrap"
-        >
-          Ver detalle completo
-          <ExternalLink size={11} strokeWidth={1.75} />
-        </Link>
+        {puedeVerDetalle && (
+          <Link
+            to={`/vacantes/${vacante.id}`}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline whitespace-nowrap"
+          >
+            Ver detalle completo
+            <ExternalLink size={11} strokeWidth={1.75} />
+          </Link>
+        )}
       </div>
 
       {/* Datos clave */}
@@ -477,9 +492,11 @@ function FormularioRechazo({
 function VacanteRowHistorica({
   vacante,
   rechazada,
+  puedeVerDetalle,
 }: {
   vacante: VacanteDoc;
   rechazada: boolean;
+  puedeVerDetalle: boolean;
 }) {
   return (
     <Card padding="sm" className="!p-4">
@@ -513,12 +530,14 @@ function VacanteRowHistorica({
             </p>
           )}
         </div>
-        <Link
-          to={`/vacantes/${vacante.id}`}
-          className="text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
-        >
-          Ver →
-        </Link>
+        {puedeVerDetalle && (
+          <Link
+            to={`/vacantes/${vacante.id}`}
+            className="text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+          >
+            Ver →
+          </Link>
+        )}
       </div>
     </Card>
   );

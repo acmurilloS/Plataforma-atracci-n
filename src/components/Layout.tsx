@@ -21,7 +21,7 @@ import {
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../utils/cn';
-import type { RolUsuario } from '../schemas';
+import type { RolUsuario, SeccionAdmin } from '../schemas';
 import { Campanita } from './Campanita';
 import { BannerActualizacion } from './BannerActualizacion';
 import { BuscadorGlobal } from './BuscadorGlobal';
@@ -42,6 +42,8 @@ interface ItemNav {
   icon: LucideIcon;
   grupo: Grupo;
   roles: RolUsuario[];
+  /** Además de `roles`, se muestra si el usuario tiene esta sección concedida. */
+  seccion?: SeccionAdmin;
   end?: boolean;
 }
 
@@ -68,8 +70,8 @@ const ITEMS: ItemNav[] = [
   { to: '/examenes-medicos', label: 'Exámenes', icon: Stethoscope, grupo: 'Proceso', roles: ['gh', 'gestor', 'analista', 'coordinador', 'admin'] },
   { to: '/tickets', label: 'Tickets', icon: Ticket, grupo: 'Proceso', roles: ['apoyo', 'analista', 'coordinador', 'admin'] },
   { to: '/admin', label: 'Panel admin', icon: LayoutGrid, grupo: 'Administración', roles: ['admin'], end: true },
-  { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog, grupo: 'Administración', roles: ['admin'] },
-  { to: '/admin/catalogos', label: 'Catálogos', icon: SlidersHorizontal, grupo: 'Administración', roles: ['admin'] },
+  { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog, grupo: 'Administración', roles: ['admin'], seccion: 'usuarios' },
+  { to: '/admin/catalogos', label: 'Catálogos', icon: SlidersHorizontal, grupo: 'Administración', roles: ['admin'], seccion: 'catalogos' },
 ];
 
 const GRUPOS: Grupo[] = ['Proceso', 'Administración'];
@@ -100,7 +102,12 @@ export function Layout() {
   const location = useLocation();
   const [abierto, setAbierto] = useState(false);
 
-  const visibles = rol ? ITEMS.filter((i) => i.roles.includes(rol)) : [];
+  const secciones = perfil?.secciones_admin ?? [];
+  const visibles = rol
+    ? ITEMS.filter(
+        (i) => i.roles.includes(rol) || (i.seccion ? secciones.includes(i.seccion) : false),
+      )
+    : [];
   const gruposVisibles = GRUPOS.map((g) => ({
     grupo: g,
     items: visibles.filter((i) => i.grupo === g),
