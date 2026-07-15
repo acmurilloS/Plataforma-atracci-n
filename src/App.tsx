@@ -7,6 +7,7 @@ import {
   ROLES_APROBACIONES,
   ROLES_CARPETAS,
   ROLES_EXAMENES,
+  ROLES_MIS_VACANTES,
   ROLES_NUEVA_VACANTE,
   ROLES_PERFILAMIENTO,
   ROLES_POOL,
@@ -134,7 +135,14 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/mis-vacantes" element={<LiderMisVacantesPage />} />
+            <Route
+              path="/mis-vacantes"
+              element={
+                <ProtectedRoute roles={ROLES_MIS_VACANTES}>
+                  <LiderMisVacantesPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/vacantes/:id"
               element={

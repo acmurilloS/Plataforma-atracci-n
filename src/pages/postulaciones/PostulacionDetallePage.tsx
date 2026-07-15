@@ -36,6 +36,7 @@ import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCrit
 import { FaseCandidato, etiquetaEstado } from '../../components/postulaciones/FaseCandidato';
 import { EditarDatosModal } from '../../components/postulaciones/EditarDatosModal';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { esSoloCarpeta } from '../../utils/accesoRutas';
 import { cn } from '../../utils/cn';
 import type { PostulacionDoc, VacanteDoc, Criticidad, CargoDoc } from '../../schemas';
 
@@ -67,7 +68,6 @@ type Tab = (typeof TABS)[number];
  * 09-jul, validado con Mari.
  */
 const TABS_CARPETA: readonly Tab[] = ['documentos', 'diligencia', 'datos básicos'];
-const ROLES_SOLO_CARPETA = ['gh', 'documentacion'];
 
 function tabEsOpcional(tab: Tab, criticidad: Criticidad | null): boolean {
   if (!criticidad) return false;
@@ -140,7 +140,7 @@ export default function PostulacionDetallePage() {
   // GH / Documentación solo ven los tabs de carpeta. Como el `rol` llega async,
   // corregimos en render: si el tab actual no les corresponde, cae al primero
   // permitido (documentos) — sin efectos ni parpadeo.
-  const soloCarpeta = ROLES_SOLO_CARPETA.includes(rol ?? '');
+  const soloCarpeta = esSoloCarpeta(rol);
   const tabsVisibles: readonly Tab[] = soloCarpeta ? TABS_CARPETA : TABS;
   const tabActivo: Tab = tabsVisibles.includes(tab) ? tab : tabsVisibles[0];
   const [enviandoPortal, setEnviandoPortal] = useState(false);

@@ -7,6 +7,7 @@ import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearCOP } from '../../utils/moneda';
 import { formatearFecha } from '../../utils/fechas';
+import { puedeVerVacante } from '../../utils/accesoRutas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
@@ -31,7 +32,7 @@ export default function AprobacionAvalPage() {
   // no ven el pipeline de reclutamiento). La card de aprobación ya trae todo lo
   // necesario para decidir, así que a ellos se les oculta el link (si no, caían
   // en "Sin permisos"). Coordinación y admin sí pueden abrirlo.
-  const puedeVerDetalle = rol === 'coordinador' || rol === 'admin';
+  const puedeVerDetalle = puedeVerVacante(rol);
   const { actualizar, crear } = useMutacion();
   const [procesando, setProcesando] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);

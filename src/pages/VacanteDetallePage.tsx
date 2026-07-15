@@ -21,6 +21,7 @@ import { BitacoraReprocesos } from '../components/vacantes/BitacoraReprocesos';
 import { SelectorAnalista } from '../components/vacantes/SelectorAnalista';
 import { Button, Card, Pill, type PillTono } from '../components/brand';
 import { useAuth } from '../hooks/useAuth';
+import { puedeVerProceso } from '../utils/accesoRutas';
 import { useVacantes } from '../hooks/useVacantes';
 import { useFestivosTodos } from '../hooks/useCatalogos';
 import { functions, db } from '../lib/firebase';
@@ -151,13 +152,18 @@ export default function VacanteDetallePage() {
       </div>
 
       <div className="flex flex-wrap gap-2 print:hidden">
-        <Link
-          to={`/vacantes/${vac.id}/solicitud-integrante`}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
-        >
-          <FileText size={13} strokeWidth={1.75} />
-          Solicitud de Integrantes (VIDA-F-01)
-        </Link>
+        {/* Talentos (José) y apoyo (IT/compras) entran a la vacante pero NO al
+            formato VIDA-F-01 (es del proceso) — sin este gate el botón los
+            mandaba a "Sin permisos" (re-auditoría 14-jul). */}
+        {puedeVerProceso(rol) && (
+          <Link
+            to={`/vacantes/${vac.id}/solicitud-integrante`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+          >
+            <FileText size={13} strokeWidth={1.75} />
+            Solicitud de Integrantes (VIDA-F-01)
+          </Link>
+        )}
         {esStaffReporte && (
           <button
             type="button"

@@ -50,6 +50,8 @@ export const ROLES_POSTULACION_DETALLE: RolUsuario[] = [...ROLES_PROCESO, 'gh', 
 export const ROLES_SOLO_CARPETA: RolUsuario[] = ['gh', 'documentacion'];
 
 export const ROLES_NUEVA_VACANTE: RolUsuario[] = ['lider', 'coordinador', 'admin'];
+/** "Mis vacantes" es del líder (filtra por lider_uid); admin entra para revisar. */
+export const ROLES_MIS_VACANTES: RolUsuario[] = ['lider', 'admin'];
 export const ROLES_VACANTES_LISTA: RolUsuario[] = ['analista', 'coordinador', 'admin'];
 export const ROLES_APROBACIONES: RolUsuario[] = ['gh', 'coordinador', 'admin'];
 export const ROLES_EXAMENES: RolUsuario[] = ['gh', 'gestor', 'analista', 'coordinador', 'admin'];
@@ -109,7 +111,7 @@ export function puedeAbrirRuta(rol: RolUsuario | null | undefined, ruta: string)
   // Rutas fijas
   if (r === '/dashboard') return rol === 'coordinador' || rol === 'admin';
   if (r === '/seguimiento') return tiene(ROLES_SEGUIMIENTO, rol);
-  if (r === '/mis-vacantes') return rol === 'lider';
+  if (r === '/mis-vacantes') return tiene(ROLES_MIS_VACANTES, rol);
   if (r === '/vacantes/nueva') return tiene(ROLES_NUEVA_VACANTE, rol);
   if (r === '/vacantes') return tiene(ROLES_VACANTES_LISTA, rol);
   if (r === '/vacantes-abiertas') return tiene(ROLES_VACANTES_ABIERTAS, rol);
