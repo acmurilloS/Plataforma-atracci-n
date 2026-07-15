@@ -69,6 +69,22 @@ type Tab = (typeof TABS)[number];
  */
 const TABS_CARPETA: readonly Tab[] = ['documentos', 'diligencia', 'datos básicos'];
 
+/**
+ * Tabs del LÍDER: ve el pipeline de su candidato y la hoja de vida, pero NO la
+ * carpeta sensible. La debida diligencia (SAGRILAFT) trae cédula del cónyuge,
+ * vínculos PEP y declaración económica, y los datos básicos traen la cuenta
+ * bancaria, el grupo sanguíneo y los hijos: el líder decide sobre la terna, no
+ * gestiona la vinculación. Las reglas ya lo excluyen (auditoría de PII 15-jul),
+ * así que sin esto vería dos tabs vacíos.
+ */
+const TABS_LIDER: readonly Tab[] = [
+  'pruebas',
+  'entrevistas',
+  'referencias',
+  'documentos',
+  'informe',
+];
+
 function tabEsOpcional(tab: Tab, criticidad: Criticidad | null): boolean {
   if (!criticidad) return false;
   const p = politicaParaCriticidad(criticidad);
@@ -141,7 +157,11 @@ export default function PostulacionDetallePage() {
   // corregimos en render: si el tab actual no les corresponde, cae al primero
   // permitido (documentos) — sin efectos ni parpadeo.
   const soloCarpeta = esSoloCarpeta(rol);
-  const tabsVisibles: readonly Tab[] = soloCarpeta ? TABS_CARPETA : TABS;
+  const tabsVisibles: readonly Tab[] = soloCarpeta
+    ? TABS_CARPETA
+    : rol === 'lider'
+      ? TABS_LIDER
+      : TABS;
   const tabActivo: Tab = tabsVisibles.includes(tab) ? tab : tabsVisibles[0];
   const [enviandoPortal, setEnviandoPortal] = useState(false);
   const [copiadoEnlace, setCopiadoEnlace] = useState(false);

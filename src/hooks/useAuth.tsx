@@ -25,6 +25,29 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * Alinea el token con el doc de usuario.
+ *
+ * Hay DOS fuentes del rol: el doc `usuarios/{uid}` (lo lee la UI) y el custom
+ * claim del token (lo leen las reglas de Firestore). Cuando un admin asigna o
+ * cambia un rol, el doc se actualiza al instante pero el token de esa persona
+ * sigue con el claim viejo hasta que Firebase lo rote (~1 h). En esa ventana la
+ * UI la deja entrar y las reglas la rechazan: la app se ve rota sin error claro.
+ *
+ * Antes no se notaba porque las reglas solo pedían `signedIn()`. Desde que la
+ * lectura exige `interno()` (rol en el claim), la ventana sí importa — así que
+ * al detectar el desfase forzamos el refresco del token (auditoría PII 15-jul).
+ */
+async function sincronizarClaim(user: User, rolDoc: string | null | undefined) {
+  if (!rolDoc) return;
+  try {
+    const { claims } = await user.getIdTokenResult();
+    if (claims.rol !== rolDoc) await user.getIdToken(true);
+  } catch {
+    /* si falla, el token se renueva solo más tarde */
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [perfil, setPerfil] = useState<UsuarioDoc | null>(null);
@@ -49,7 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ref,
       (snap) => {
         if (snap.exists()) {
-          setPerfil({ id: snap.id, ...(snap.data() as Omit<UsuarioDoc, 'id'>) });
+          const p = { id: snap.id, ...(snap.data() as Omit<UsuarioDoc, 'id'>) };
+          setPerfil(p);
+          void sincronizarClaim(user, p.rol);
         } else {
           setPerfil(null);
         }

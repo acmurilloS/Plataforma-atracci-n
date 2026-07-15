@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "emulators": "node scripts/start-emulators.mjs",
-    "emulators:fresh": "node scripts/start-emulators.mjs --fresh"
+    "emulators:fresh": "node scripts/start-emulators.mjs --fresh",
+    "test:reglas": "node scripts/test-reglas-lectura.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

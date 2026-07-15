@@ -20,6 +20,52 @@ service cloud.firestore {
     function isGestor() { return signedIn() && rol() == 'gestor'; }
     function staff() { return isAdmin() || isCoord() || isGH(); }
 
+    // ===== La frontera real de lectura (auditoría de PII, 15-jul) =====
+    //
+    // OJO con signedIn(): la landing (/carreras) y el portal (/portal) entran con
+    // Auth ANÓNIMA, y un token anónimo cumple `request.auth != null`. Es decir:
+    // `read: if signedIn()` NO significa "el equipo" — significa "cualquiera en
+    // internet que abra una oferta de trabajo". Con eso se leían cédulas, el
+    // SAGRILAFT (cónyuge, PEP, finanzas) y cuentas bancarias.
+    //
+    // `interno()` es la frontera: sesión REAL (no anónima) + rol ya asignado.
+    // Exigir el rol cierra además al Google cualquiera que se autentique sin
+    // pertenecer al equipo (el `hd` del login es solo una pista del cliente).
+    // Verificado 15-jul: las 25 cuentas de prod tienen el claim `rol`.
+    function interno() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && 'rol' in request.auth.token;
+    }
+
+    // Datos del CANDIDATO (cédula, contacto, documentos). Fuera: apoyo
+    // (IT/compras), talentos y gestor SST — ninguno los necesita para su
+    // pantalla y hasta hoy los leían todos.
+    function leeCandidato() {
+      return interno() && (isLider() || isAnalista() || isCoord() || isAdmin()
+        || isGH() || isDocumentacion());
+    }
+    // La postulación la necesita además el gestor SST (su pantalla de Exámenes
+    // resuelve el candidato desde ahí).
+    function leePostulacion() { return leeCandidato() || isGestor(); }
+
+    // PIPELINE de reclutamiento: pruebas, entrevistas, referencias, informes,
+    // ternas, decisiones, conceptos. GH queda FUERA — la reu Karen 09-jul pidió
+    // que Gestión Humana no viera la gestión interna del equipo de Atracción, y
+    // hasta hoy eso solo estaba en la UI (por reglas, Diego leía todo).
+    function leePipeline() {
+      return interno() && (isLider() || isAnalista() || isCoord() || isAdmin());
+    }
+
+    // CARPETA del integrante: SAGRILAFT, datos básicos (cuenta bancaria, salud,
+    // hijos), carpeta digital. Exactamente los roles de /carpetas. El líder NO
+    // entra: decide sobre la terna, no gestiona la vinculación (sus tabs de
+    // carpeta también se ocultan en la UI).
+    function leeCarpeta() {
+      return interno() && (isAnalista() || isCoord() || isAdmin()
+        || isGH() || isDocumentacion());
+    }
+
     // Override POR-USUARIO: secciones de admin concedidas a un usuario no-admin
     // vía el custom claim `secciones_admin` (lista). Ej.: Karen (coordinadora)
     // tiene 'catalogos' para editar empresas/sedes/unidades/cargos sin ser admin.
@@ -55,25 +101,25 @@ service cloud.firestore {
 
     // ===== Catálogos =====
     match /empresas/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow create: if puedeCatalogos() && nuevoConAuditoria();
       allow update: if puedeCatalogos() && preservaCreador();
       allow delete: if false;
     }
     match /sedes/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow create: if puedeCatalogos() && nuevoConAuditoria();
       allow update: if puedeCatalogos() && preservaCreador();
       allow delete: if false;
     }
     match /unidades/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow create: if puedeCatalogos() && nuevoConAuditoria();
       allow update: if puedeCatalogos() && preservaCreador();
       allow delete: if false;
     }
     match /cargos_catalogo/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       // Líder/analista/coord pueden crear cargos al vuelo desde el form
       // "Nueva vacante" cuando el suyo no está en el catálogo. Maribel (GH)
       // refina banda/criticidad después desde /admin/catalogos.
@@ -82,15 +128,15 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /festivos/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow write: if isAdmin();
     }
     match /plantillas_comunicacion/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow write: if isAdmin() || isGH();
     }
     match /plantillas_graficas/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow write: if isAdmin() || isGH();
     }
 
@@ -133,7 +179,11 @@ service cloud.firestore {
       // todo, o filtrar por el uid de OTRO líder) queda negada por la base.
       // El resto de roles (admin, coordinador, gh, analista, apoyo) NO se
       // tocan: siguen viendo todo como hasta ahora.
-      allow list: if signedIn() && (
+      // El `list` es de uso INTERNO (tableros). El anónimo de la landing no lista
+      // vacantes: abre UNA por su id con el `get` de arriba (auditoría 15-jul —
+      // antes, al no ser líder, el anónimo pasaba el filtro y listaba todo,
+      // incluidos borradores).
+      allow list: if interno() && (
         !isLider()
         || resource.data.lider_uid == request.auth.uid
         || resource.data.estado == 'publicada'
@@ -170,29 +220,29 @@ service cloud.firestore {
     // nadie edita ni borra → trazabilidad inmutable de por qué un proceso se
     // reprocesa o cambia de estado.
     match /vacante_novedades/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow create: if (staff() || isAnalista()) && nuevoConAuditoria();
       allow update, delete: if false;
     }
 
     // ===== Procesos y colecciones derivadas =====
     match /procesos/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow write: if staff() || (isAnalista());
     }
     match /publicaciones/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow write: if staff() || isAnalista();
     }
     match /candidatos/{id} {
-      allow read: if signedIn();
+      allow read: if leeCandidato();
       // Landing pública (anónimo) DEBE aceptar Habeas Data; flujos internos igual.
       allow create: if signedIn() && (!esAnonimo() || aceptoHabeasData());
       allow update: if staff() || isAnalista();
       allow delete: if false;
     }
     match /postulaciones/{id} {
-      allow read: if signedIn();
+      allow read: if leePostulacion();
       // Landing pública (anónimo) DEBE aceptar Habeas Data; flujos internos igual.
       allow create: if signedIn() && (!esAnonimo() || aceptoHabeasData());
       // BUG 3 (2026-06-24): ningún cliente puede transicionar a 'contratado'
@@ -210,41 +260,41 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /contactos_candidato/{id} {
-      allow read: if signedIn();
+      allow read: if false /* sin lectores de cliente: solo Admin SDK */;
       allow write: if staff() || isAnalista();
     }
     match /pruebas/{id} {
-      allow read: if signedIn();
+      allow read: if leePipeline();
       allow write: if staff() || isAnalista();
     }
     match /entrevistas/{id} {
-      allow read: if signedIn();
+      allow read: if leePipeline();
       allow write: if staff() || isAnalista() || (isLider() && resource.data.entrevistador_uid == request.auth.uid);
     }
     match /referencias/{id} {
-      allow read: if signedIn();
+      allow read: if leePipeline();
       allow write: if staff() || isAnalista();
     }
     match /documentos_candidato/{id} {
-      allow read: if signedIn();
+      allow read: if leeCandidato();
       allow write: if staff() || isAnalista() || isDocumentacion();
     }
     match /informes/{id} {
-      allow read: if signedIn();
+      allow read: if leePipeline();
       allow write: if staff() || isAnalista();
     }
     match /ternas/{id} {
-      allow read: if signedIn();
+      allow read: if false /* sin lectores de cliente: solo Admin SDK */;
       allow write: if staff() || isAnalista();
     }
     match /decisiones/{id} {
-      allow read: if signedIn();
+      allow read: if leePipeline();
       allow create: if isLider() && request.resource.data.lider_uid == request.auth.uid
         || staff();
       allow update, delete: if false;
     }
     match /validaciones_salariales/{id} {
-      allow read: if signedIn();
+      allow read: if false /* sin lectores de cliente: solo Admin SDK */;
       allow write: if staff() || isAnalista();
     }
     match /examenes_medicos/{id} {
@@ -267,13 +317,18 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /carpetas_digitales/{id} {
-      allow read: if signedIn();
+      allow read: if leeCarpeta();
       allow write: if staff() || isAnalista() || isDocumentacion();
     }
     match /tickets_conexion/{id} {
       allow get: if staff() || isAnalista()
         || (isApoyo() && resource.data.area == request.auth.token.area_apoyo);
-      allow list: if staff() || isAnalista() || isApoyo();
+      // Mismo caso que notificaciones: el `get` acotaba por área pero el `list`
+      // no, así que un apoyo de bodega listaba los tickets de IT y compras
+      // (auditoría 15-jul). TicketsPage ya fuerza `where('area','==',...)` para
+      // el rol apoyo, así que su tablero no cambia.
+      allow list: if staff() || isAnalista()
+        || (isApoyo() && resource.data.area == request.auth.token.area_apoyo);
       allow create: if staff() || isAnalista();
       allow update: if staff() || isAnalista()
         || (isApoyo() && resource.data.area == request.auth.token.area_apoyo);
@@ -281,7 +336,7 @@ service cloud.firestore {
     }
 
     match /busquedas_sourcing/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow write: if false; // solo Cloud Functions vía Admin SDK
     }
 
@@ -289,18 +344,17 @@ service cloud.firestore {
     // Auditoría de cada vez que se "activan referidos" para una vacante.
     // Solo escribe la callable generarInvitacionesReferidos.
     match /referidos_generaciones/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow write: if false;
     }
-    // Mapeo slug → cédula del técnico. get público porque la landing
-    // (CarreraPublicaPage) lo resuelve al postular con `?ref=<slug>`.
-    // Lo único expuesto es el slug aleatorio — la cédula nunca llega al cliente
-    // directamente, viene a través de la callable `resolverRefSlug` que ya
-    // valida el slug.
+    // Mapeo slug → cédula del técnico. El comentario anterior afirmaba que "la
+    // cédula nunca llega al cliente directamente" — pero `get: if true` la
+    // entregaba a cualquiera con el slug, y `list` permitía volcar el mapeo de
+    // TODA la plantilla, derrotando el diseño del slug aleatorio (auditoría
+    // 15-jul). La landing NO lee esta colección: la resuelve la callable
+    // `resolverRefSlug` (Admin SDK), que es el único acceso legítimo.
     match /referidos_links/{slug} {
-      allow get: if true;
-      allow list: if signedIn();
-      allow write: if false;
+      allow read, write: if false;
     }
     // Portal del candidato (público, sin login). El cliente NUNCA lee el token
     // directamente: la callable `resolverPortalToken` lo resuelve con Admin SDK.
@@ -316,40 +370,40 @@ service cloud.firestore {
     }
     // Técnicos que pidieron no recibir más invitaciones. Solo admin edita.
     match /referidos_optouts/{cedula} {
-      allow read: if signedIn();
+      allow read: if interno() && (isAdmin() || isGH());
       allow create, update: if isAdmin() || isGH();
       allow delete: if isAdmin();
     }
     // Configuración del módulo (Sheet ID, mapping de columnas).
     // Solo 1 doc: `configuracion_global/referidos`.
     match /configuracion_global/{id} {
-      allow read: if signedIn();
+      allow read: if interno();
       allow write: if isAdmin();
     }
 
     match /debida_diligencia/{id} {
-      allow read: if signedIn();
+      allow read: if leeCarpeta();
       allow create: if isAnalista() || staff();
       allow update: if isAnalista() || staff();
       allow delete: if false;
     }
 
     match /datos_basicos_integrante/{id} {
-      allow read: if signedIn();
+      allow read: if leeCarpeta();
       allow create: if isAnalista() || staff();
       allow update: if isAnalista() || staff();
       allow delete: if false;
     }
 
     match /solicitudes_integrante/{id} {
-      allow read: if signedIn();
+      allow read: if leePipeline();
       allow create: if isAnalista() || staff();
       allow update: if isAnalista() || staff();
       allow delete: if false;
     }
 
     match /conceptos_atraccion/{id} {
-      allow read: if signedIn();
+      allow read: if leePipeline();
       allow create: if isAnalista() || staff();
       allow update: if isAnalista() || staff();
       allow delete: if false;
@@ -357,13 +411,17 @@ service cloud.firestore {
 
     // ===== Transversales =====
     match /ans_seguimiento/{id} {
-      allow read: if signedIn();
+      allow read: if false /* sin lectores de cliente: solo Admin SDK */;
       allow write: if staff() || isAnalista();
     }
+    // Bitácora inmutable. La escriben SOLO las Cloud Functions (Admin SDK, que no
+    // pasa por reglas): ningún archivo de src/ toca 'eventos'. El `create: if
+    // signedIn()` anterior no habilitaba nada nuestro y sí dejaba al anónimo de
+    // la landing inyectar documentos en la bitácora que el staff lee como fuente
+    // de verdad para auditar (auditoría 15-jul).
     match /eventos/{id} {
       allow read: if staff();
-      allow create: if signedIn();
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
     // Versiones de los formatos controlados por Calidad (Datos Básicos / SAGRILAFT)
     // al corregir un campo: historial inmutable (quién/cuándo/qué/PDF por versión).
@@ -375,9 +433,15 @@ service cloud.firestore {
       allow write: if false;
     }
     match /notificaciones/{id} {
-      allow get: if signedIn() && resource.data.destinatario_uid == request.auth.uid;
-      allow list: if signedIn();
-      allow update: if signedIn() && resource.data.destinatario_uid == request.auth.uid;
+      allow get: if interno() && resource.data.destinatario_uid == request.auth.uid;
+      // El `list` DEBE filtrar por destinatario igual que el `get`: si no, el
+      // control de arriba es decorativo — cualquiera (incluido el anónimo de la
+      // landing) volcaba el inbox de todos, con nombres de candidatos y
+      // resultados de exámenes en el título (auditoría 15-jul). La campanita ya
+      // consulta con `where('destinatario_uid','==',uid)`, así que no cambia nada
+      // para el usuario.
+      allow list: if interno() && resource.data.destinatario_uid == request.auth.uid;
+      allow update: if interno() && resource.data.destinatario_uid == request.auth.uid;
       // staff + analista pueden notificar (ej. el analista avisa al líder que la
       // terna está lista para su revisión). El analista no es staff() pero sí
       // dispara notificaciones legítimas del flujo.

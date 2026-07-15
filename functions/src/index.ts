@@ -40,6 +40,7 @@ export { registrarSolicitudHerramientas } from './solicitudes/registrarSolicitud
 // Referidos internos (módulo v1, 2026-06-03).
 export { generarInvitacionesReferidos } from './referidos/generarInvitaciones';
 export { resolverRefSlug } from './referidos/resolverRefSlug';
+export { contextoOfertaPublica } from './carreras/contextoOfertaPublica';
 export { marcarComoEnviadasReferidos } from './referidos/marcarComoEnviadas';
 
 // Envío de pruebas al candidato por correo (paso 7, 2026-06-09).

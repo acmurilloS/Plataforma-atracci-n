@@ -66,6 +66,14 @@ export const setearRolUsuario = onRequest(
       if (Array.isArray(prevClaims.secciones_admin)) {
         nuevosClaims.secciones_admin = prevClaims.secciones_admin;
       }
+      // Mismo motivo con `area_apoyo` (IT / compras / bodega…): las reglas de
+      // `tickets_conexion` filtran la cola por ESE claim. Si se pierde al tocar
+      // el rol, el doc de usuario conserva el área pero el token no, y la
+      // persona deja de ver sus tickets sin ningún error visible (auditoría de
+      // PII, 15-jul). Solo aplica si sigue siendo apoyo.
+      if (rol === 'apoyo' && typeof prevClaims.area_apoyo === 'string') {
+        nuevosClaims.area_apoyo = prevClaims.area_apoyo;
+      }
       await getAuth().setCustomUserClaims(uid, nuevosClaims);
       await db.collection('usuarios').doc(uid).update({
         rol,

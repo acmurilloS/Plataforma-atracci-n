@@ -85,23 +85,12 @@ export default function CarreraPublicaPage() {
   const [enviando, setEnviando] = useState(false);
   const [errSubmit, setErrSubmit] = useState<string | null>(null);
 
-  // Habeas Data: aceptación obligatoria + política configurable.
+  // Habeas Data: aceptación obligatoria + política configurable. La versión y el
+  // link de la política llegan por `contextoOfertaPublica` (ver más abajo): el
+  // cliente anónimo ya NO lee `configuracion_global` directo — esa colección
+  // quedó cerrada a interno() (auditoría de PII, 15-jul).
   const [habeasAceptado, setHabeasAceptado] = useState(false);
   const [consent, setConsent] = useState(CONSENT_DEFAULT);
-  useEffect(() => {
-    getDoc(doc(db, 'configuracion_global', 'consentimiento_registro'))
-      .then((s) => {
-        if (!s.exists()) return;
-        const d = s.data() as Record<string, unknown>;
-        setConsent({
-          version: String(d.version ?? CONSENT_DEFAULT.version),
-          politica_url: String(d.politica_url ?? CONSENT_DEFAULT.politica_url),
-        });
-      })
-      .catch(() => {
-        /* usa el respaldo */
-      });
-  }, []);
 
   // Referencias laborales: el candidato registra 2 contactos de empleos
   // anteriores, o marca "no aplica" si no tiene experiencia.
@@ -180,27 +169,25 @@ export default function CarreraPublicaPage() {
         setVacante({ id: snap.id, ...data });
         setCargando(false);
 
-        // Contexto del cargo para el candidato: primero los criterios del
-        // perfilamiento (lo que el líder definió para esta vacante), si no, la
-        // descripción del cargo del catálogo. Se deja la justificación FUERA
-        // de la landing — es interna.
+        // Contexto del cargo + consentimiento vigente. Los arma el servidor
+        // (`contextoOfertaPublica`, Admin SDK): el candidato anónimo NO lee
+        // `procesos` ni `cargos_catalogo` — ahí viven la banda salarial y las
+        // empresas competencia. La justificación de la vacante tampoco sale.
         try {
-          let contexto = '';
-          if (data.proceso_activo_id) {
-            const ps = await getDoc(doc(db, 'procesos', data.proceso_activo_id));
-            const perf = ps.exists()
-              ? (ps.data() as { perfilamiento?: { criterios_texto?: string } }).perfilamiento
-              : null;
-            contexto = (perf?.criterios_texto ?? '').trim();
+          const fn = httpsCallable<
+            { vacante_id: string },
+            { contexto: string; consent: { version: string; politica_url: string } | null }
+          >(functions, 'contextoOfertaPublica');
+          const res = await fn({ vacante_id: id });
+          setContextoCargo(res.data.contexto ?? '');
+          if (res.data.consent?.version && res.data.consent.politica_url) {
+            setConsent({
+              version: res.data.consent.version,
+              politica_url: res.data.consent.politica_url,
+            });
           }
-          if (!contexto && data.cargo_id) {
-            const cs = await getDoc(doc(db, 'cargos_catalogo', data.cargo_id));
-            contexto = cs.exists()
-              ? String((cs.data() as { descripcion?: string }).descripcion ?? '').trim()
-              : '';
-          }
-          setContextoCargo(contexto);
         } catch (e) {
+          // Degrada al respaldo embebido: la oferta sigue abriendo.
           console.warn('No se pudo cargar el contexto del cargo', e);
         }
       } catch (e) {
