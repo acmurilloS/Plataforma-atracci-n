@@ -26,6 +26,7 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import type { PostulacionDoc } from '../../schemas';
+import { puedeVerPostulacion } from '../../utils/accesoRutas';
 import { cn } from '../../utils/cn';
 
 /**
@@ -384,12 +385,18 @@ export default function ExamenesMedicosPage() {
                   )}
                   <h3 className="mt-1 text-[16px] font-semibold tracking-[-0.012em] text-text-strong inline-flex items-center gap-2">
                     <User size={14} strokeWidth={1.5} className="text-text-subtle shrink-0" />
-                    <Link
-                      to={`/postulaciones/${ex.postulacion_id}`}
-                      className="hover:text-brand-700 transition-colors"
-                    >
-                      {info.candidato}
-                    </Link>
+                    {/* El gestor SST no abre la ficha del integrante: para él es
+                        solo texto (antes daba "Sin permisos" — auditoría 14-jul). */}
+                    {puedeVerPostulacion(rol) ? (
+                      <Link
+                        to={`/postulaciones/${ex.postulacion_id}`}
+                        className="hover:text-brand-700 transition-colors"
+                      >
+                        {info.candidato}
+                      </Link>
+                    ) : (
+                      info.candidato
+                    )}
                   </h3>
                   {(info.empresa || info.sede) && (
                     <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-text-muted">

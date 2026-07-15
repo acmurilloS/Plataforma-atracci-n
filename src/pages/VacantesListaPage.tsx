@@ -14,6 +14,8 @@ import { formatearCOP } from '../utils/moneda';
 import type { VacanteDoc } from '../schemas';
 import { Button, Card, Pill, type PillTono } from '../components/brand';
 import { EncabezadoPagina } from '../components/ui/EncabezadoPagina';
+import { useAuth } from '../hooks/useAuth';
+import { puedeCrearVacante } from '../utils/accesoRutas';
 import { cn } from '../utils/cn';
 
 /**
@@ -67,6 +69,7 @@ const inputClass = cn(
 );
 
 export default function VacantesListaPage() {
+  const { rol } = useAuth();
   const [vacantes, setVacantes] = useState<VacanteDoc[]>([]);
   const [cargando, setCargando] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -125,11 +128,15 @@ export default function VacantesListaPage() {
           </>
         }
         accion={
-          <Link to="/vacantes/nueva">
-            <Button variant="brand-primary" icon={<Plus size={13} strokeWidth={1.75} />}>
-              Nueva vacante
-            </Button>
-          </Link>
+          // La analista ve esta pantalla pero NO puede crear vacantes (eso es del
+          // líder/coordinación) — antes el botón la mandaba a "Sin permisos".
+          puedeCrearVacante(rol) ? (
+            <Link to="/vacantes/nueva">
+              <Button variant="brand-primary" icon={<Plus size={13} strokeWidth={1.75} />}>
+                Nueva vacante
+              </Button>
+            </Link>
+          ) : undefined
         }
       />
 

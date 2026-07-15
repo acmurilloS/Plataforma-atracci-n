@@ -2,8 +2,22 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import type { RolUsuario } from './schemas';
 import { rutaHome } from './utils/rutaHome';
+import {
+  ROLES_APROBACIONES,
+  ROLES_CARPETAS,
+  ROLES_EXAMENES,
+  ROLES_NUEVA_VACANTE,
+  ROLES_PERFILAMIENTO,
+  ROLES_POOL,
+  ROLES_POSTULACION_DETALLE,
+  ROLES_PROCESO,
+  ROLES_SEGUIMIENTO,
+  ROLES_TICKETS,
+  ROLES_VACANTES_ABIERTAS,
+  ROLES_VACANTES_LISTA,
+  ROLES_VACANTE_DETALLE,
+} from './utils/accesoRutas';
 import CatalogosAdminPage from './pages/admin/CatalogosAdminPage';
 import PanelAdminPage from './pages/admin/PanelAdminPage';
 import UsuariosRolesPage from './pages/admin/UsuariosRolesPage';
@@ -34,35 +48,9 @@ import ReferenciasPdfPage from './pages/postulaciones/ReferenciasPdfPage';
 import PoolPage from './pages/pool/PoolPage';
 import VacantesAbiertasPage from './pages/internos/VacantesAbiertasPage';
 
-// Roles que trabajan el proceso de atracción (vacante/postulación). EXCLUYE
-// 'apoyo' (IT/compras/bodega: solo tickets) y 'gh' (Gestión Humana solo ve
-// Aprobaciones/Carpetas/Exámenes — reu Karen 09-jul, validado con Mari: no ven
-// el pipeline de reclutamiento ni la gestión interna del equipo de atracción).
-// Defensa en profundidad para que esas pantallas no se abran por URL directa;
-// el nav ya filtra por rol.
-const ROLES_PROCESO: RolUsuario[] = ['lider', 'analista', 'coordinador', 'admin'];
-
-// Todo el que NO es GH ni sin-rol: para Seguimiento (GH queda fuera).
-const ROLES_SEGUIMIENTO: RolUsuario[] = [
-  'lider',
-  'analista',
-  'coordinador',
-  'apoyo',
-  'admin',
-  'talentos',
-];
-
-// Perfilamiento: además del proceso, lo puede VER (solo lectura) 'talentos'
-// (José Hoyos · Conexión de Talentos, reu 03-jul). No edita: la página se
-// renderiza read-only para su rol y las firestore.rules bloquean su escritura.
-const ROLES_PERFILAMIENTO: RolUsuario[] = [...ROLES_PROCESO, 'talentos'];
-
-// Detalle de la POSTULACIÓN: además del proceso, entran 'gh' (Diego/Paola) y
-// 'documentacion' (Carla) porque ahí es donde SUBEN y verifican los documentos
-// de la carpeta (contrato, ARL, EPS, caja) — Carpetas enlaza aquí con "Ir al tab
-// Documentos". NO ven el pipeline: PostulacionDetallePage les muestra solo los
-// tabs de carpeta (documentos / diligencia / datos básicos).
-const ROLES_POSTULACION_DETALLE: RolUsuario[] = [...ROLES_PROCESO, 'gh', 'documentacion'];
+// Quién puede abrir cada ruta vive en UNA sola fuente (src/utils/accesoRutas.ts),
+// compartida con el gating de LINKS de cada página. Así no vuelven a aparecer
+// "callejones sin salida" (link visible → ruta prohibida). Ver auditoría 14-jul.
 
 function AppShell() {
   return (
@@ -133,7 +121,7 @@ export default function App() {
             <Route
               path="/vacantes/nueva"
               element={
-                <ProtectedRoute roles={['lider', 'coordinador', 'admin']}>
+                <ProtectedRoute roles={ROLES_NUEVA_VACANTE}>
                   <NuevaVacantePage />
                 </ProtectedRoute>
               }
@@ -141,7 +129,7 @@ export default function App() {
             <Route
               path="/vacantes"
               element={
-                <ProtectedRoute roles={['analista', 'coordinador', 'admin']}>
+                <ProtectedRoute roles={ROLES_VACANTES_LISTA}>
                   <VacantesListaPage />
                 </ProtectedRoute>
               }
@@ -150,7 +138,7 @@ export default function App() {
             <Route
               path="/vacantes/:id"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={ROLES_VACANTE_DETALLE}>
                   <VacanteDetallePage />
                 </ProtectedRoute>
               }
@@ -230,7 +218,7 @@ export default function App() {
             <Route
               path="/postulaciones/:id/autorizacion-datos"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={ROLES_POSTULACION_DETALLE}>
                   <AutorizacionDatosPage />
                 </ProtectedRoute>
               }
@@ -238,7 +226,7 @@ export default function App() {
             <Route
               path="/postulaciones/:id/autorizacion-imagen"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={ROLES_POSTULACION_DETALLE}>
                   <AutorizacionImagenPage />
                 </ProtectedRoute>
               }
@@ -246,7 +234,7 @@ export default function App() {
             <Route
               path="/aprobaciones-aval"
               element={
-                <ProtectedRoute roles={['gh', 'admin', 'coordinador']}>
+                <ProtectedRoute roles={ROLES_APROBACIONES}>
                   <AprobacionAvalPage />
                 </ProtectedRoute>
               }
@@ -254,7 +242,7 @@ export default function App() {
             <Route
               path="/examenes-medicos"
               element={
-                <ProtectedRoute roles={['gh', 'gestor', 'analista', 'admin', 'coordinador']}>
+                <ProtectedRoute roles={ROLES_EXAMENES}>
                   <ExamenesMedicosPage />
                 </ProtectedRoute>
               }
@@ -262,7 +250,7 @@ export default function App() {
             <Route
               path="/carpetas"
               element={
-                <ProtectedRoute roles={['gh', 'documentacion', 'analista', 'admin', 'coordinador']}>
+                <ProtectedRoute roles={ROLES_CARPETAS}>
                   <CarpetasPage />
                 </ProtectedRoute>
               }
@@ -270,7 +258,7 @@ export default function App() {
             <Route
               path="/tickets"
               element={
-                <ProtectedRoute roles={['apoyo', 'analista', 'admin', 'coordinador']}>
+                <ProtectedRoute roles={ROLES_TICKETS}>
                   <TicketsPage />
                 </ProtectedRoute>
               }
@@ -278,7 +266,7 @@ export default function App() {
             <Route
               path="/pool"
               element={
-                <ProtectedRoute roles={['analista', 'coordinador', 'admin']}>
+                <ProtectedRoute roles={ROLES_POOL}>
                   <PoolPage />
                 </ProtectedRoute>
               }
@@ -286,7 +274,7 @@ export default function App() {
             <Route
               path="/vacantes-abiertas"
               element={
-                <ProtectedRoute roles={['analista', 'coordinador', 'apoyo', 'admin', 'talentos']}>
+                <ProtectedRoute roles={ROLES_VACANTES_ABIERTAS}>
                   <VacantesAbiertasPage />
                 </ProtectedRoute>
               }

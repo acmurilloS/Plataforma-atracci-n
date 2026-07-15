@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, CornerDownLeft, Search, X } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 import { useColeccion } from '../hooks/useColeccion';
+import { puedeVerVacante } from '../utils/accesoRutas';
 import { cn } from '../utils/cn';
 import type { VacanteDoc } from '../schemas';
 
@@ -10,11 +12,18 @@ import type { VacanteDoc } from '../schemas';
  * barra lateral (reu 03-jul). Busca vacantes por consecutivo, cargo, empresa o
  * sede y navega al detalle. El disparador vive en el sidebar; los datos se cargan
  * solo al abrir el modal (y quedan cacheados por useColeccion).
+ *
+ * Solo se muestra a quien PUEDE abrir el detalle de una vacante: para GH,
+ * Documentación o Gestor SST buscar una vacante terminaba en "Sin permisos"
+ * (auditoría 14-jul).
  */
 export function BuscadorGlobal() {
+  const { rol } = useAuth();
+  const habilitado = puedeVerVacante(rol);
   const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
+    if (!habilitado) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -23,7 +32,9 @@ export function BuscadorGlobal() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [habilitado]);
+
+  if (!habilitado) return null;
 
   return (
     <>

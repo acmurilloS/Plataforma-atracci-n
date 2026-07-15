@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { Pill, type PillTono } from './brand';
+import { useAuth } from '../hooks/useAuth';
+import { puedeAbrirRuta } from '../utils/accesoRutas';
 import { cn } from '../utils/cn';
 import type { VacanteDoc } from '../schemas';
 
@@ -219,11 +221,22 @@ interface Props {
 }
 
 export function FlujogramaTimeline({ vacante }: Props) {
+  const { rol } = useAuth();
+
+  /**
+   * Ruta del CTA "abrir →" del paso. Devuelve null si el rol NO puede abrirla:
+   * así la card deja de ser link en vez de mandar al usuario a "Sin permisos"
+   * (p.ej. el líder veía CTA a Exámenes / Carpetas / Tickets — auditoría 14-jul).
+   */
   function construirRuta(paso: PasoDef): string | null {
     if (!paso.rutaRelativa) return null;
-    if (paso.rutaRelativa.startsWith('/')) return paso.rutaRelativa;
-    if (!vacante) return null;
-    return `/vacantes/${paso.rutaRelativa.replace(':id', vacante.id)}`;
+    const ruta = paso.rutaRelativa.startsWith('/')
+      ? paso.rutaRelativa
+      : vacante
+        ? `/vacantes/${paso.rutaRelativa.replace(':id', vacante.id)}`
+        : null;
+    if (!ruta) return null;
+    return puedeAbrirRuta(rol, ruta) ? ruta : null;
   }
 
   function esPasoActivo(paso: PasoDef): boolean {

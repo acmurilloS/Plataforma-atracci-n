@@ -34,6 +34,7 @@ import { DescarteModal } from '../../components/vacantes/DescarteModal';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 import { Button, Card, Pill } from '../../components/brand';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
+import { puedeVerExamenes, puedeVerTickets } from '../../utils/accesoRutas';
 import { cn } from '../../utils/cn';
 
 /**
@@ -375,6 +376,9 @@ export default function TernaPage() {
               </div>
             </div>
             <div className="flex flex-col gap-2 shrink-0">
+              {/* El líder no puede abrir Exámenes → no le mostramos el CTA
+                  (antes lo mandaba a "Sin permisos", auditoría 14-jul). */}
+              {puedeVerExamenes(rol) && (
               <Link to="/examenes-medicos">
                 <Button
                   variant="brand-primary"
@@ -385,6 +389,7 @@ export default function TernaPage() {
                   Ir a exámenes médicos
                 </Button>
               </Link>
+              )}
               <Link
                 to={`/postulaciones/${seleccionado.id}`}
                 className="inline-flex items-center justify-end gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
@@ -734,9 +739,13 @@ export default function TernaPage() {
       <p className="text-[11px] text-text-subtle italic">
         Al aprobar un integrante, la plataforma crea automáticamente la solicitud de exámenes
         médicos (paso 15), dispara los{' '}
-        <Link to="/tickets" className="text-brand-700 hover:text-brand-800 hover:underline">
-          tickets de conexión
-        </Link>{' '}
+        {puedeVerTickets(rol) ? (
+          <Link to="/tickets" className="text-brand-700 hover:text-brand-800 hover:underline">
+            tickets de conexión
+          </Link>
+        ) : (
+          'tickets de conexión'
+        )}{' '}
         a IT / compras / bodega / contabilidad / talentos (paso 20), y mueve la vacante a estado{' '}
         <code className="font-mono text-text-body">seleccionado</code>.
       </p>

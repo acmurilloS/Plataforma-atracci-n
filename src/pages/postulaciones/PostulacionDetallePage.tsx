@@ -460,13 +460,14 @@ export default function PostulacionDetallePage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
-      {/* Volver */}
+      {/* Volver · GH y Documentación no pueden abrir /vacantes/:id/postulaciones
+          (es del pipeline del analista): ellos vienen de Carpetas y vuelven allá. */}
       <Link
-        to={`/vacantes/${post.vacante_id}/postulaciones`}
+        to={soloCarpeta ? '/carpetas' : `/vacantes/${post.vacante_id}/postulaciones`}
         className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-text-strong transition-colors"
       >
         <ArrowLeft size={13} strokeWidth={1.75} />
-        Volver a postulaciones
+        {soloCarpeta ? 'Volver a carpetas' : 'Volver a postulaciones'}
       </Link>
 
       {/* ─── Hero ────────────────────────────────────────────── */}
