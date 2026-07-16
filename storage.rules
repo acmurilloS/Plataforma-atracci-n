@@ -33,10 +33,13 @@ service firebase.storage {
     }
 
     // Hojas de vida. Las sube el candidato (anónimo) al postularse o el analista.
-    // Lectura para cualquier autenticado (se necesita para obtener la URL tras
-    // subir); el path no es listable, así que el riesgo es bajo.
+    // Lectura: el STAFF (con rol) lee cualquiera; el candidato solo el archivo que
+    // SUBIÓ ÉL (se estampa uploaderUid en customMetadata). Antes bastaba cualquier
+    // sesión, así que un anónimo podía descargar el CV de otro si adivinaba la ruta
+    // (revisión 16-jul).
     match /cvs/{vacante}/{file} {
-      allow read: if request.auth != null;
+      allow read: if tieneRol()
+        || (request.auth != null && resource.metadata.uploaderUid == request.auth.uid);
       allow write: if request.auth != null && esPdf() && request.resource.size < 5 * 1024 * 1024;
     }
 
@@ -47,10 +50,12 @@ service firebase.storage {
     }
 
     // Documentos que el candidato sube desde su portal público (anónimo).
-    // Necesita leer para obtener su URL de descarga tras subir; la escritura queda
-    // limitada a PDF/imagen y tamaño.
+    // Lectura: el STAFF (con rol) lee cualquiera; el candidato solo lo que subió él
+    // (uploaderUid en customMetadata). Antes cualquier sesión podía leer los docs
+    // de otro candidato conociendo su token+ruta (revisión 16-jul).
     match /portal_docs/{token}/{file} {
-      allow read: if request.auth != null;
+      allow read: if tieneRol()
+        || (request.auth != null && resource.metadata.uploaderUid == request.auth.uid);
       allow write: if request.auth != null && esPdfOImagenOWord() && request.resource.size < 10 * 1024 * 1024;
     }
 

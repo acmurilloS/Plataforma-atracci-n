@@ -40,6 +40,10 @@ function keyDeIp(ip: string): string {
  * (antes de verificar la cédula) para rechazar rápido sin tocar contadores.
  */
 export async function ipBloqueada(ip: string): Promise<ResultadoRateLimit> {
+  // Sin IP identificable no se bloquea: si no, TODOS los candidatos sin IP caen
+  // en el mismo balde "desconocida" y se bloquean entre sí (revisión 16-jul). El
+  // rate-limit por TOKEN (verificarCedula) sigue protegiendo cada identidad.
+  if (!ip) return { ok: true, bloqueado_segundos: 0 };
   const ref = db.collection('rate_limit_cedula').doc(keyDeIp(ip));
   const snap = await ref.get();
   if (!snap.exists) return { ok: true, bloqueado_segundos: 0 };
@@ -64,6 +68,7 @@ export async function ipBloqueada(ip: string): Promise<ResultadoRateLimit> {
  * acaba de quedar bloqueada). Todo transaccional.
  */
 export async function registrarFalloIp(ip: string): Promise<ResultadoRateLimit> {
+  if (!ip) return { ok: true, bloqueado_segundos: 0 };
   const cfg = await leerConfigSeguridadPortal();
   const ref = db.collection('rate_limit_cedula').doc(keyDeIp(ip));
 

@@ -37,14 +37,22 @@ export async function notificarCarpetaListaValidarCore(
   const nombre = String(post.candidato_nombre ?? 'el candidato').trim();
   const cargo = String(post.cargo_nombre ?? '').trim();
 
-  const ghs = await db
-    .collection('usuarios')
-    .where('rol', '==', 'gh')
-    .where('activo', '==', true)
-    .get();
+  // GH (Diego/Paola) Y Documentación (Carla): los tres trabajan la carpeta, así
+  // que a los tres les llega el aviso. Antes Carla —cuyo único trabajo es
+  // Carpetas— no recibía NADA (revisión 16-jul). Dos queries separadas (mismo
+  // patrón ya probado en prod) en vez de un `in`, para no depender de otro índice.
+  const destinatarios = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+  for (const rol of ['gh', 'documentacion']) {
+    const snap = await db
+      .collection('usuarios')
+      .where('rol', '==', rol)
+      .where('activo', '==', true)
+      .get();
+    snap.docs.forEach((d) => destinatarios.set(d.id, d));
+  }
 
   let notificados = 0;
-  for (const g of ghs.docs) {
+  for (const g of destinatarios.values()) {
     await db.collection('notificaciones').add({
       destinatario_uid: g.id,
       tipo: 'generica',

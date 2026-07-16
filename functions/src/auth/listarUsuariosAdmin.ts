@@ -19,30 +19,32 @@ export const listarUsuariosAdmin = onCall({ region: 'us-central1' }, async (req)
     throw new HttpsError('permission-denied', 'No tienes permiso para ver la gestión de usuarios.');
   }
 
-  // Metadata de Auth (último login + si la cuenta está deshabilitada) — paginado.
-  const authMeta = new Map<
-    string,
-    { ultimo_login: string | null; deshabilitado: boolean; creado: string | null }
-  >();
-  let pageToken: string | undefined;
-  do {
-    const page = await getAuth().listUsers(1000, pageToken);
-    page.users.forEach((u) => {
-      authMeta.set(u.uid, {
-        ultimo_login: u.metadata.lastSignInTime || null,
-        deshabilitado: u.disabled,
-        creado: u.metadata.creationTime || null,
-      });
-    });
-    pageToken = page.pageToken;
-  } while (pageToken);
-
   const toMs = (ts: unknown): number | null => {
     const m = (ts as { toMillis?: () => number })?.toMillis?.();
     return typeof m === 'number' ? m : null;
   };
 
   const snap = await db.collection('usuarios').get();
+
+  // Metadata de Auth (último login + si está deshabilitada) SOLO de los usuarios
+  // reales (los que tienen doc). Antes se paginaba por TODAS las cuentas de Auth
+  // con listUsers — desde que hay auth anónima, eso recorre miles de cuentas de
+  // candidatos sin necesidad (revisión 16-jul). getUsers va en lotes de 100.
+  const authMeta = new Map<
+    string,
+    { ultimo_login: string | null; deshabilitado: boolean; creado: string | null }
+  >();
+  const uids = snap.docs.map((d) => ({ uid: d.id }));
+  for (let i = 0; i < uids.length; i += 100) {
+    const res = await getAuth().getUsers(uids.slice(i, i + 100));
+    res.users.forEach((u) => {
+      authMeta.set(u.uid, {
+        ultimo_login: u.metadata.lastSignInTime || null,
+        deshabilitado: u.disabled,
+        creado: u.metadata.creationTime || null,
+      });
+    });
+  }
   const usuarios = snap.docs.map((d) => {
     const data = d.data();
     const meta = authMeta.get(d.id);

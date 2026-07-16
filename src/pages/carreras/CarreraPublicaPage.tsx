@@ -262,7 +262,13 @@ export default function CarreraPublicaPage() {
       const safe = cv.name.replace(/[^\w.-]+/g, '_');
       const path = `cvs/${vacante.id}/${ts}_${safe}`;
       const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, cv, { contentType: 'application/pdf' });
+      // Estampa el dueño del archivo: la regla de Storage solo deja leerlo a él o
+      // al staff, para que un anónimo no pueda descargar el CV de otro candidato
+      // conociendo la ruta (revisión 16-jul).
+      await uploadBytes(storageRef, cv, {
+        contentType: 'application/pdf',
+        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+      });
       const cv_url = await getDownloadURL(storageRef);
 
       const uid = auth.currentUser.uid;

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { Check, Loader2, Upload } from 'lucide-react';
-import { functions, storage } from '../../lib/firebase';
+import { auth, functions, storage } from '../../lib/firebase';
 
 /**
  * PortalDocumentos · F4 · slots pre-etiquetados que van a la carpeta REAL.
@@ -100,7 +100,9 @@ function SlotRow({
       const ts = Date.now();
       const safe = file.name.replace(/[^\w.\-]+/g, '_');
       const r = storageRef(storage, `portal_docs/${token}/${slot.clave}_${ts}_${safe}`);
-      await uploadBytes(r, file);
+      await uploadBytes(r, file, {
+        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+      });
       const url = await getDownloadURL(r);
       const fn = httpsCallable<
         {

@@ -74,3 +74,28 @@ export async function destinatariosExamen(vacanteId: string): Promise<string[]> 
   }
   return [...uids];
 }
+
+/**
+ * GH activos (Diego, Paola y cualquier otro rol `gh`). Ambos deciden sobre un
+ * examen con novedad y ven lo mismo en su perfil, así que el aviso debe ir a
+ * TODOS ellos — antes el correo iba solo a Diego, escrito fijo (revisión 16-jul).
+ */
+export async function ghActivos(): Promise<{ uid: string; email: string }[]> {
+  const out: { uid: string; email: string }[] = [];
+  try {
+    const cs = await db
+      .collection('usuarios')
+      .where('rol', '==', 'gh')
+      .where('activo', '==', true)
+      .get();
+    cs.forEach((c) => {
+      const email = String(c.data()?.email ?? '').trim();
+      if (email) out.push({ uid: c.id, email });
+    });
+  } catch (e) {
+    logger.warn('[notificarExamen] no se pudieron leer los GH', {
+      msg: e instanceof Error ? e.message : String(e),
+    });
+  }
+  return out;
+}

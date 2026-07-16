@@ -804,12 +804,18 @@ function ConsentimientoCard({
         firma,
       );
       const r = storageRef(storage, `portal_docs/${token}/firma_${tipo}_${ts}.pdf`);
-      await uploadBytes(r, blob, { contentType: 'application/pdf' });
+      await uploadBytes(r, blob, {
+        contentType: 'application/pdf',
+        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+      });
       const url = await getDownloadURL(r);
       // Imagen de la firma (PNG) para incrustarla en el documento del staff.
       const imgBlob = await (await fetch(firma)).blob();
       const ri = storageRef(storage, `portal_docs/${token}/firma_img_${tipo}_${ts}.png`);
-      await uploadBytes(ri, imgBlob, { contentType: 'image/png' });
+      await uploadBytes(ri, imgBlob, {
+        contentType: 'image/png',
+        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+      });
       const imgUrl = await getDownloadURL(ri);
       await onAceptar(url, imgUrl);
     } catch (e) {
@@ -1025,7 +1031,9 @@ function SubirDocumentos({
       const ts = Date.now();
       const safe = file.name.replace(/[^\w.\-]+/g, '_');
       const r = storageRef(storage, `portal_docs/${token}/${ts}_${safe}`);
-      await uploadBytes(r, file);
+      await uploadBytes(r, file, {
+        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+      });
       const url = await getDownloadURL(r);
       const fn = httpsCallable<
         { token: string; cedula: string; nombre_archivo: string; url: string },

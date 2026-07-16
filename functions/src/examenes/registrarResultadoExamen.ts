@@ -9,7 +9,8 @@ import {
   escapeHtml,
   FOOTER_EMPRESAS_DEFAULT,
 } from '../notificaciones/plantillasMensajes';
-import { crearNotificacionExamen, destinatariosExamen } from './notificarExamen';
+import { crearNotificacionExamen, destinatariosExamen, ghActivos } from './notificarExamen';
+import { emailAnalistaDeVacante, emailCoordinadorFallback } from '../notificaciones/emailAnalista';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -161,8 +162,12 @@ export const registrarResultadoExamen = onCall(
       });
     }
 
-    // Avisos a analista + coordinación (Karen/Mari).
-    const dests = await destinatariosExamen(vacanteId);
+    // Avisos a analista + coordinación (Karen/Mari). Si el examen viene CON
+    // NOVEDAD, la decisión es de GH (Diego y Paola), así que también les llega la
+    // campana a ellos (antes solo a Diego por correo — revisión 16-jul).
+    const dests = new Set(await destinatariosExamen(vacanteId));
+    const ghs = sinNovedad ? [] : await ghActivos();
+    for (const g of ghs) dests.add(g.uid);
     for (const uid of dests) {
       await crearNotificacionExamen({
         destinatario_uid: uid,
@@ -173,17 +178,17 @@ export const registrarResultadoExamen = onCall(
         mensaje: `${candidatoNombre}${consecutivo ? ` (${consecutivo})` : ''}: resultado ${
           sinNovedad
             ? 'SIN novedad → apto, avanza a contratación.'
-            : 'CON novedad → pendiente de la decisión de Diego (C&D).'
+            : 'CON novedad → pendiente de la decisión de Gestión Humana (C&D).'
         }`,
         link: '/examenes-medicos',
       });
     }
 
-    // Con novedad → correo a Diego con botón a la plataforma (además de la campana).
+    // Con novedad → correo a GH (Diego + Paola) con botón a la plataforma.
     if (!sinNovedad && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
       try {
         const cuerpo = `
-          <p style="margin:0 0 14px;">Hola Diego,</p>
+          <p style="margin:0 0 14px;">Hola,</p>
           <p style="margin:0 0 14px;">
             El examen médico de <strong>${escapeHtml(candidatoNombre)}</strong>${
               consecutivo ? ` (${escapeHtml(consecutivo)})` : ''
@@ -210,16 +215,23 @@ export const registrarResultadoExamen = onCall(
           footerEmpresas: FOOTER_EMPRESAS_DEFAULT,
           preheader: 'Examen médico con novedad — requiere tu decisión',
         });
+        // A todos los GH activos (Diego + Paola); si por algún motivo no hay
+        // ninguno cargado, cae al correo de Diego como respaldo. Reply-to a la
+        // analista del proceso (fallback coordinación), no al buzón de Steve.
+        const correosGh = ghs.map((g) => g.email);
+        const replyTo =
+          (await emailAnalistaDeVacante(vacanteId)) || (await emailCoordinadorFallback());
         await enviarConGmail({
           from: FROM,
-          to: [DIEGO_CULTURA],
+          to: correosGh.length ? correosGh : [DIEGO_CULTURA],
+          replyTo: replyTo || undefined,
           subject: `Examen médico CON NOVEDAD — ${candidatoNombre}${
             consecutivo ? ` (${consecutivo})` : ''
           }`,
           html,
         });
       } catch (e) {
-        logger.error('[registrarResultadoExamen] correo a Diego falló', {
+        logger.error('[registrarResultadoExamen] correo de novedad a GH falló', {
           msg: e instanceof Error ? e.message : String(e),
         });
       }

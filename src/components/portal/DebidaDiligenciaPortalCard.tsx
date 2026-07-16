@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { Check, Plus, Trash2 } from 'lucide-react';
-import { functions, storage } from '../../lib/firebase';
+import { auth, functions, storage } from '../../lib/firebase';
 import { Button } from '../brand';
 import { FirmaInput } from '../firma/FirmaInput';
 import {
@@ -149,11 +149,17 @@ export function DebidaDiligenciaPortalCard({
       const blob = await estamparDebidaDiligencia(estampado, firma);
       const ts = Date.now();
       const rPdf = storageRef(storage, `portal_docs/${token}/debida_diligencia_${ts}.pdf`);
-      await uploadBytes(rPdf, blob, { contentType: 'application/pdf' });
+      await uploadBytes(rPdf, blob, {
+        contentType: 'application/pdf',
+        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+      });
       const pdfUrl = await getDownloadURL(rPdf);
       const imgBlob = await (await fetch(firma)).blob();
       const rImg = storageRef(storage, `portal_docs/${token}/debida_diligencia_firma_${ts}.png`);
-      await uploadBytes(rImg, imgBlob, { contentType: 'image/png' });
+      await uploadBytes(rImg, imgBlob, {
+        contentType: 'image/png',
+        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+      });
       const firmaImgUrl = await getDownloadURL(rImg);
 
       const datos = {

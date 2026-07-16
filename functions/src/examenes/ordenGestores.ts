@@ -144,7 +144,12 @@ export async function enviarOrdenAGestores(
       msg: e instanceof Error ? e.message : String(e),
     });
   }
-  const ccCopia = [analistaEmail, ...coordinadores.map((c) => c.email)].filter((e) => e);
+  // En modo_prueba (demo) el `to` se desvía al correo de prueba, pero el CC seguía
+  // yendo a la analista y a los coordinadores REALES (revisión 16-jul). En demo no
+  // se copia a nadie real; en operación real, CC normal.
+  const ccCopia = cfg.modo_prueba
+    ? []
+    : [analistaEmail, ...coordinadores.map((c) => c.email)].filter((e) => e);
 
   const filasHtml = REQUERIDOS.map((r) => {
     const v = valores[r.key] || '(pendiente)';

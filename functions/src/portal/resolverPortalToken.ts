@@ -77,12 +77,12 @@ export const resolverPortalToken = onCall(
       ip?: string;
       headers?: Record<string, string | undefined>;
     };
-    ip = String(
-      raw?.ip ?? raw?.headers?.['x-forwarded-for'] ?? '',
-    )
-      .split(',')[0]
-      .trim()
-      .slice(0, 64);
+    // En Cloud Run, `raw.ip` es la IP del proxy de Google (compartida por TODOS
+    // los candidatos) — la IP real del cliente es el PRIMER valor de
+    // x-forwarded-for. Antes se priorizaba raw.ip, lo que metía a todos en el
+    // mismo balde de rate-limit y podía bloquearlos en masa (revisión 16-jul).
+    const xff = String(raw?.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim();
+    ip = (xff || String(raw?.ip ?? '').trim()).slice(0, 64);
 
     if (!(await validarTurnstile(captchaToken, ip))) {
       logger.info('[portal] captcha inválido', { token });
