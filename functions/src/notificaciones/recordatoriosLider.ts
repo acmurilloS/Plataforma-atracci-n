@@ -4,7 +4,25 @@ import { logger } from 'firebase-functions/v2';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
-import { enviarEmail } from './enviarEmail';
+import { enviarConGmail } from './enviarConGmail';
+import { envolverMarca } from './plantillasMensajes';
+
+const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const APP_URL = 'https://ptm-atraccion.web.app';
+
+/** Envía el recordatorio al líder por Gmail (antes iba por un stub que NUNCA
+ *  enviaba, pero sí registraba en `eventos` que había salido — revisión 16-jul).
+ *  El texto plano se preserva con white-space y se envuelve en la marca. */
+async function correoLider(liderEmail: string, asunto: string, texto: string): Promise<void> {
+  const html = envolverMarca(
+    `<p style="margin:0;white-space:pre-line;">${texto
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')}</p>`,
+    { preheader: asunto },
+  );
+  await enviarConGmail({ from: FROM, to: [liderEmail], subject: asunto, html, text: texto });
+}
 
 /**
  * Reloj de 48h del líder (paso 13 del flujograma).
@@ -102,20 +120,12 @@ async function procesarVacante(v: VacanteSnap, ahora: number): Promise<{
 
 Ya te conseguimos candidatos para tu vacante de ${v.cargo_nombre} en ${v.empresa_nombre} - ${v.sede_nombre}. Te quedan aproximadamente 24 horas para revisar la terna y dar feedback antes de que el proceso se pause.
 
-Entra al portal: https://atraccion.equitel.com.co${link}
+Entra al portal: ${APP_URL}${link}
 
 Gracias,
 Equipo de Atracción de Talento`;
 
-    await enviarEmail({
-      destinatario_email: liderEmail,
-      destinatario_uid: v.lider_uid,
-      destinatario_nombre: v.lider_nombre,
-      asunto,
-      mensaje_texto: mensaje,
-      origen: 'recordatorio_lider_24h',
-      contexto: { vacante_id: v.id, consecutivo: v.consecutivo },
-    });
+    await correoLider(liderEmail, asunto, mensaje);
 
     await notificacionInApp({
       destinatario_uid: v.lider_uid,
@@ -141,20 +151,12 @@ Equipo de Atracción de Talento`;
 
 No pudimos contactarte sobre la terna de ${v.cargo_nombre} (${v.empresa_nombre} - ${v.sede_nombre}) en estos dos días. Para no perder los candidatos sin tu decisión, pausamos temporalmente el proceso.
 
-Cuando puedas retomarlo, contáctanos o entra al portal: https://atraccion.equitel.com.co${link}
+Cuando puedas retomarlo, contáctanos o entra al portal: ${APP_URL}${link}
 
 Sin presión,
 Equipo de Atracción de Talento`;
 
-    await enviarEmail({
-      destinatario_email: liderEmail,
-      destinatario_uid: v.lider_uid,
-      destinatario_nombre: v.lider_nombre,
-      asunto: asuntoLider,
-      mensaje_texto: mensajeLider,
-      origen: 'recordatorio_lider_expirado',
-      contexto: { vacante_id: v.id, consecutivo: v.consecutivo },
-    });
+    await correoLider(liderEmail, asuntoLider, mensajeLider);
 
     await notificacionInApp({
       destinatario_uid: v.lider_uid,

@@ -39,10 +39,14 @@ function cargarScript(): Promise<void> {
 export function TurnstileWidget({
   siteKey,
   onToken,
+  onError,
   resetTrigger = 0,
 }: {
   siteKey: string;
   onToken: (token: string | null) => void;
+  /** El widget no cargó o Cloudflare devolvió error (adblock / red que bloquea
+   *  challenges.cloudflare.com). El padre lo usa para avisar al candidato. */
+  onError?: () => void;
   resetTrigger?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -57,10 +61,16 @@ export function TurnstileWidget({
           sitekey: siteKey,
           callback: (tk: string) => onToken(tk),
           'expired-callback': () => onToken(null),
-          'error-callback': () => onToken(null),
+          'error-callback': () => {
+            onToken(null);
+            onError?.();
+          },
         });
       })
-      .catch(() => onToken(null));
+      .catch(() => {
+        onToken(null);
+        onError?.();
+      });
     return () => {
       cancelado = true;
       if (widgetId.current && window.turnstile) {

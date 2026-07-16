@@ -46,6 +46,9 @@ const DATOS = {
   'contactos_candidato/cc1': { candidato_id: 'c1' },
   'ternas/tn1': { vacante_id: 'v1' },
   'eventos/ev1': { tipo: 'x' },
+  'documentos_portal/dp1': { postulacion_id: 'p1', clave: 'hoja_vida' },
+  'formatos_versiones/fv1': { postulacion_id: 'p1', tipo: 'datos_basicos' },
+  'examenes_medicos/em1': { postulacion_id: 'p1', candidato_nombre: 'Ana', estado: 'solicitada' },
 };
 
 const casos = [];
@@ -116,7 +119,7 @@ caso(G4, 'GH lee documentos_candidato', { token: gh, path: 'documentos_candidato
 caso(G4, 'GH lee el SAGRILAFT (es su carpeta)', { token: gh, path: 'debida_diligencia/dd1', esperado: 'ALLOW' });
 caso(G4, 'Carla lee carpetas', { token: carla, path: 'carpetas_digitales/carp1', esperado: 'ALLOW' });
 caso(G4, 'Carla lee datos básicos', { token: carla, path: 'datos_basicos_integrante/db1', esperado: 'ALLOW' });
-caso(G4, 'gestor SST lee postulaciones', { token: gestor, path: 'postulaciones/p1', esperado: 'ALLOW' });
+caso(G4, 'gestor SST lee su examen (examenes_medicos)', { token: gestor, path: 'examenes_medicos/em1', esperado: 'ALLOW' });
 caso(G4, 'líder lee informes', { token: lider, path: 'informes/i1', esperado: 'ALLOW' });
 caso(G4, 'líder lee documentos (hoja de vida)', { token: lider, path: 'documentos_candidato/doc1', esperado: 'ALLOW' });
 caso(G4, 'líder lista SUS vacantes', { token: lider, path: 'vacantes/v1', method: 'list', esperado: 'ALLOW' });
@@ -142,6 +145,18 @@ caso(G5, 'líder NO lee la cuenta bancaria', { token: lider, path: 'datos_basico
 caso(G5, 'analista NO lee notif ajena', { token: analista, path: 'notificaciones/n2', method: 'list', esperado: 'DENY' });
 caso(G5, 'superficie muerta: contactos_candidato', { token: coord, path: 'contactos_candidato/cc1', esperado: 'DENY' });
 caso(G5, 'superficie muerta: ternas', { token: coord, path: 'ternas/tn1', esperado: 'DENY' });
+
+const G6 = '6. FIXES 16-JUL (Carla ve su carpeta · líder decide por callable)';
+caso(G6, 'Carla lee documentos_portal (docs del integrante)', { token: carla, path: 'documentos_portal/dp1', esperado: 'ALLOW' });
+caso(G6, 'GH lee documentos_portal', { token: gh, path: 'documentos_portal/dp1', esperado: 'ALLOW' });
+caso(G6, 'analista lee documentos_portal', { token: analista, path: 'documentos_portal/dp1', esperado: 'ALLOW' });
+caso(G6, 'Carla lee formatos_versiones (historial de correcciones)', { token: carla, path: 'formatos_versiones/fv1', esperado: 'ALLOW' });
+caso(G6, 'gestor NO lee documentos_portal', { token: gestor, path: 'documentos_portal/dp1', esperado: 'DENY' });
+caso(G6, 'anónimo NO lee documentos_portal', { token: ANON, path: 'documentos_portal/dp1', esperado: 'DENY' });
+// El líder decide la terna por la callable decidirTerna (Admin SDK); NO puede
+// escribir la postulación directo — esta regla debe seguir negándolo.
+caso(G6, 'líder NO escribe postulaciones directo (va por callable)', { token: lider, path: 'postulaciones/p1', method: 'update', esperado: 'DENY', data: { estado: 'en_examenes_medicos' } });
+caso(G6, 'gestor SST NO lee postulaciones (solo su examen)', { token: gestor, path: 'postulaciones/p1', esperado: 'DENY' });
 
 // ── Ejecutar ────────────────────────────────────────────────────────────
 const res = await fetch(`https://firebaserules.googleapis.com/v1/projects/${PROJECT}:test`, {

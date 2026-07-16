@@ -178,10 +178,13 @@ export default function PortalCandidatoPage() {
   async function aceptar(tipo: 'datos' | 'imagen', firmaUrl: string, firmaImagenUrl: string) {
     if (!token) return;
     const fn = httpsCallable<
-      { token: string; tipo: string; firma_url?: string; firma_imagen_url?: string },
+      { token: string; cedula: string; tipo: string; firma_url?: string; firma_imagen_url?: string },
       { ok: true }
     >(functions, 'registrarConsentimientoPortal');
-    await fn({ token, tipo, firma_url: firmaUrl, firma_imagen_url: firmaImagenUrl });
+    // Reenvía la cédula ya validada en el gate: el server la re-verifica (2º
+    // factor) para que nadie pueda forjar un consentimiento con solo el token
+    // (revisión 16-jul).
+    await fn({ token, cedula, tipo, firma_url: firmaUrl, firma_imagen_url: firmaImagenUrl });
     setData((d) =>
       d
         ? {
@@ -420,9 +423,22 @@ function CedulaGate({
   const [bloqueoActivo, setBloqueoActivo] = useState(gate.bloqueado);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [resetCaptcha, setResetCaptcha] = useState(0);
+  const [captchaFallo, setCaptchaFallo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const captchaRequerido = !!TURNSTILE_SITE_KEY;
+
+  // Si Turnstile no carga (adblock, red que bloquea Cloudflare), el botón
+  // quedaba deshabilitado para siempre SIN explicación (revisión 16-jul). Un
+  // respaldo por tiempo marca el fallo aunque el widget ni siquiera dispare su
+  // error-callback (petición que se traga en silencio).
+  useEffect(() => {
+    if (!captchaRequerido || captchaToken || captchaFallo) return;
+    const t = setTimeout(() => {
+      if (!captchaToken) setCaptchaFallo(true);
+    }, 12000);
+    return () => clearTimeout(t);
+  }, [captchaRequerido, captchaToken, captchaFallo, resetCaptcha]);
 
   useEffect(() => {
     setBloqueoActivo(gate.bloqueado);
@@ -523,12 +539,33 @@ function CedulaGate({
             />
           </div>
           {captchaRequerido && (
-            <div className="mt-4 flex justify-center">
+            <div className="mt-4 flex flex-col items-center">
               <TurnstileWidget
                 siteKey={TURNSTILE_SITE_KEY}
-                onToken={setCaptchaToken}
+                onToken={(tk) => {
+                  setCaptchaToken(tk);
+                  if (tk) setCaptchaFallo(false);
+                }}
+                onError={() => setCaptchaFallo(true)}
                 resetTrigger={resetCaptcha}
               />
+              {captchaFallo && (
+                <div className="mt-3 text-center text-[12px] text-danger-700 leading-[1.5]">
+                  No pudimos cargar la verificación de seguridad. Revisa tu conexión, desactiva
+                  bloqueadores o la VPN, y{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCaptchaFallo(false);
+                      setResetCaptcha((n) => n + 1);
+                    }}
+                    className="font-semibold underline hover:text-danger-800"
+                  >
+                    reintenta
+                  </button>
+                  . Si sigue igual, responde el correo con el que recibiste este enlace.
+                </div>
+              )}
             </div>
           )}
           <div className="mt-4">
@@ -699,6 +736,7 @@ function AutorizacionesTab({
       {condiciones && (
         <CondicionesCard
           token={token}
+          cedula={cedula}
           condiciones={condiciones}
           aceptadas={condicionesAceptadas}
         />
@@ -860,10 +898,12 @@ function ConsentimientoCard({
 
 function CondicionesCard({
   token,
+  cedula,
   condiciones,
   aceptadas,
 }: {
   token: string;
+  cedula: string;
   condiciones: Record<string, string>;
   aceptadas: boolean;
 }) {
@@ -892,11 +932,11 @@ function CondicionesCard({
     setEnviando(true);
     setErr(null);
     try {
-      const fn = httpsCallable<{ token: string }, { ok: true }>(
+      const fn = httpsCallable<{ token: string; cedula: string }, { ok: true }>(
         functions,
         'aceptarCondicionesLaborales',
       );
-      await fn({ token });
+      await fn({ token, cedula });
       setAceptado(true);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No se pudo registrar. Reintenta.');

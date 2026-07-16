@@ -127,7 +127,14 @@ export default function ExamenesMedicosPage() {
   const { docs, cargando } = useColeccion<ExamenDoc>('examenes_medicos', {
     orden: ['solicitada_en', 'desc'],
   });
-  const { docs: postulaciones } = useColeccion<PostulacionDoc>('postulaciones');
+  // El gestor SST NO debe leer todo el pipeline (PII de candidatos que no son de
+  // exámenes). La página solo usa `postulaciones` como fallback del nombre, y el
+  // doc `examenes_medicos` ya trae candidato_nombre denormalizado — así que para
+  // el gestor no suscribimos postulaciones (revisión 16-jul). Las reglas también
+  // se lo niegan (leePostulacion ya no incluye al gestor).
+  const { docs: postulaciones } = useColeccion<PostulacionDoc>('postulaciones', {
+    habilitado: rol !== 'gestor',
+  });
   const postulacionPorId = useMemo(() => {
     const m = new Map<string, PostulacionDoc>();
     for (const p of postulaciones) m.set(p.id, p);

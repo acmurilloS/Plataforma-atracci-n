@@ -4,6 +4,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
 import { urlPortalDocValida } from './urlPortalDocValida';
+import { verificarCedula } from './verificarCedula';
 
 /**
  * registrarConsentimientoPortal · registra que el candidato ACEPTÓ, desde su
@@ -36,7 +37,8 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
     throw new HttpsError('invalid-argument', 'URL de firma (imagen) inválida.');
   }
 
-  const tSnap = await db.collection('portal_candidato_tokens').doc(token).get();
+  const ref = db.collection('portal_candidato_tokens').doc(token);
+  const tSnap = await ref.get();
   if (!tSnap.exists) throw new HttpsError('not-found', 'Token no encontrado.');
   const t = tSnap.data() as Record<string, unknown>;
   if (!tokenVigente(t)) {
@@ -44,6 +46,14 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
       'failed-precondition',
       'El enlace expiró o fue revocado. Pídele al equipo de Atracción que te reenvíe tu portal.',
     );
+  }
+  // 2º factor: la cédula. Sin esto, quien conociera el token de 8-12 chars podía
+  // FORJAR el consentimiento firmado sin ser el candidato (revisión 16-jul). Los
+  // otros formularios del portal ya la exigían; este se había quedado sin ella.
+  const cedula = String(req.data?.cedula ?? '').trim();
+  const ced = await verificarCedula(ref, cedula);
+  if (!ced.ok) {
+    throw new HttpsError('permission-denied', 'Cédula incorrecta o bloqueada. Verifica e intenta de nuevo.');
   }
   const postulacionId = String(t.postulacion_id ?? '');
   if (!postulacionId) throw new HttpsError('failed-precondition', 'Token sin postulación.');

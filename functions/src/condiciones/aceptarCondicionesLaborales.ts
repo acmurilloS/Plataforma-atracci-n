@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from '../portal/tokenVigente';
+import { verificarCedula } from '../portal/verificarCedula';
 
 /**
  * aceptarCondicionesLaborales · E (lote GH 16-jun).
@@ -15,7 +16,8 @@ export const aceptarCondicionesLaborales = onCall({ region: 'us-central1' }, asy
   if (!token) throw new HttpsError('invalid-argument', 'Falta token.');
   if (!/^[A-Za-z0-9]{8,12}$/.test(token)) throw new HttpsError('not-found', 'Token inválido.');
 
-  const tSnap = await db.collection('portal_candidato_tokens').doc(token).get();
+  const ref = db.collection('portal_candidato_tokens').doc(token);
+  const tSnap = await ref.get();
   if (!tSnap.exists) throw new HttpsError('not-found', 'Token no encontrado.');
   const t = tSnap.data() as Record<string, unknown>;
   if (!tokenVigente(t)) {
@@ -23,6 +25,12 @@ export const aceptarCondicionesLaborales = onCall({ region: 'us-central1' }, asy
       'failed-precondition',
       'El enlace expiró o fue revocado. Pídele al equipo de Atracción que te reenvíe tu portal.',
     );
+  }
+  // 2º factor: la cédula, para que aceptar las condiciones no se pueda forjar con
+  // solo el token (revisión 16-jul).
+  const ced = await verificarCedula(ref, String(req.data?.cedula ?? '').trim());
+  if (!ced.ok) {
+    throw new HttpsError('permission-denied', 'Cédula incorrecta o bloqueada. Verifica e intenta de nuevo.');
   }
   const postId = String(t.postulacion_id ?? '');
   if (!postId) throw new HttpsError('failed-precondition', 'Token sin postulación.');

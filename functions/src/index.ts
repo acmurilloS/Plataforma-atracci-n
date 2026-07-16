@@ -81,6 +81,7 @@ export { onCandidatoContratado } from './tickets/onCandidatoContratado';
 // Aprobar carpeta = contratar + cerrar vacante + tickets, transaccional y con
 // unicidad de 1 contratado por vacante (BUG 3+4, 2026-06-24).
 export { aprobarCarpeta } from './carpetas/aprobarCarpeta';
+export { decidirTerna } from './decisiones/decidirTerna';
 // Solicitud de dotación con tallas (subpaso de entrega de carpeta, reu 26-jun).
 export { enviarSolicitudDotacion } from './dotacion/enviarSolicitudDotacion';
 // Dotación AUTOMÁTICA al diligenciar las tallas en Datos Básicos (reu Karen 02-jul).

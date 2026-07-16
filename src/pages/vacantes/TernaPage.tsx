@@ -15,11 +15,12 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
-import { useFestivosAnio } from '../../hooks/useCatalogos';
 import {
   MOTIVOS_RECICLABLES,
   MOTIVO_DESCARTE_LABEL,
@@ -27,9 +28,7 @@ import {
   validarTransicion,
   type MotivoDescarte,
 } from '../../schemas';
-import type { VacanteDoc, PostulacionDoc, ProcesoDoc } from '../../schemas';
-import { crearTicketsConexion } from '../../utils/crearTicketsConexion';
-import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
+import type { VacanteDoc, PostulacionDoc } from '../../schemas';
 import { DescarteModal } from '../../components/vacantes/DescarteModal';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 import { Button, Card, Pill } from '../../components/brand';
@@ -50,15 +49,10 @@ export default function TernaPage() {
   const { id } = useParams<{ id: string }>();
   const { user, perfil, rol } = useAuth();
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', id);
-  const { doc: procesoActivo } = useDoc<ProcesoDoc>(
-    'procesos',
-    vacante?.proceso_activo_id ?? null,
-  );
   const { docs: postulaciones } = useColeccion<PostulacionDoc>('postulaciones', {
     filtros: id ? [['vacante_id', '==', id]] : [],
   });
   const { crear, actualizar } = useMutacion();
-  const festivos = useFestivosAnio(new Date().getFullYear());
   const [procesando, setProcesando] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [descarteAbierto, setDescarteAbierto] = useState<PostulacionDoc | null>(null);
@@ -107,54 +101,18 @@ export default function TernaPage() {
   const vencido = relojActivo && msRestantes <= 0;
   const urgente = relojActivo && !vencido && horasRestantes <= 24;
 
+  // La decisión de terna (aprobar/descartar) es del LÍDER, y las reglas no le
+  // permiten escribir postulaciones/vacantes/tickets/candidatos directo. Todo eso
+  // vive ahora en la callable `decidirTerna` (Admin SDK), que valida que sea el
+  // líder de la vacante y aplica la transición + tickets + pool atómicamente. El
+  // examen lo crea solo el trigger onPostulacionEnExamenes (revisión 16-jul).
   async function aprobar(p: PostulacionDoc) {
-    if (!vacante || !user || !perfil) return;
+    if (!vacante || !user) return;
     setProcesando(p.id);
     setErr(null);
     try {
-      await crear('decisiones', {
-        postulacion_id: p.id,
-        proceso_id: vacante.proceso_activo_id,
-        terna_id: null,
-        lider_uid: user.uid,
-        lider_nombre: `${perfil.nombre} ${perfil.apellido}`,
-        aprobado: true,
-        feedback_lider: '',
-        condiciones_adicionales: null,
-        decidido_en: Timestamp.now(),
-      });
-      const ahora = Timestamp.now();
-      await actualizar('postulaciones', p.id, {
-        // Al aprobar se dispara la solicitud de exámenes, así que el candidato
-        // queda visible como "en exámenes médicos" en el embudo (no solo
-        // "seleccionado por líder"). La decisión queda en `decisiones` + marcas.
-        estado: 'en_examenes_medicos',
-        ultima_transicion_estado: ahora,
-        'marcas.decidido_en': ahora,
-        'marcas.en_examenes_medicos_en': ahora,
-      });
-      await actualizar('vacantes', vacante.id, {
-        estado: 'seleccionado',
-        terna_respondida_en: ahora,
-      });
-      // La solicitud de exámenes (examenes_medicos/examen_{post}) la crea ahora el
-      // trigger onPostulacionEnExamenes al detectar el estado en_examenes_medicos,
-      // así también se cubre el camino de cambio de estado manual (no solo terna).
-      await crearTicketsConexion({
-        vacante,
-        postulacion: p,
-        procesoActivo,
-        uid: user.uid,
-        festivosIsoSet: festivos,
-        disparadoPor: 'automatico_terna',
-      });
-      await actualizarResultadoCandidato({
-        candidato_id: p.candidato_id,
-        resultado: 'contratado',
-        vacante_id: vacante.id,
-        vacante_consecutivo: vacante.consecutivo,
-        uid: user.uid,
-      });
+      const fn = httpsCallable(functions, 'decidirTerna');
+      await fn({ postulacion_id: p.id, aprobado: true });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos aprobar.');
     } finally {
@@ -163,42 +121,12 @@ export default function TernaPage() {
   }
 
   async function descartarConMotivo(p: PostulacionDoc, motivo: MotivoDescarte, notas: string) {
-    if (!vacante || !user || !perfil) return;
+    if (!vacante || !user) return;
     setProcesando(p.id);
     setErr(null);
     try {
-      await crear('decisiones', {
-        postulacion_id: p.id,
-        proceso_id: vacante.proceso_activo_id,
-        terna_id: null,
-        lider_uid: user.uid,
-        lider_nombre: `${perfil.nombre} ${perfil.apellido}`,
-        aprobado: false,
-        feedback_lider: notas,
-        motivo_descarte: motivo,
-        condiciones_adicionales: null,
-        decidido_en: Timestamp.now(),
-      });
-      const ahora = Timestamp.now();
-      await actualizar('postulaciones', p.id, {
-        estado: 'descartado_por_lider',
-        ultima_transicion_estado: ahora,
-        motivo_descarte: motivo,
-        razon_descarte: notas || null,
-        descarte_etapa: 'entrevista_lider',
-        'marcas.descartado_en': ahora,
-      });
-      await actualizarResultadoCandidato({
-        candidato_id: p.candidato_id,
-        resultado: MOTIVOS_RECICLABLES.has(motivo) ? 'apto_no_contratado' : 'descartado_lider',
-        vacante_id: vacante.id,
-        vacante_consecutivo: vacante.consecutivo,
-        motivo_descarte: motivo,
-        uid: user.uid,
-      });
-      if (vacante.terna_enviada_en && !vacante.terna_respondida_en) {
-        await actualizar('vacantes', vacante.id, { terna_respondida_en: ahora });
-      }
+      const fn = httpsCallable(functions, 'decidirTerna');
+      await fn({ postulacion_id: p.id, aprobado: false, motivo_descarte: motivo, feedback: notas });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos descartar.');
       throw e;

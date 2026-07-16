@@ -200,7 +200,25 @@ export default function CarreraPublicaPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!vacante || !auth.currentUser) return;
+    if (!vacante) return;
+    // La sesión anónima puede no haber quedado lista (red que bloquea Firebase,
+    // primer render). Antes se hacía `return` en silencio: el candidato pulsaba
+    // "Enviar" y no pasaba NADA (revisión 16-jul). Ahora reintentamos una vez y,
+    // si aun así falla, mostramos un error accionable en vez de tragárnoslo.
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch {
+        setErrSubmit(
+          'No pudimos conectar con el servidor. Revisa tu conexión (o desactiva la VPN) e inténtalo de nuevo.',
+        );
+        return;
+      }
+      if (!auth.currentUser) {
+        setErrSubmit('No pudimos iniciar tu sesión. Recarga la página e inténtalo de nuevo.');
+        return;
+      }
+    }
     // La vacante ya no recibe postulaciones si está cerrada/desierta/cancelada o
     // pausada. La landing sigue mostrando la oferta, pero no deja postular.
     if (ESTADOS_SIN_POSTULACION.includes(vacante.estado)) {

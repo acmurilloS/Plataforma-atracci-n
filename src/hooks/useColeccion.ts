@@ -18,6 +18,13 @@ export interface OpcionesColeccion {
   filtros?: FiltroTupla[];
   orden?: [string, 'asc' | 'desc'] | null;
   limit?: number;
+  /**
+   * Si es `false`, NO se monta la query (devuelve `docs: []`). Para no suscribir
+   * una colección que el rol actual no puede leer según firestore.rules — así se
+   * evita un permission-denied cosmético en consola cada vez que abre la página
+   * (revisión 16-jul). Default: true.
+   */
+  habilitado?: boolean;
 }
 
 interface DocumentoBase {
@@ -83,8 +90,15 @@ export function useColeccion<T extends DocumentoBase>(
     setError(null);
   }
 
+  const habilitado = opciones.habilitado ?? true;
+
   useEffect(() => {
     setError(null);
+    if (!habilitado) {
+      setDocs([]);
+      setCargando(false);
+      return;
+    }
 
     const filtros = opciones.filtros ?? [];
     const orden = opciones.orden ?? null;
@@ -158,7 +172,7 @@ export function useColeccion<T extends DocumentoBase>(
     suscribir(true);
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coleccion, keyFiltros, keyOrden, lim]);
+  }, [coleccion, keyFiltros, keyOrden, lim, habilitado]);
 
   return { docs, cargando, error };
 }

@@ -56,11 +56,17 @@ export function BuscadorGlobal() {
 
 function BuscadorModal({ onClose }: { onClose: () => void }) {
   const nav = useNavigate();
+  const { rol, user } = useAuth();
   const [q, setQ] = useState('');
   const [activo, setActivo] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // El líder solo puede LISTAR sus propias vacantes (regla de confidencialidad).
+  // Sin este filtro, el list traía vacantes de otros líderes, la regla denegaba
+  // TODA la query y el buscador siempre decía "Sin resultados" con un
+  // permission-denied (revisión 16-jul). Los demás roles listan todo.
   const { docs: vacantes } = useColeccion<VacanteDoc>('vacantes', {
+    filtros: rol === 'lider' && user ? [['lider_uid', '==', user.uid]] : [],
     orden: ['creado_en', 'desc'],
     limit: 500,
   });

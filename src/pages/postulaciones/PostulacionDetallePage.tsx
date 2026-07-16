@@ -147,8 +147,13 @@ export default function PostulacionDetallePage() {
   const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
   const { actualizar } = useMutacion();
   const { rol } = useAuth();
+  // examenes_medicos solo lo pueden leer staff/analista/gestor (dato médico). Sin
+  // este gate, el líder y Documentación (Carla) disparaban un permission-denied en
+  // consola al abrir la ficha (revisión 16-jul).
+  const puedeLeerExamenes = ['analista', 'coordinador', 'gh', 'admin', 'gestor'].includes(rol ?? '');
   const { docs: examenes } = useColeccion<ExamenMin>('examenes_medicos', {
     filtros: [['postulacion_id', '==', id ?? '___']],
+    habilitado: puedeLeerExamenes,
   });
   const puedeEditarDatos = ['analista', 'coordinador', 'gh', 'admin'].includes(rol ?? '');
   const [editarDatosAbierto, setEditarDatosAbierto] = useState(false);

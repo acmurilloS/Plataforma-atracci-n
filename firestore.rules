@@ -45,9 +45,11 @@ service cloud.firestore {
       return interno() && (isLider() || isAnalista() || isCoord() || isAdmin()
         || isGH() || isDocumentacion());
     }
-    // La postulación la necesita además el gestor SST (su pantalla de Exámenes
-    // resuelve el candidato desde ahí).
-    function leePostulacion() { return leeCandidato() || isGestor(); }
+    // El gestor SST NO lee postulaciones: su pantalla de Exámenes resuelve el
+    // candidato desde el propio doc `examenes_medicos` (candidato_nombre
+    // denormalizado). Antes leía TODO el pipeline —PII de candidatos ajenos a
+    // exámenes— sin necesitarlo (revisión 16-jul).
+    function leePostulacion() { return leeCandidato(); }
 
     // PIPELINE de reclutamiento: pruebas, entrevistas, referencias, informes,
     // ternas, decisiones, conceptos. GH queda FUERA — la reu Karen 09-jul pidió
@@ -363,9 +365,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
     // Documentos que el candidato sube desde su portal. Los escribe la callable
-    // registrarDocumentoPortal (Admin SDK); el analista/coordinación los leen.
+    // registrarDocumentoPortal (Admin SDK). Los leen quienes trabajan la carpeta:
+    // analista + GH + Documentación (Carla) — sin isDocumentacion, Carla abría la
+    // carpeta y el panel "Aportados por el integrante · portal" desaparecía con un
+    // permission-denied (revisión 16-jul). leeCarpeta() cubre exactamente a ese grupo.
     match /documentos_portal/{id} {
-      allow read: if staff() || isAnalista();
+      allow read: if leeCarpeta();
       allow write: if false;
     }
     // Técnicos que pidieron no recibir más invitaciones. Solo admin edita.
@@ -427,9 +432,11 @@ service cloud.firestore {
     // al corregir un campo: historial inmutable (quién/cuándo/qué/PDF por versión).
     // Solo la callable `regenerarFormatoOficial` (Admin SDK) escribe; staff lee.
     match /formatos_versiones/{id} {
-      // Lectura para quienes pueden corregir (staff + analista): así la analista
-      // que genera la corrección ve su propio historial. Escritura solo la callable.
-      allow read: if staff() || isAnalista();
+      // Lectura para quienes trabajan la carpeta (staff + analista + Documentación):
+      // los tabs Datos Básicos / Debida Diligencia muestran el historial de
+      // correcciones, y sin isDocumentacion Carla generaba un permission-denied al
+      // abrirlos (revisión 16-jul). Escritura solo la callable.
+      allow read: if leeCarpeta() || isAnalista();
       allow write: if false;
     }
     match /notificaciones/{id} {
