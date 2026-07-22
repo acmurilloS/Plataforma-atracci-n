@@ -37,7 +37,13 @@ export const onVacanteCreate = onDocumentCreated(
 
     const creadoEn = data.creado_en?.toDate?.() ?? new Date();
     const anio = creadoEn.getFullYear();
-    const contadorId = `${empresa}_${sede}_${anio}`;
+    // Consecutivo POR EMPRESA (reu Karen jul-2026): cada empresa lleva un único
+    // conteo de procesos, continuo entre sedes y años ("por cada empresa vamos en
+    // número de procesos distintos"). El contador es por empresa; la sede y el año
+    // se siguen mostrando en el código EMPRESA-SEDE-AÑO-####, pero el número no se
+    // reinicia por sede ni por año. Los contadores se siembran con el número real
+    // de cada empresa (CUM/EQT/ING/LAP) para continuar desde donde va Karen.
+    const contadorId = empresa;
     const contadorRef = db.collection('contadores').doc(contadorId);
 
     try {
@@ -54,8 +60,6 @@ export const onVacanteCreate = onDocumentCreated(
           tx.set(contadorRef, {
             id: contadorId,
             empresa_codigo: empresa,
-            sede_codigo: sede,
-            anio,
             ultimo_numero: next,
             creado_en: FieldValue.serverTimestamp(),
             actualizado_en: FieldValue.serverTimestamp(),

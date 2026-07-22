@@ -68,6 +68,20 @@ function pesos(n: number | undefined): string {
   return `$ ${n.toLocaleString('es-CO')}`;
 }
 
+/**
+ * Valores estándar del auxilio de rodamiento (Karen, jul-2026). El usuario elige
+ * de la lista; si el caso no encaja, "Otro valor…" abre un campo libre.
+ */
+const RODAMIENTO_OPCIONES: { valor: string; label: string }[] = [
+  { valor: '$460.000', label: '$460.000 · Técnicos postventa / proyectos energía — Mosquera' },
+  { valor: '$415.000', label: '$415.000 · Técnicos postventa / proyectos energía — otras sedes' },
+  { valor: '$400.000', label: '$400.000 · Comerciales (todas las empresas)' },
+  { valor: '$280.000', label: '$280.000 · Mensajeros' },
+  { valor: '$365.000', label: '$365.000 · Gestores SST, ingenieros residentes u otros cargos' },
+  { valor: 'No aplica', label: 'No aplica' },
+];
+const RODAMIENTO_FIJOS = new Set(RODAMIENTO_OPCIONES.map((o) => o.valor));
+
 export default function SolicitudIntegrantePage() {
   const { id } = useParams<{ id: string }>();
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', id);
@@ -80,6 +94,8 @@ export default function SolicitudIntegrantePage() {
   const solicitud = solicitudes[0] ?? null;
 
   const [form, setForm] = useState<FormSolicitud>(FORM_VACIO);
+  // Rodamiento: true cuando el valor cargado no es uno de los estándar → modo "Otro".
+  const [rodOtro, setRodOtro] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const [descargando, setDescargando] = useState(false);
@@ -103,6 +119,8 @@ export default function SolicitudIntegrantePage() {
       garantizado_tiempo: solicitud.garantizado_tiempo ?? '',
       observaciones: solicitud.observaciones ?? '',
     });
+    const rv = solicitud.rodamiento_valor ?? '';
+    setRodOtro(!!rv && !RODAMIENTO_FIJOS.has(rv));
   }, [solicitud]);
 
   function set<K extends keyof FormSolicitud>(k: K, v: string) {
@@ -363,7 +381,37 @@ export default function SolicitudIntegrantePage() {
           <Fila label="Salario básico mensual">{pesos(vacante.salario_base)}</Fila>
           <Fila label="Auxilio de rodamiento">{vacante.rodamiento ? 'Sí' : 'No'}</Fila>
           <Fila label="Valor del auxilio de rodamiento">
-            <Entrada value={form.rodamiento_valor} onChange={(v) => set('rodamiento_valor', v)} />
+            <div className="flex flex-col gap-1">
+              <select
+                value={rodOtro ? '__otro__' : RODAMIENTO_FIJOS.has(form.rodamiento_valor) ? form.rodamiento_valor : ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '__otro__') {
+                    setRodOtro(true);
+                    set('rodamiento_valor', '');
+                  } else {
+                    setRodOtro(false);
+                    set('rodamiento_valor', v);
+                  }
+                }}
+                className="w-full px-2 py-1 text-[12px] border-0 bg-transparent focus:bg-brand-50/40 focus:outline-none"
+              >
+                <option value="">Selecciona…</option>
+                {RODAMIENTO_OPCIONES.map((o) => (
+                  <option key={o.valor} value={o.valor}>
+                    {o.label}
+                  </option>
+                ))}
+                <option value="__otro__">Otro valor…</option>
+              </select>
+              {rodOtro && (
+                <Entrada
+                  value={form.rodamiento_valor}
+                  onChange={(v) => set('rodamiento_valor', v)}
+                  placeholder="Escribe el valor del rodamiento"
+                />
+              )}
+            </div>
           </Fila>
           <Fila label="Esquema de comisiones">{vacante.comisiones_texto || '—'}</Fila>
           <Fila label="Esquema de bonificaciones">
