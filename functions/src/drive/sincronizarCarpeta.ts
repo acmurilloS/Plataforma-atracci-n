@@ -28,6 +28,32 @@ export async function carpetaCompleta100(postulacionId: string): Promise<boolean
   );
 }
 
+/**
+ * ¿La carpeta ya se puede depositar en Drive? Umbral 85% de la parte de CULTURA Y
+ * DESARROLLO (lo que ve GH en la barra "Cultura y Desarrollo"), SIN exigir los 4
+ * documentos de GH (contrato + afiliaciones). Diego planteó (reu 21-jul) que esos
+ * pueden demorar más allá del proceso de atracción y no deben bloquear el depósito;
+ * se re-sincronizan cuando lleguen. El % usa el mismo redondeo que la UI, así que
+ * "11/13 = 85%" dispara.
+ */
+export async function carpetaListaParaDrive(postulacionId: string): Promise<boolean> {
+  const dc = await db
+    .collection('documentos_candidato')
+    .where('postulacion_id', '==', postulacionId)
+    .get();
+  const estadoPorClave = new Map<string, string>();
+  dc.docs.forEach((d) => {
+    const x = d.data() as Record<string, unknown>;
+    estadoPorClave.set(String(x.clave ?? ''), String(x.estado ?? 'pendiente'));
+  });
+  const total = CLAVES_OBLIGATORIAS.length;
+  if (total === 0) return false;
+  const ok = CLAVES_OBLIGATORIAS.filter((c) =>
+    ESTADOS_OK.has(estadoPorClave.get(c) ?? 'pendiente'),
+  ).length;
+  return Math.round((ok / total) * 100) >= 85;
+}
+
 export interface ResultadoSync {
   ok: boolean;
   drive_carpeta_id?: string;
@@ -207,13 +233,17 @@ export type EstadoDeposito = 'ok' | 'ocupado' | 'ya_sincronizada' | 'sin_carpeta
 export async function ejecutarDepositoDrive(
   carpetaRef: FirebaseFirestore.DocumentReference,
   postulacionId: string,
+  // Re-sincronizar una carpeta que YA se depositó: para subir los documentos que
+  // llegan tarde (contrato/afiliaciones de GH) sin bloquear el depósito inicial al
+  // 85% (reu 21-jul). La sync es incremental y no duplica.
+  permitirResync = false,
 ): Promise<{ estado: EstadoDeposito; drive_carpeta_id?: string; subidos?: number; error?: string }> {
   const ahoraMs = Date.now();
   const turno = await db.runTransaction(async (tx) => {
     const snap = await tx.get(carpetaRef);
     if (!snap.exists) return 'sin_carpeta';
     const d = snap.data() ?? {};
-    if (d.drive_sincronizada_en) return 'ya';
+    if (d.drive_sincronizada_en && !permitirResync) return 'ya';
     const intMs =
       (d.drive_sync_intentando_en as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
     if (intMs && ahoraMs - intMs < 10 * 60 * 1000) return 'ocupado';
@@ -229,6 +259,7 @@ export async function ejecutarDepositoDrive(
     await carpetaRef.update({
       drive_carpeta_id: res.drive_carpeta_id ?? null,
       drive_sincronizada_en: FieldValue.serverTimestamp(),
+      drive_ultima_sync_en: FieldValue.serverTimestamp(),
       drive_sync_intentando_en: null,
       drive_error: null,
     });

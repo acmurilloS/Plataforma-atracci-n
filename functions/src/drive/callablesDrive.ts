@@ -2,7 +2,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { asegurarFolder, borrarDeDrive, subirBufferAFolder } from './cliente';
-import { carpetaCompleta100, ejecutarDepositoDrive } from './sincronizarCarpeta';
+import { carpetaListaParaDrive, ejecutarDepositoDrive } from './sincronizarCarpeta';
 
 const GDRIVE_SERVICE_ACCOUNT_JSON = defineSecret('GDRIVE_SERVICE_ACCOUNT_JSON');
 
@@ -74,14 +74,16 @@ export const sincronizarCarpetaDrive = onCall(
     const postulacionId = String(carpetaSnap.data()?.postulacion_id ?? '');
     if (!postulacionId) throw new HttpsError('failed-precondition', 'La carpeta no tiene postulación.');
 
-    if (!(await carpetaCompleta100(postulacionId))) {
+    if (!(await carpetaListaParaDrive(postulacionId))) {
       throw new HttpsError(
         'failed-precondition',
-        'La carpeta aún no está al 100% (CyD + GH); no se deposita todavía.',
+        'La carpeta aún no llega al 85% de Cultura y Desarrollo; no se deposita todavía.',
       );
     }
 
-    const r = await ejecutarDepositoDrive(carpetaRef, postulacionId);
+    // Reintento manual de GH: permite re-sincronizar para subir lo que llegó tarde
+    // (contrato/afiliaciones) aunque ya se haya depositado antes.
+    const r = await ejecutarDepositoDrive(carpetaRef, postulacionId, true);
     if (r.estado === 'ok') {
       return { ok: true as const, drive_carpeta_id: r.drive_carpeta_id ?? '', subidos: r.subidos ?? 0 };
     }

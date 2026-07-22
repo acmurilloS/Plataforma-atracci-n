@@ -5,9 +5,11 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { db } from '../utils/admin';
 import {
   asegurarCarpetaRef,
-  carpetaCompleta100,
+  carpetaListaParaDrive,
   ejecutarDepositoDrive,
 } from './sincronizarCarpeta';
+
+const ESTADOS_OK = new Set(['entregado', 'verificado', 'no_aplica']);
 
 const GDRIVE_SERVICE_ACCOUNT_JSON = defineSecret('GDRIVE_SERVICE_ACCOUNT_JSON');
 
@@ -36,23 +38,33 @@ export const onCarpetaCompletaTotal = onDocumentWritten(
     memory: '512MiB',
   },
   async (event) => {
-    const data = (event.data?.after?.data() ?? event.data?.before?.data()) as
-      | Record<string, unknown>
-      | undefined;
+    const after = event.data?.after?.data() as Record<string, unknown> | undefined;
+    const before = event.data?.before?.data() as Record<string, unknown> | undefined;
+    const data = after ?? before;
     if (!data) return;
     const postulacionId = String(data.postulacion_id ?? '');
     if (!postulacionId) return;
 
-    if (!(await carpetaCompleta100(postulacionId))) return;
+    // Umbral 85% de C&D (reu 21-jul): deposita sin esperar los 4 docs de GH.
+    if (!(await carpetaListaParaDrive(postulacionId))) return;
 
     // Asegura la carpeta (idempotente) — cubre la carrera en que CyD y GH completan
     // en el mismo evento y onCarpetaCompletaCheck aún no la creó.
     const carpetaRef = await asegurarCarpetaRef(postulacionId);
     if (!carpetaRef) return;
 
+    // ¿Ya se depositó antes? Si sí, solo re-sincronizamos cuando ESTE documento
+    // acaba de pasar a un estado OK (entregado/verificado) — así el contrato y las
+    // afiliaciones que GH sube DESPUÉS del 85% se suben a Drive sin duplicar, pero
+    // no re-sincronizamos por escrituras irrelevantes.
+    const ya = (await carpetaRef.get()).data()?.drive_sincronizada_en;
+    const entroAOk =
+      !ESTADOS_OK.has(String(before?.estado ?? '')) && ESTADOS_OK.has(String(after?.estado ?? ''));
+    if (ya && !entroAOk) return;
+
     // Depósito con lock (serializa con el reintento manual). Único punto que toca
-    // los flags drive_*.
-    const r = await ejecutarDepositoDrive(carpetaRef, postulacionId);
+    // los flags drive_*. `ya` → re-sync incremental de lo que llegó tarde.
+    const r = await ejecutarDepositoDrive(carpetaRef, postulacionId, Boolean(ya));
     if (r.estado === 'ok') {
       await db.collection('eventos').add({
         tipo: 'carpeta_sincronizada_drive',
