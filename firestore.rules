@@ -18,6 +18,14 @@ service cloud.firestore {
     // por eso no necesita write directo en las reglas.
     function isDocumentacion() { return signedIn() && rol() == 'documentacion'; }
     function isGestor() { return signedIn() && rol() == 'gestor'; }
+    // Gerente por área (reu Karen jul-2026): solo lectura, acotado a las vacantes
+    // de SUS unidades. El conjunto de unidades vive en el claim `unidades_gerente`
+    // (lista de unidad_id). Ver el scoping del `list` de vacantes más abajo.
+    function isGerente() { return signedIn() && rol() == 'gerente'; }
+    function unidadDelGerente(unidadId) {
+      return 'unidades_gerente' in request.auth.token
+        && (unidadId in request.auth.token.unidades_gerente);
+    }
     function staff() { return isAdmin() || isCoord() || isGH(); }
 
     // ===== La frontera real de lectura (auditoría de PII, 15-jul) =====
@@ -185,11 +193,19 @@ service cloud.firestore {
       // vacantes: abre UNA por su id con el `get` de arriba (auditoría 15-jul —
       // antes, al no ser líder, el anónimo pasaba el filtro y listaba todo,
       // incluidos borradores).
+      // El `gerente` (reu Karen jul-2026) es solo-lectura acotado: SOLO puede
+      // listar las vacantes cuya `unidad_id` está en su claim `unidades_gerente`.
+      // Se saca del catch-all `!isLider()` (que dejaba a cualquier no-líder listar
+      // todo) para que su alcance sea real, no solo de UI. El resto de roles no
+      // cambia.
       allow list: if interno() && (
-        !isLider()
-        || resource.data.lider_uid == request.auth.uid
-        || resource.data.estado == 'publicada'
-        || resource.data.estado == 'en_proceso'
+        (!isLider() && !isGerente())
+        || (isLider() && (
+              resource.data.lider_uid == request.auth.uid
+              || resource.data.estado == 'publicada'
+              || resource.data.estado == 'en_proceso'
+           ))
+        || (isGerente() && unidadDelGerente(resource.data.unidad_id))
       );
       // El aval ya no es obligatorio al crear — el líder puede mandar la
       // solicitud sin él y queda marcada con aval_pendiente=true para que

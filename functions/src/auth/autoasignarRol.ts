@@ -24,7 +24,7 @@ const DOMINIO = '@equitel.com.co';
 /** Lo único que un usuario puede ELEGIR por sí mismo en el primer ingreso. */
 const ROLES_AUTOSERVICIO = ['lider', 'analista'];
 /** Roles válidos que el staff puede dejar PRE-ASIGNADOS (se honran al ingresar). */
-const ROLES_PREASIGNABLES = ['gh', 'apoyo', 'talentos', 'gestor', 'documentacion'];
+const ROLES_PREASIGNABLES = ['gh', 'apoyo', 'talentos', 'gestor', 'documentacion', 'gerente'];
 
 export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
@@ -62,11 +62,15 @@ export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
   async function asignar(
     rol: string,
     areaApoyo: string | null,
+    unidadesGerente: string[] | null,
     fuente: 'preasignado' | 'autoservicio',
     asignadoPor: string | null,
   ) {
     const claims: Record<string, unknown> = { rol };
     if (areaApoyo) claims.area_apoyo = areaApoyo;
+    // Gerente: el conjunto de unidades viaja en el claim para que las reglas de
+    // Firestore acoten sus lecturas (`unidad_id in token.unidades_gerente`).
+    if (unidadesGerente && unidadesGerente.length > 0) claims.unidades_gerente = unidadesGerente;
     await getAuth().setCustomUserClaims(uid, claims);
     await docRef.set(
       {
@@ -76,6 +80,7 @@ export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
         apellido,
         rol,
         area_apoyo: areaApoyo,
+        unidades_gerente: unidadesGerente,
         empresa_codigo: null,
         sede_codigo: null,
         unidad_id: null,
@@ -110,8 +115,11 @@ export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
     const pre = preSnap.data() ?? {};
     const rolPre = String(pre.rol ?? '').trim();
     const areaPre = pre.area_apoyo ? String(pre.area_apoyo) : null;
+    const unidadesPre = Array.isArray(pre.unidades_gerente)
+      ? pre.unidades_gerente.map((u: unknown) => String(u ?? '').trim()).filter(Boolean)
+      : null;
     if (ROLES_PREASIGNABLES.includes(rolPre)) {
-      await asignar(rolPre, areaPre, 'preasignado', String(pre.creado_por ?? '') || null);
+      await asignar(rolPre, areaPre, unidadesPre, 'preasignado', String(pre.creado_por ?? '') || null);
       await preRef.update({ usado_en: FieldValue.serverTimestamp(), usado_por_uid: uid });
       return { ok: true as const, rol: rolPre, fuente: 'preasignado' as const };
     }
@@ -128,6 +136,6 @@ export const autoasignarRol = onCall({ region: 'us-central1' }, async (req) => {
       'Ese rol no se puede autoasignar; lo asigna el equipo de Gestión Humana o un administrador.',
     );
   }
-  await asignar(rol, null, 'autoservicio', null);
+  await asignar(rol, null, null, 'autoservicio', null);
   return { ok: true as const, rol, fuente: 'autoservicio' as const };
 });

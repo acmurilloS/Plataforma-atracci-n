@@ -44,7 +44,7 @@ export const crearUsuarioCorporativo = onRequest(
         return;
       }
 
-      const { email, nombre, apellido, rol, empresa_codigo, sede_codigo, area_apoyo } =
+      const { email, nombre, apellido, rol, empresa_codigo, sede_codigo, area_apoyo, unidades_gerente } =
         (req.body ?? {}) as {
           email?: string;
           nombre?: string;
@@ -53,9 +53,10 @@ export const crearUsuarioCorporativo = onRequest(
           empresa_codigo?: string;
           sede_codigo?: string;
           area_apoyo?: string;
+          unidades_gerente?: unknown;
         };
 
-      const rolesValidos = ['admin', 'lider', 'analista', 'coordinador', 'gh', 'apoyo', 'talentos', 'gestor', 'documentacion'];
+      const rolesValidos = ['admin', 'lider', 'analista', 'coordinador', 'gh', 'apoyo', 'talentos', 'gestor', 'documentacion', 'gerente'];
 
       if (!email || !nombre || !apellido || !rol || !rolesValidos.includes(rol)) {
         res.status(400).json({
@@ -84,8 +85,14 @@ export const crearUsuarioCorporativo = onRequest(
         logger.info('crearUsuarioCorporativo · user creado en Auth', { email, uid });
       }
 
+      const unidadesGerente =
+        rol === 'gerente' && Array.isArray(unidades_gerente)
+          ? [...new Set(unidades_gerente.map((u) => String(u ?? '').trim()).filter(Boolean))]
+          : null;
+
       const claims: Record<string, unknown> = { rol };
       if (area_apoyo) claims.area_apoyo = area_apoyo;
+      if (unidadesGerente && unidadesGerente.length > 0) claims.unidades_gerente = unidadesGerente;
       await auth.setCustomUserClaims(uid, claims);
 
       await db.collection('usuarios').doc(uid).set(
@@ -98,6 +105,7 @@ export const crearUsuarioCorporativo = onRequest(
           empresa_codigo: empresa_codigo ?? null,
           sede_codigo: sede_codigo ?? null,
           area_apoyo: area_apoyo ?? null,
+          unidades_gerente: unidadesGerente,
           activo: true,
           creado_en: FieldValue.serverTimestamp(),
           creado_por: decoded.uid,

@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { Clock, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
 import { functions } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
+import { useUnidadesDeSede } from '../../hooks/useCatalogos';
 import { Button, Card, Pill } from '../../components/brand';
 import { cn } from '../../utils/cn';
 
@@ -49,8 +50,9 @@ const ROL_LABEL: Record<string, string> = {
   talentos: 'Conexión de Talentos',
   gestor: 'Gestor SST',
   documentacion: 'Documentación',
+  gerente: 'Gerente',
 };
-const ROLES_ASIGNABLES = ['admin', 'coordinador', 'gh', 'analista', 'lider', 'talentos', 'gestor', 'documentacion'];
+const ROLES_ASIGNABLES = ['admin', 'coordinador', 'gh', 'analista', 'lider', 'talentos', 'gestor', 'documentacion', 'gerente'];
 
 const SETEAR_ROL_URL = 'https://us-central1-ptm-atraccion.cloudfunctions.net/setearRolUsuario';
 
@@ -84,7 +86,9 @@ export default function UsuariosRolesPage() {
   const [filtroRol, setFiltroRol] = useState('');
 
   // Formulario de pre-asignación (invitar rol nuevo por correo).
-  const [rolPre, setRolPre] = useState<'gh' | 'talentos' | 'gestor' | 'documentacion'>('gh');
+  const [rolPre, setRolPre] = useState<'gh' | 'talentos' | 'gestor' | 'documentacion' | 'gerente'>('gh');
+  const [unidadesSel, setUnidadesSel] = useState<string[]>([]);
+  const { unidades: catalogoUnidades } = useUnidadesDeSede();
   const [texto, setTexto] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [errorPre, setErrorPre] = useState('');
@@ -197,15 +201,21 @@ export default function UsuariosRolesPage() {
       setErrorPre('Pega al menos un correo.');
       return;
     }
+    if (rolPre === 'gerente' && unidadesSel.length === 0) {
+      setErrorPre('Elige al menos una unidad para el gerente.');
+      return;
+    }
     setGuardando(true);
     try {
       const fn = httpsCallable(functions, 'preasignarRoles');
       const res = (await fn({
         emails: correos,
         rol: rolPre,
+        ...(rolPre === 'gerente' ? { unidades_gerente: unidadesSel } : {}),
       })) as { data: { creados: number; invalidos: string[] } };
       setResultadoPre(res.data);
       setTexto('');
+      setUnidadesSel([]);
       await cargar();
     } catch (e) {
       setErrorPre((e instanceof Error ? e.message : 'No se pudo guardar.').replace(/^.*?:\s*/, ''));
@@ -459,7 +469,7 @@ export default function UsuariosRolesPage() {
 
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {(['gh', 'talentos', 'gestor', 'documentacion'] as const).map((r) => (
+            {(['gh', 'talentos', 'gestor', 'documentacion', 'gerente'] as const).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -475,6 +485,45 @@ export default function UsuariosRolesPage() {
               </button>
             ))}
           </div>
+
+          {/* Gerente: elegir las unidades cuyas vacantes verá (solo lectura). */}
+          {rolPre === 'gerente' && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3.5">
+              <p className="text-[12px] font-medium text-text-muted mb-2">
+                Unidades a cargo{' '}
+                <span className="text-text-subtle">
+                  ({unidadesSel.length} seleccionada{unidadesSel.length === 1 ? '' : 's'})
+                </span>
+              </p>
+              <div className="grid gap-1.5 sm:grid-cols-2 max-h-64 overflow-y-auto pr-1">
+                {catalogoUnidades.map((u) => {
+                  const marcada = unidadesSel.includes(u.id);
+                  return (
+                    <label
+                      key={u.id}
+                      className="flex items-center gap-2 text-[12.5px] text-text-body cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={marcada}
+                        onChange={(e) =>
+                          setUnidadesSel((prev) =>
+                            e.target.checked ? [...prev, u.id] : prev.filter((x) => x !== u.id),
+                          )
+                        }
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
+                      />
+                      {u.nombre}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-text-subtle mt-2">
+                Todos los correos de la lista quedarán con estas unidades. Para gerentes con
+                unidades distintas, márcalos por separado.
+              </p>
+            </div>
+          )}
 
           <label className="block">
             <span className="text-[12px] font-medium text-text-muted">

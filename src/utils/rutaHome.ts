@@ -18,6 +18,8 @@ export function rutaHome(rol: RolUsuario | null | undefined): string {
       return '/examenes-medicos';
     case 'apoyo':
       return '/tickets';
+    case 'gerente':
+      return '/mis-unidades';
     case 'lider':
     case 'analista':
     case 'talentos':

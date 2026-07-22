@@ -55,6 +55,9 @@ export const listarUsuariosAdmin = onCall({ region: 'us-central1' }, async (req)
       apellido: String(data.apellido ?? ''),
       rol: String(data.rol ?? ''),
       area_apoyo: data.area_apoyo ? String(data.area_apoyo) : null,
+      unidades_gerente: Array.isArray(data.unidades_gerente)
+        ? data.unidades_gerente.map((u: unknown) => String(u ?? ''))
+        : null,
       empresa_codigo: data.empresa_codigo ? String(data.empresa_codigo) : null,
       activo: data.activo !== false,
       auth_deshabilitado: meta?.deshabilitado ?? false,
@@ -74,6 +77,9 @@ export const listarUsuariosAdmin = onCall({ region: 'us-central1' }, async (req)
         email: String(data.email ?? d.id),
         rol: String(data.rol ?? ''),
         area_apoyo: data.area_apoyo ? String(data.area_apoyo) : null,
+        unidades_gerente: Array.isArray(data.unidades_gerente)
+          ? data.unidades_gerente.map((u: unknown) => String(u ?? ''))
+          : null,
         creado_en: toMs(data.creado_en),
         creado_por: data.creado_por ? String(data.creado_por) : null,
       };

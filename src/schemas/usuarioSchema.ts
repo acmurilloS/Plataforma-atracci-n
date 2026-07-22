@@ -19,6 +19,14 @@ export const usuarioInputSchema = z.object({
    * las Cloud Functions y las reglas de Firestore lo respeten.
    */
   secciones_admin: z.array(seccionAdmin).optional(),
+  /**
+   * Rol 'gerente' (reu Karen jul-2026): conjunto de IDs de `unidades` cuyas
+   * vacantes puede ver este gerente. Es la fuente que la UI usa para el filtro
+   * (`unidad_id in [...]`) y se refleja también como custom claim `unidades_gerente`
+   * para que las reglas de Firestore lo apliquen (frontera real). Ausente/vacío
+   * para roles que no son gerente.
+   */
+  unidades_gerente: z.array(z.string()).optional(),
 });
 
 export type UsuarioInput = z.infer<typeof usuarioInputSchema>;

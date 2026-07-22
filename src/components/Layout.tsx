@@ -55,6 +55,7 @@ const ITEMS: ItemNav[] = [
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3, grupo: 'Proceso', roles: ['coordinador', 'admin'] },
   { to: '/seguimiento', label: 'Seguimiento', icon: ListChecks, grupo: 'Proceso', roles: ['lider', 'analista', 'coordinador', 'apoyo', 'admin', 'talentos'] },
   { to: '/mis-vacantes', label: 'Mis vacantes', icon: Briefcase, grupo: 'Proceso', roles: ['lider'] },
+  { to: '/mis-unidades', label: 'Mis áreas', icon: FolderOpen, grupo: 'Proceso', roles: ['gerente'] },
   { to: '/vacantes/nueva', label: 'Nueva vacante', icon: PlusCircle, grupo: 'Proceso', roles: ['lider', 'coordinador', 'admin'] },
   {
     // Sin 'lider' (reu Karen 02-jul) ni 'gh' (reu 09-jul): solicitudes confidenciales.
@@ -86,6 +87,7 @@ const ROL_NOMBRE: Record<string, string> = {
   apoyo: 'Apoyo',
   gestor: 'Gestor SST',
   documentacion: 'Documentación',
+  gerente: 'Gerente',
 };
 
 function itemClass({ isActive }: { isActive: boolean }) {

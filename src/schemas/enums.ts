@@ -18,6 +18,11 @@ export const rolUsuario = z.enum([
   // Documentación (Carla, reu Karen 09-jul): trabaja SOLO las Carpetas. Rol
   // acotado — no ve aprobaciones ni exámenes.
   'documentacion',
+  // Gerente por área (reu Karen jul-2026): perfil de SOLO LECTURA que ve
+  // únicamente las vacantes de SUS unidades (el conjunto vive en el claim/doc
+  // `unidades_gerente`). No gestiona el proceso; observa el estado de la
+  // contratación de sus áreas. Scoping real en firestore.rules por unidad_id.
+  'gerente',
 ]);
 export type RolUsuario = z.infer<typeof rolUsuario>;
 

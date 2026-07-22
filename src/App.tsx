@@ -8,6 +8,7 @@ import {
   ROLES_CARPETAS,
   ROLES_EXAMENES,
   ROLES_MIS_VACANTES,
+  ROLES_MIS_UNIDADES,
   ROLES_NUEVA_VACANTE,
   ROLES_PERFILAMIENTO,
   ROLES_POOL,
@@ -30,6 +31,7 @@ import CarpetasPage from './pages/gh/CarpetasPage';
 import ExamenesMedicosPage from './pages/gh/ExamenesMedicosPage';
 import AprobacionAvalPage from './pages/gh/AprobacionAvalPage';
 import LiderMisVacantesPage from './pages/lider/MisVacantesPage';
+import MisUnidadesPage from './pages/gerente/MisUnidadesPage';
 import LoginPage from './pages/LoginPage';
 import OnboardingRolPage from './pages/OnboardingRolPage';
 import NuevaVacantePage from './pages/NuevaVacantePage';
@@ -140,6 +142,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={ROLES_MIS_VACANTES}>
                   <LiderMisVacantesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/mis-unidades"
+              element={
+                <ProtectedRoute roles={ROLES_MIS_UNIDADES}>
+                  <MisUnidadesPage />
                 </ProtectedRoute>
               }
             />

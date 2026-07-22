@@ -40,8 +40,12 @@ export const setearRolUsuario = onRequest(
         return;
       }
 
-      const { uid, rol } = (req.body ?? {}) as { uid?: string; rol?: string };
-      const rolesValidos = ['admin', 'lider', 'analista', 'coordinador', 'gh', 'apoyo', 'talentos', 'gestor', 'documentacion'];
+      const { uid, rol, unidades_gerente } = (req.body ?? {}) as {
+        uid?: string;
+        rol?: string;
+        unidades_gerente?: unknown;
+      };
+      const rolesValidos = ['admin', 'lider', 'analista', 'coordinador', 'gh', 'apoyo', 'talentos', 'gestor', 'documentacion', 'gerente'];
 
       if (!uid || !rol || !rolesValidos.includes(rol)) {
         res.status(400).json({
@@ -74,9 +78,31 @@ export const setearRolUsuario = onRequest(
       if (rol === 'apoyo' && typeof prevClaims.area_apoyo === 'string') {
         nuevosClaims.area_apoyo = prevClaims.area_apoyo;
       }
+      // Gerente: mismo cuidado con `unidades_gerente` (las reglas acotan sus
+      // vacantes por ese claim). Si el cuerpo trae unidades nuevas se usan; si no,
+      // se preservan las del token anterior. Solo aplica si el rol destino es gerente.
+      let unidadesDoc: string[] | null | undefined;
+      if (rol === 'gerente') {
+        const delBody = Array.isArray(unidades_gerente)
+          ? [...new Set(unidades_gerente.map((u) => String(u ?? '').trim()).filter(Boolean))]
+          : null;
+        const unidades =
+          delBody && delBody.length > 0
+            ? delBody
+            : Array.isArray(prevClaims.unidades_gerente)
+              ? (prevClaims.unidades_gerente as string[])
+              : [];
+        if (unidades.length === 0) {
+          res.status(400).json({ error: 'El rol gerente requiere al menos una unidad (unidades_gerente).' });
+          return;
+        }
+        nuevosClaims.unidades_gerente = unidades;
+        unidadesDoc = unidades;
+      }
       await getAuth().setCustomUserClaims(uid, nuevosClaims);
       await db.collection('usuarios').doc(uid).update({
         rol,
+        ...(unidadesDoc !== undefined ? { unidades_gerente: unidadesDoc } : {}),
         actualizado_en: FieldValue.serverTimestamp(),
         actualizado_por: decoded.uid,
       });

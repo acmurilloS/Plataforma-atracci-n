@@ -15,7 +15,7 @@ import { db } from '../utils/admin';
  */
 
 const STAFF = ['admin', 'coordinador'];
-const ROLES_PERMITIDOS = ['gh', 'apoyo', 'talentos', 'gestor', 'documentacion'];
+const ROLES_PERMITIDOS = ['gh', 'apoyo', 'talentos', 'gestor', 'documentacion', 'gerente'];
 const AREAS_APOYO = ['it', 'compras', 'bodega', 'contabilidad', 'administrativo', 'talentos'];
 const RE_EMAIL = /^[^@\s]+@equitel\.com\.co$/;
 
@@ -42,6 +42,20 @@ export const preasignarRoles = onCall({ region: 'us-central1' }, async (req) => 
     }
   }
 
+  // Gerente por área: conjunto de IDs de unidad que verá. Se guarda en la
+  // pre-asignación y autoasignarRol lo copia al claim + doc en el primer login.
+  let unidadesGerente: string[] | null = null;
+  if (rol === 'gerente') {
+    const arr: unknown[] = Array.isArray(req.data?.unidades_gerente) ? req.data.unidades_gerente : [];
+    unidadesGerente = [...new Set(arr.map((u) => String(u ?? '').trim()).filter(Boolean))];
+    if (unidadesGerente.length === 0) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Para el rol de gerente debes elegir al menos una unidad.',
+      );
+    }
+  }
+
   // Normaliza, deduplica y valida dominio.
   const entrada: unknown[] = Array.isArray(req.data?.emails) ? req.data.emails : [];
   const normalizados = [
@@ -64,6 +78,7 @@ export const preasignarRoles = onCall({ region: 'us-central1' }, async (req) => 
         email,
         rol,
         area_apoyo: area,
+        unidades_gerente: unidadesGerente,
         creado_por: req.auth.uid,
         creado_en: FieldValue.serverTimestamp(),
         actualizado_por: req.auth.uid,
@@ -74,6 +89,6 @@ export const preasignarRoles = onCall({ region: 'us-central1' }, async (req) => 
   }
   await batch.commit();
 
-  logger.info('preasignarRoles', { por: req.auth.uid, rol, area, creados: validos.length });
-  return { ok: true as const, rol, area_apoyo: area, creados: validos.length, emails: validos, invalidos };
+  logger.info('preasignarRoles', { por: req.auth.uid, rol, area, unidades: unidadesGerente?.length ?? 0, creados: validos.length });
+  return { ok: true as const, rol, area_apoyo: area, unidades_gerente: unidadesGerente, creados: validos.length, emails: validos, invalidos };
 });

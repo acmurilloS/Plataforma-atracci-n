@@ -49,6 +49,9 @@ const DATOS = {
   'documentos_portal/dp1': { postulacion_id: 'p1', clave: 'hoja_vida' },
   'formatos_versiones/fv1': { postulacion_id: 'p1', tipo: 'datos_basicos' },
   'examenes_medicos/em1': { postulacion_id: 'p1', candidato_nombre: 'Ana', estado: 'solicitada' },
+  // Vacantes con unidad_id para el scoping del rol 'gerente'.
+  'vacantes/vGer': { unidad_id: 'u_energia', lider_uid: 'lider9', estado: 'en_proceso' },
+  'vacantes/vOtra': { unidad_id: 'u_ajena', lider_uid: 'lider9', estado: 'en_proceso' },
 };
 
 const casos = [];
@@ -157,6 +160,21 @@ caso(G6, 'anónimo NO lee documentos_portal', { token: ANON, path: 'documentos_p
 // escribir la postulación directo — esta regla debe seguir negándolo.
 caso(G6, 'líder NO escribe postulaciones directo (va por callable)', { token: lider, path: 'postulaciones/p1', method: 'update', esperado: 'DENY', data: { estado: 'en_examenes_medicos' } });
 caso(G6, 'gestor SST NO lee postulaciones (solo su examen)', { token: gestor, path: 'postulaciones/p1', esperado: 'DENY' });
+
+const G7 = '7. GERENTE POR ÁREA (solo lee vacantes de SUS unidades)';
+const gerenteE = tok('gerente', { uid: 'ger1', unidades_gerente: ['u_energia'] });
+const gerenteSinUnidades = tok('gerente', { uid: 'ger2' });
+caso(G7, 'gerente lista vacante de SU unidad', { token: gerenteE, path: 'vacantes/vGer', method: 'list', esperado: 'ALLOW' });
+caso(G7, 'gerente NO lista vacante de otra unidad', { token: gerenteE, path: 'vacantes/vOtra', method: 'list', esperado: 'DENY' });
+caso(G7, 'gerente sin unidades en el claim NO lista', { token: gerenteSinUnidades, path: 'vacantes/vGer', method: 'list', esperado: 'DENY' });
+caso(G7, 'gerente SÍ abre una vacante por id (get público)', { token: gerenteE, path: 'vacantes/vGer', esperado: 'ALLOW' });
+caso(G7, 'gerente NO lee candidatos (PII)', { token: gerenteE, path: 'candidatos/c1', esperado: 'DENY' });
+caso(G7, 'gerente NO lee postulaciones', { token: gerenteE, path: 'postulaciones/p1', esperado: 'DENY' });
+caso(G7, 'gerente NO lee el SAGRILAFT', { token: gerenteE, path: 'debida_diligencia/dd1', esperado: 'DENY' });
+caso(G7, 'gerente NO lee carpetas', { token: gerenteE, path: 'carpetas_digitales/carp1', esperado: 'DENY' });
+// Regresión: los demás roles NO se vieron afectados por el nuevo scoping.
+caso(G7, 'analista sigue listando vacantes (todas)', { token: analista, path: 'vacantes/vOtra', method: 'list', esperado: 'ALLOW' });
+caso(G7, 'coord sigue listando vacantes (todas)', { token: coord, path: 'vacantes/vOtra', method: 'list', esperado: 'ALLOW' });
 
 // ── Ejecutar ────────────────────────────────────────────────────────────
 const res = await fetch(`https://firebaserules.googleapis.com/v1/projects/${PROJECT}:test`, {
