@@ -28,7 +28,7 @@ import { SelectorCargo } from '../components/vacantes/SelectorCargo';
 import { useFestivosTodos } from '../hooks/useCatalogos';
 import { functions, db } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
-import { formatearCOP } from '../utils/moneda';
+import { formatearCOP, soloDigitos } from '../utils/moneda';
 import { agruparPostulaciones, construirBaseVacantes } from '../utils/reportesVacantes';
 import { exportarVacanteIndividual } from '../utils/exportarExcel';
 import { TIPO_SOLICITUD_LABEL, type CargoDoc, type PostulacionDoc, type VacanteDoc } from '../schemas';
@@ -78,6 +78,97 @@ export default function VacanteDetallePage() {
 
   const esStaffReporte =
     rol === 'analista' || rol === 'coordinador' || rol === 'gh' || rol === 'admin';
+  // Coordinación (Karen / Mari) + admin: únicos que editan condiciones y
+  // consecutivo cuando cambian las condiciones (petición Karen, jul-2026).
+  const esCoord = rol === 'coordinador' || rol === 'admin';
+
+  // ── Editar condiciones (salario/comisiones/rodamiento/garantizado) ──────────
+  const [editarCondAbierto, setEditarCondAbierto] = useState(false);
+  const [condForm, setCondForm] = useState({
+    salario_base: '',
+    comisiones_texto: '',
+    rodamiento: false,
+    garantizado_texto: '',
+  });
+  const [guardandoCond, setGuardandoCond] = useState(false);
+  const [errCond, setErrCond] = useState<string | null>(null);
+
+  function abrirEditarCondiciones() {
+    if (!vac) return;
+    setCondForm({
+      salario_base: String(vac.salario_base ?? ''),
+      comisiones_texto: vac.comisiones_texto ?? '',
+      rodamiento: Boolean(vac.rodamiento),
+      garantizado_texto: vac.garantizado_texto ?? '',
+    });
+    setErrCond(null);
+    setEditarCondAbierto(true);
+  }
+  async function guardarCondiciones() {
+    if (!vac) return;
+    const salario = Number(condForm.salario_base);
+    if (!Number.isFinite(salario) || salario <= 0) {
+      setErrCond('Ingresa un salario base válido.');
+      return;
+    }
+    setGuardandoCond(true);
+    setErrCond(null);
+    try {
+      await actualizar('vacantes', vac.id, {
+        salario_base: salario,
+        comisiones_texto: condForm.comisiones_texto.trim(),
+        rodamiento: condForm.rodamiento,
+        garantizado_texto: condForm.garantizado_texto.trim(),
+      });
+      setEditarCondAbierto(false);
+    } catch (e) {
+      setErrCond(e instanceof Error ? e.message : 'No se pudieron guardar las condiciones.');
+    } finally {
+      setGuardandoCond(false);
+    }
+  }
+
+  // ── Editar consecutivo (corrección manual de coordinación) ──────────────────
+  const [editarConsecAbierto, setEditarConsecAbierto] = useState(false);
+  const [consecNuevo, setConsecNuevo] = useState('');
+  const [guardandoConsec, setGuardandoConsec] = useState(false);
+  const [errConsec, setErrConsec] = useState<string | null>(null);
+
+  function abrirEditarConsecutivo() {
+    if (!vac) return;
+    setConsecNuevo(vac.consecutivo ?? '');
+    setErrConsec(null);
+    setEditarConsecAbierto(true);
+  }
+  async function guardarConsecutivo() {
+    if (!vac) return;
+    const nuevo = consecNuevo.trim().toUpperCase();
+    if (!nuevo) {
+      setErrConsec('El consecutivo no puede quedar vacío.');
+      return;
+    }
+    if (nuevo === vac.consecutivo) {
+      setEditarConsecAbierto(false);
+      return;
+    }
+    setGuardandoConsec(true);
+    setErrConsec(null);
+    try {
+      // Unicidad: que no exista OTRA vacante con ese consecutivo.
+      const dup = await getDocs(query(collection(db, 'vacantes'), where('consecutivo', '==', nuevo)));
+      if (dup.docs.some((d) => d.id !== vac.id)) {
+        setErrConsec('Ya existe otra vacante con ese consecutivo.');
+        setGuardandoConsec(false);
+        return;
+      }
+      await actualizar('vacantes', vac.id, { consecutivo: nuevo });
+      setEditarConsecAbierto(false);
+    } catch (e) {
+      setErrConsec(e instanceof Error ? e.message : 'No se pudo guardar el consecutivo.');
+    } finally {
+      setGuardandoConsec(false);
+    }
+  }
 
   /** Corrige el cargo de la vacante (reu 21-jul). Solo staff/analista y solo en
    *  estados tempranos; re-denormaliza nombre + criticidad sugerida del catálogo. */
@@ -223,6 +314,28 @@ export default function VacanteDetallePage() {
             Corregir cargo
           </button>
         )}
+        {/* Coordinación (Karen/Mari): editar condiciones + consecutivo cuando
+            cambian las condiciones (petición Karen, jul-2026). */}
+        {esCoord && (
+          <button
+            type="button"
+            onClick={abrirEditarCondiciones}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+          >
+            <CircleDollarSign size={13} strokeWidth={1.75} />
+            Editar condiciones
+          </button>
+        )}
+        {esCoord && (
+          <button
+            type="button"
+            onClick={abrirEditarConsecutivo}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+          >
+            <FileText size={13} strokeWidth={1.75} />
+            Editar consecutivo
+          </button>
+        )}
       </div>
 
       {editarCargoAbierto && (
@@ -263,6 +376,128 @@ export default function VacanteDetallePage() {
                 disabled={guardandoCargo || !cargoNuevo || cargoNuevo.id === vac.cargo_id}
               >
                 {guardandoCargo ? 'Guardando…' : 'Guardar cargo'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal · Editar condiciones (coordinación) ──────────────── */}
+      {editarCondAbierto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => !guardandoCond && setEditarCondAbierto(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[16px] font-semibold text-text-strong">Editar condiciones</h2>
+            <p className="mt-1 text-[12px] text-text-muted leading-[1.5]">
+              Actualiza las condiciones de la vacante{' '}
+              <span className="font-mono">{vac.consecutivo}</span> cuando cambien.
+            </p>
+            <div className="mt-4 space-y-3.5">
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+                  Salario base
+                </span>
+                <input
+                  inputMode="numeric"
+                  value={condForm.salario_base ? formatearCOP(Number(condForm.salario_base)) : ''}
+                  onChange={(e) =>
+                    setCondForm((p) => ({ ...p, salario_base: soloDigitos(e.target.value) }))
+                  }
+                  disabled={guardandoCond}
+                  placeholder="$ 0"
+                  className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+                  Comisiones
+                </span>
+                <input
+                  value={condForm.comisiones_texto}
+                  onChange={(e) => setCondForm((p) => ({ ...p, comisiones_texto: e.target.value }))}
+                  disabled={guardandoCond}
+                  placeholder="Ej.: 3% sobre ventas · vacío = No aplica"
+                  className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+                  Garantizado
+                </span>
+                <input
+                  value={condForm.garantizado_texto}
+                  onChange={(e) => setCondForm((p) => ({ ...p, garantizado_texto: e.target.value }))}
+                  disabled={guardandoCond}
+                  placeholder="Ej.: $1.500.000 x 3 meses · vacío = No aplica"
+                  className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
+                />
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={condForm.rodamiento}
+                  onChange={(e) => setCondForm((p) => ({ ...p, rodamiento: e.target.checked }))}
+                  disabled={guardandoCond}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
+                />
+                <span className="text-[13px] text-text-strong">Incluye auxilio de rodamiento</span>
+              </label>
+            </div>
+            {errCond && <p className="mt-3 text-[12px] text-danger-700">{errCond}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="neutral-secondary"
+                onClick={() => setEditarCondAbierto(false)}
+                disabled={guardandoCond}
+              >
+                Cancelar
+              </Button>
+              <Button variant="brand-primary" onClick={guardarCondiciones} disabled={guardandoCond}>
+                {guardandoCond ? 'Guardando…' : 'Guardar condiciones'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal · Editar consecutivo (coordinación) ──────────────── */}
+      {editarConsecAbierto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => !guardandoConsec && setEditarConsecAbierto(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[16px] font-semibold text-text-strong">Editar consecutivo</h2>
+            <p className="mt-1 text-[12px] text-text-muted leading-[1.5]">
+              Corrige el número de la solicitud. Se valida que no choque con otra vacante. Formato
+              usual: <span className="font-mono">EMPRESA-SEDE-AÑO-####</span>.
+            </p>
+            <input
+              value={consecNuevo}
+              onChange={(e) => setConsecNuevo(e.target.value)}
+              disabled={guardandoConsec}
+              placeholder="CUM-CME-2026-1217"
+              className="mt-4 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 font-mono text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
+            />
+            {errConsec && <p className="mt-3 text-[12px] text-danger-700">{errConsec}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="neutral-secondary"
+                onClick={() => setEditarConsecAbierto(false)}
+                disabled={guardandoConsec}
+              >
+                Cancelar
+              </Button>
+              <Button variant="brand-primary" onClick={guardarConsecutivo} disabled={guardandoConsec}>
+                {guardandoConsec ? 'Guardando…' : 'Guardar consecutivo'}
               </Button>
             </div>
           </div>
