@@ -9,13 +9,14 @@ const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**
  * Gestores SST que tramitan las órdenes de exámenes médicos.
- * Correos confirmados por Karen (2026-06-09). Por ahora se notifica a los 3;
- * si más adelante quieren ruteo por sede/región (bog vs yumbo), se filtra acá.
+ * Correos confirmados por Karen (2026-06-09) + lmolina agregado (JC, jul-2026).
+ * Si más adelante quieren ruteo por sede/región (bog vs yumbo), se filtra acá.
  */
 export const GESTORES = [
   'gestorsstbog@equitel.com.co',
   'jochoa@equitel.com.co',
   'gestorsstyumbo@equitel.com.co',
+  'lmolina@equitel.com.co',
 ];
 
 /**
