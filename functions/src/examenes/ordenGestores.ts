@@ -158,6 +158,19 @@ export async function enviarOrdenAGestores(
     )}</td></tr>`;
   }).join('');
 
+  // Persona en condición de discapacidad (reu Karen jul-2026): se destaca para que
+  // el gestor SST lo tenga presente al tramitar la orden. La observación es el
+  // tipo/detalle que registró Atracción.
+  const discapacidad = Boolean(ex.discapacidad);
+  const discapacidadObs = String(ex.discapacidad_observacion ?? '').trim();
+  const discapacidadHtml = discapacidad
+    ? `<p style="font-size:14px; margin:0 0 16px; padding:10px 12px; background:#eef4ff; border-left:3px solid #2563eb; border-radius:4px;">
+        <strong>Persona en condición de discapacidad.</strong>${
+          discapacidadObs ? ` ${escapeHtml(discapacidadObs)}` : ''
+        }
+      </p>`
+    : '';
+
   const html = `
     <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
       <p>Buen día,</p>
@@ -166,6 +179,7 @@ export async function enviarOrdenAGestores(
       <table style="border-collapse:collapse; font-size:14px; margin:8px 0 16px;">
         ${filasHtml}
       </table>
+      ${discapacidadHtml}
       <p style="font-size:14px; margin:0 0 14px;">
         <strong>Tiempo de respuesta esperado:</strong> ${escapeHtml(cfg.tiempo_esperado)}.
       </p>

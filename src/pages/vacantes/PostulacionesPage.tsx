@@ -29,6 +29,7 @@ import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCan
 import { Button, Card, Pill } from '../../components/brand';
 import { FaseCandidato } from '../../components/postulaciones/FaseCandidato';
 import { RepostularModal } from '../../components/postulaciones/RepostularModal';
+import { MarcarDiscapacidadModal } from '../../components/postulaciones/MarcarDiscapacidadModal';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
@@ -94,6 +95,7 @@ export default function PostulacionesPage() {
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [repostulando, setRepostulando] = useState<PostulacionDoc | null>(null);
+  const [marcandoDiscapacidad, setMarcandoDiscapacidad] = useState<PostulacionDoc | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -727,6 +729,23 @@ export default function PostulacionesPage() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setMarcandoDiscapacidad(p)}
+                      className={cn(
+                        'hover:underline text-[12px] font-medium',
+                        p.discapacidad
+                          ? 'text-blue-700 hover:text-blue-800'
+                          : 'text-text-muted hover:text-brand-700',
+                      )}
+                      title={
+                        p.discapacidad
+                          ? p.discapacidad_observacion || 'Persona en condición de discapacidad'
+                          : 'Marcar persona en condición de discapacidad'
+                      }
+                    >
+                      {p.discapacidad ? '♿ Discapacidad' : 'Discapacidad'}
+                    </button>
                     {p.estado !== 'repostulado' && p.estado !== 'contratado' && (
                       <button
                         type="button"
@@ -775,6 +794,20 @@ export default function PostulacionesPage() {
               `${repostulando.candidato_nombre} fue repostulado${
                 consecutivo ? ` a ${consecutivo}` : ''
               }. Quedó activo en esa vacante y repostulado aquí.`,
+            )
+          }
+        />
+      )}
+
+      {marcandoDiscapacidad && (
+        <MarcarDiscapacidadModal
+          postulacion={marcandoDiscapacidad}
+          onClose={() => setMarcandoDiscapacidad(null)}
+          onDone={(marcada) =>
+            setOkMsg(
+              marcada
+                ? `${marcandoDiscapacidad.candidato_nombre} quedó marcado como persona en condición de discapacidad. La orden de exámenes esperará el visto bueno de Gestión Humana.`
+                : `Se quitó la marca de discapacidad de ${marcandoDiscapacidad.candidato_nombre}.`,
             )
           }
         />

@@ -58,6 +58,8 @@ export { enviarOrdenExamenCandidato } from './examenes/enviarOrdenExamenCandidat
 export { registrarResultadoExamen } from './examenes/registrarResultadoExamen';
 // Don Diego (C&D) decide continúa / no-continúa una novedad (reu Karen 09-jul).
 export { decisionCulturaExamen } from './examenes/decisionCulturaExamen';
+// GH autoriza el envío a gestores de una persona en condición de discapacidad (reu Karen jul-2026).
+export { autorizarGestoresDiscapacidad } from './examenes/autorizarGestoresDiscapacidad';
 
 // Correo al candidato con el agendamiento de su entrevista (pasos 8/13, 2026-06-12).
 export { onEntrevistaCreate } from './entrevistas/onEntrevistaCreate';

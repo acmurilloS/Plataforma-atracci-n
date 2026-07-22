@@ -80,6 +80,13 @@ interface ExamenDoc {
   decision_cd?: 'continua' | 'no_continua' | null;
   decision_cd_en?: Timestamp | null;
   decision_cd_obs?: string | null;
+  // Persona en condición de discapacidad (reu Karen jul-2026). Cuando requiere
+  // autorización de GH, la orden NO salió sola a los gestores: GH la autoriza.
+  discapacidad?: boolean;
+  discapacidad_observacion?: string | null;
+  requiere_autorizacion_gh?: boolean;
+  autorizado_gestores_en?: Timestamp | null;
+  autorizado_gestores_por?: string | null;
   [k: string]: unknown;
 }
 
@@ -193,6 +200,29 @@ export default function ExamenesMedicosPage() {
       );
     } catch (e) {
       window.alert('No se pudo reenviar a los gestores: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setReenviando(null);
+    }
+  }
+
+  // GH autoriza el envío a gestores de una persona en condición de discapacidad
+  // (la orden no salió sola al aprobar el líder). Reusa el mismo spinner de reenvío.
+  async function autorizarGestores(ex: ExamenDoc) {
+    setReenviando(ex.id);
+    try {
+      const fn = httpsCallable<
+        { examen_id: string },
+        { ok: true; faltantes: string[]; destinatarios: number }
+      >(functions, 'autorizarGestoresDiscapacidad');
+      const res = await fn({ examen_id: ex.id });
+      const faltantes = res.data.faltantes ?? [];
+      window.alert(
+        faltantes.length > 0
+          ? `Envío autorizado. La orden salió a los ${res.data.destinatarios} gestores SST.\n\nOjo: faltó ${faltantes.join(', ')}. Complétalo en los Datos Básicos y reenvía.`
+          : `Envío autorizado. La orden salió a los ${res.data.destinatarios} gestores SST con los datos completos.`,
+      );
+    } catch (e) {
+      window.alert('No se pudo autorizar el envío: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setReenviando(null);
     }
@@ -444,6 +474,22 @@ export default function ExamenesMedicosPage() {
                       Gestores SST notificados {formatearFecha(ex.correo_gestor_enviado_en.toDate())}
                     </p>
                   ) : null}
+                  {/* Persona en condición de discapacidad · el correo a gestores
+                      requiere el visto bueno de GH antes de salir. */}
+                  {ex.discapacidad && (
+                    <p className="mt-1.5 flex items-start gap-1.5 flex-wrap text-[11px] text-blue-700 font-medium">
+                      <span aria-hidden>♿</span>
+                      <span>
+                        Persona en condición de discapacidad
+                        {ex.discapacidad_observacion ? ` · ${ex.discapacidad_observacion}` : ''}
+                        {ex.requiere_autorizacion_gh && !ex.autorizado_gestores_en
+                          ? ' — pendiente de autorización de GH para enviar a gestores'
+                          : ex.autorizado_gestores_en
+                            ? ' — envío autorizado'
+                            : ''}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <Pill tono={tono} dot>
                   {ESTADO_LABEL[ex.estado] ?? ex.estado.replace(/_/g, ' ')}
@@ -455,8 +501,24 @@ export default function ExamenesMedicosPage() {
 
               {/* Acciones */}
               <div className="mt-4 flex gap-2 justify-end flex-wrap items-center">
+                {/* Persona en condición de discapacidad · GH autoriza el envío que
+                    no salió solo. Mientras esté pendiente, reemplaza al reenvío. */}
+                {ex.requiere_autorizacion_gh && !ex.autorizado_gestores_en && puedeEnviarOrden && (
+                  <Button
+                    onClick={() => autorizarGestores(ex)}
+                    disabled={reenviando === ex.id}
+                    loading={reenviando === ex.id}
+                    variant="brand-primary"
+                    size="small"
+                    icon={<CheckCircle2 size={13} strokeWidth={1.75} />}
+                  >
+                    Autorizar y enviar a gestores
+                  </Button>
+                )}
+
                 {(ex.estado === 'solicitada' || ex.estado === 'enviada' || ex.correo_gestor_error) &&
-                  puedeEnviarOrden && (
+                  puedeEnviarOrden &&
+                  !(ex.requiere_autorizacion_gh && !ex.autorizado_gestores_en) && (
                     <Button
                       onClick={() => reenviarGestores(ex)}
                       disabled={reenviando === ex.id}

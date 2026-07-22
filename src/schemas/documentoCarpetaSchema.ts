@@ -84,6 +84,13 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     multiple: true,
     ayuda: 'Admite varios archivos: la solicitud/reporte y el soporte del aval del líder.',
   },
+  {
+    clave: 'certificado_discapacidad',
+    seccion: 'generales',
+    nombre: 'Certificado de discapacidad (Secretaría de Salud)',
+    opcional: true,
+    ayuda: 'Solo para persona en condición de discapacidad: certificado emitido por la Secretaría de Salud.',
+  },
 
   // ─── Seguridad Social ─────────────────────────────────────────────────
   {

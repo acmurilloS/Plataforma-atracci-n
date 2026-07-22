@@ -165,6 +165,16 @@ export const postulacionInputSchema = z.object({
   referencias_no_aplica: z.boolean().default(false),
   /** Contactos de referencia de empleos anteriores (típicamente 2). */
   referencias_aportadas: z.array(referenciaAportadaSchema).default([]),
+
+  // ── Persona en condición de discapacidad (reu Karen jul-2026) ──────────────
+  // Lo marca el equipo de Atracción en Seguimiento. Cuando es true, el envío de
+  // la orden a los gestores SST NO se dispara solo al aprobar el líder: GH lo
+  // revisa y lo autoriza (un filtro). Además la carpeta suma el certificado de
+  // discapacidad y el correo a gestores lo destaca. Se espeja al candidato.
+  /** true si el candidato es persona en condición de discapacidad (dato sensible). */
+  discapacidad: z.boolean().default(false),
+  /** Tipo / detalle de la condición (lo escribe quien marca). */
+  discapacidad_observacion: z.string().default(''),
 });
 
 export type PostulacionInput = z.infer<typeof postulacionInputSchema>;

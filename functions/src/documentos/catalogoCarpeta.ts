@@ -23,6 +23,7 @@ export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'datos_basicos_integrante', seccion: 'generales', nombre: 'Datos Básicos del Integrante (DGH-F-05)', opcional: false, aporta_candidato: false },
   { clave: 'contrato_trabajo', seccion: 'generales', nombre: 'Contrato de Trabajo', opcional: false, aporta_candidato: false, responsable: 'gh' },
   { clave: 'solicitud_integrantes', seccion: 'generales', nombre: 'Solicitud de Integrantes / Reporte de Novedad', opcional: false, aporta_candidato: false },
+  { clave: 'certificado_discapacidad', seccion: 'generales', nombre: 'Certificado de discapacidad (Secretaría de Salud)', opcional: true, aporta_candidato: false },
   { clave: 'afiliacion_arl', seccion: 'seguridad_social', nombre: 'Afiliación ARL', opcional: false, aporta_candidato: false, responsable: 'gh' },
   { clave: 'afiliacion_eps', seccion: 'seguridad_social', nombre: 'Afiliación EPS', opcional: false, aporta_candidato: false, responsable: 'gh' },
   { clave: 'afiliacion_caja', seccion: 'seguridad_social', nombre: 'Afiliación Caja de Compensación', opcional: false, aporta_candidato: false, responsable: 'gh' },

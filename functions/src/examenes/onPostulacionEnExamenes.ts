@@ -75,12 +75,23 @@ export const onPostulacionEnExamenes = onDocumentUpdated(
           db.collection('examenes_medicos').where('postulacion_id', '==', postId).limit(1),
         );
         if (!previos.empty) return;
+        // Persona en condición de discapacidad (marcada en Seguimiento). Cuando lo
+        // es, el correo a los gestores NO sale solo al crearse la orden: GH lo
+        // revisa y lo autoriza (onExamenMedicoCreate lo omite; la callable
+        // autorizarGestoresDiscapacidad lo dispara). requiere_autorizacion_gh es la
+        // señal que lee ese trigger; se copia la observación para el correo/pantalla.
+        const discapacidad = Boolean(after.discapacidad);
         tx.set(examenRef, {
           postulacion_id: postId,
           candidato_id: String(after.candidato_id ?? ''),
           vacante_id: vacanteId,
           proceso_id: procesoId,
           candidato_nombre: String(after.candidato_nombre ?? ''),
+          discapacidad,
+          discapacidad_observacion: String(after.discapacidad_observacion ?? ''),
+          requiere_autorizacion_gh: discapacidad,
+          autorizado_gestores_en: null,
+          autorizado_gestores_por: null,
           cargo_nombre: cargoNombre,
           vacante_consecutivo: consecutivo,
           empresa_codigo: empresaCodigo,

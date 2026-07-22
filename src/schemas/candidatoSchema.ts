@@ -118,6 +118,12 @@ export const candidatoInputSchema = z.object({
   /** True cuando no se capturó el documento (registro provisional). Pool no debe usarlos. */
   provisional: z.boolean().default(true),
 
+  // ── Persona en condición de discapacidad (reu Karen jul-2026) ──────────────
+  /** true si es persona en condición de discapacidad (dato sensible). Se marca en Seguimiento. */
+  discapacidad: z.boolean().default(false),
+  /** Tipo / detalle de la condición. */
+  discapacidad_observacion: z.string().default(''),
+
   // Pool-ready: geografía
   ciudad_residencia: z.string().nullable(),
 
