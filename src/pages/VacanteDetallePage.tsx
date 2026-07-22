@@ -23,13 +23,20 @@ import { Button, Card, Pill, type PillTono } from '../components/brand';
 import { useAuth } from '../hooks/useAuth';
 import { puedeVerProceso } from '../utils/accesoRutas';
 import { useVacantes } from '../hooks/useVacantes';
+import { useMutacion } from '../hooks/useMutacion';
+import { SelectorCargo } from '../components/vacantes/SelectorCargo';
 import { useFestivosTodos } from '../hooks/useCatalogos';
 import { functions, db } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
 import { formatearCOP } from '../utils/moneda';
 import { agruparPostulaciones, construirBaseVacantes } from '../utils/reportesVacantes';
 import { exportarVacanteIndividual } from '../utils/exportarExcel';
-import { TIPO_SOLICITUD_LABEL, type PostulacionDoc, type VacanteDoc } from '../schemas';
+import { TIPO_SOLICITUD_LABEL, type CargoDoc, type PostulacionDoc, type VacanteDoc } from '../schemas';
+
+// Estados en los que aún tiene sentido corregir el cargo: antes de que arranque
+// el reclutamiento en firme. En estados avanzados no se edita para no desalinear
+// el proceso (reu 21-jul: habilitar edición del cargo para corregir errores).
+const ESTADOS_CARGO_EDITABLE = ['borrador', 'aprobada', 'lista_para_publicar'];
 
 /**
  * VacanteDetallePage · sistema brand.
@@ -63,9 +70,36 @@ export default function VacanteDetallePage() {
   const [vac, setVac] = useState<VacanteDoc | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [descargando, setDescargando] = useState(false);
+  const { actualizar } = useMutacion();
+  const [editarCargoAbierto, setEditarCargoAbierto] = useState(false);
+  const [cargoNuevo, setCargoNuevo] = useState<CargoDoc | null>(null);
+  const [guardandoCargo, setGuardandoCargo] = useState(false);
+  const [errCargo, setErrCargo] = useState<string | null>(null);
 
   const esStaffReporte =
     rol === 'analista' || rol === 'coordinador' || rol === 'gh' || rol === 'admin';
+
+  /** Corrige el cargo de la vacante (reu 21-jul). Solo staff/analista y solo en
+   *  estados tempranos; re-denormaliza nombre + criticidad sugerida del catálogo. */
+  async function guardarCargo() {
+    if (!vac || !cargoNuevo) return;
+    setGuardandoCargo(true);
+    setErrCargo(null);
+    try {
+      await actualizar('vacantes', vac.id, {
+        cargo_id: cargoNuevo.id,
+        cargo_nombre: cargoNuevo.nombre,
+        cargo_criticidad_al_crear: cargoNuevo.criticidad_sugerida,
+        criticidad: cargoNuevo.criticidad_sugerida,
+      });
+      setEditarCargoAbierto(false);
+      setCargoNuevo(null);
+    } catch (e) {
+      setErrCargo(e instanceof Error ? e.message : 'No pudimos actualizar el cargo.');
+    } finally {
+      setGuardandoCargo(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -175,7 +209,65 @@ export default function VacanteDetallePage() {
             {descargando ? 'Generando…' : 'Descargar información (Excel)'}
           </button>
         )}
+        {esStaffReporte && ESTADOS_CARGO_EDITABLE.includes(vac.estado) && (
+          <button
+            type="button"
+            onClick={() => {
+              setCargoNuevo(null);
+              setErrCargo(null);
+              setEditarCargoAbierto(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+          >
+            <Layers size={13} strokeWidth={1.75} />
+            Corregir cargo
+          </button>
+        )}
       </div>
+
+      {editarCargoAbierto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => !guardandoCargo && setEditarCargoAbierto(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[16px] font-semibold text-text-strong">Corregir el cargo</h2>
+            <p className="mt-1 text-[12px] text-text-muted leading-[1.5]">
+              Elige el cargo correcto del catálogo. Se actualizará el nombre y la
+              criticidad sugerida de la vacante <span className="font-mono">{vac.consecutivo}</span>.
+            </p>
+            <div className="mt-4">
+              <SelectorCargo
+                value={cargoNuevo?.id ?? vac.cargo_id}
+                onChange={setCargoNuevo}
+                disabled={guardandoCargo}
+              />
+            </div>
+            {errCargo && (
+              <p className="mt-3 text-[12px] text-danger-700">{errCargo}</p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="neutral-secondary"
+                onClick={() => setEditarCargoAbierto(false)}
+                disabled={guardandoCargo}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="brand-primary"
+                onClick={guardarCargo}
+                disabled={guardandoCargo || !cargoNuevo || cargoNuevo.id === vac.cargo_id}
+              >
+                {guardandoCargo ? 'Guardando…' : 'Guardar cargo'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <PoliticaCriticidadBanner criticidad={vac.criticidad} />
 
