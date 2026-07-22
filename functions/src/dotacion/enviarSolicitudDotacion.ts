@@ -12,7 +12,7 @@ import { leerConfigDotacion } from './configDotacion';
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const ROLES = ['analista', 'gh', 'coordinador', 'admin'];
 
 /** Campos de talla que trae Datos Básicos (fuente de la dotación). */

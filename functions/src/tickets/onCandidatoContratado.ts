@@ -10,7 +10,7 @@ import { leerConfigConexionTalentos } from '../notificaciones/configConexionTale
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 
 /** Plan de conexión de talentos → José (IT/talentos). Confirmado 2026-06-16. */
 const JOSE_TALENTOS = 'jhoyos@equitel.com.co';

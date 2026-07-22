@@ -9,7 +9,7 @@ import { emailAnalistaDePostulacion } from '../notificaciones/emailAnalista';
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 
 interface PruebaInput {
   nombre: string;
@@ -23,7 +23,7 @@ interface PruebaInput {
  * con todos los links — desde el aplicativo (decisión JC 2026-06-09, en respuesta
  * a Karen). Permite mandar varias pruebas de una (ej. todas las del cargo).
  *
- * Reusa el Gmail SMTP corporativo (steve@equitel.com.co) que ya manda los
+ * Reusa el Gmail SMTP corporativo (Steve-noresponder@equitel.com.co) que ya manda los
  * recordatorios al líder — sin costo nuevo. El candidato es un postulado que
  * dejó su correo al aplicar, así que escribirle sobre su propio proceso es
  * legítimo (no aplica el bloqueo de Habeas Data del sourcing).

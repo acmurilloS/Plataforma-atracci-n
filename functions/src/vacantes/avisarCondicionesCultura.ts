@@ -12,7 +12,7 @@ import {
   FOOTER_EMPRESAS_DEFAULT,
 } from '../notificaciones/plantillasMensajes';
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**

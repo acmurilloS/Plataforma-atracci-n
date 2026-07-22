@@ -7,7 +7,7 @@ import { db } from '../utils/admin';
 import { enviarConGmail } from './enviarConGmail';
 import { envolverMarca } from './plantillasMensajes';
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
 
 /** Envía el recordatorio al líder por Gmail (antes iba por un stub que NUNCA

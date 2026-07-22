@@ -16,9 +16,9 @@ import {
  * correo del destinatario.
  *
  * Provider: Gmail SMTP vía nodemailer (mismo patrón que el Repositorio
- * Jurídico). Remitente: `Plataforma de Atracción Equitel <steve@equitel.com.co>`.
+ * Jurídico). Remitente: `Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>`.
  * La cuenta Workspace autenticada con `GMAIL_USER` debe tener "Send mail as"
- * configurado para steve@equitel.com.co (ya configurado en la cuenta que usa
+ * configurado para Steve-noresponder@equitel.com.co (ya configurado en la cuenta que usa
  * Legal — la misma que aquí).
  *
  * Si los secrets `GMAIL_USER` / `GMAIL_APP_PASSWORD` no están sembrados, la
@@ -31,7 +31,7 @@ import {
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
 
 export const onNotificacionCreate = onDocumentCreated(

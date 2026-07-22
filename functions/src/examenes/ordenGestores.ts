@@ -4,7 +4,7 @@ import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { leerConfigExamenes } from './configExamenes';
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**

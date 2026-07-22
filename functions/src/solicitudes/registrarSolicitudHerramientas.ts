@@ -38,7 +38,7 @@ const SOLICITUD_HERRAMIENTAS_SHEET_ID = defineSecret('SOLICITUD_HERRAMIENTAS_SHE
 const HOJA = 'Registro';
 
 /** Remitente unificado de todo correo saliente de la plataforma. */
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 
 /** Buzones de IT que hoy reciben la notificación del formulario. */
 const DESTINOS_IT = [

@@ -14,7 +14,7 @@ import { logger } from 'firebase-functions/v2';
  *
  * Credenciales (secrets de Firebase Functions, debe declararlos quien invoca):
  *  - `GMAIL_USER`         · cuenta autenticada (debe tener "Send mail as"
- *                           configurado para steve@equitel.com.co si el FROM
+ *                           configurado para Steve-noresponder@equitel.com.co si el FROM
  *                           difiere del usuario autenticado).
  *  - `GMAIL_APP_PASSWORD` · App Password de 16 caracteres generada en
  *                           https://myaccount.google.com/apppasswords.
@@ -56,7 +56,7 @@ export interface AdjuntoCorreo {
 }
 
 export interface EnviarCorreoOpts {
-  /** Display name + dirección. Ej: 'Plataforma de Atracción Equitel <steve@equitel.com.co>'. */
+  /** Display name + dirección. Ej: 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>'. */
   from: string;
   to: string[];
   cc?: string[];

@@ -10,7 +10,7 @@ import { envolverMarca } from './plantillasMensajes';
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 
 /**
  * enviarAgradecimientoCandidato · D.3 (lote GH 16-jun).

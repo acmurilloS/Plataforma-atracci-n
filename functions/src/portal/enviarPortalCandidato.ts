@@ -11,7 +11,7 @@ import { DIAS_VIGENCIA_TOKEN } from './tokenVigente';
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
-const FROM = 'Plataforma de Atracción Equitel <steve@equitel.com.co>';
+const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
 
 /**
