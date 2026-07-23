@@ -9,8 +9,30 @@ import { avisarCondicionesCultura } from './avisarCondicionesCultura';
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
-function formatearConsecutivo(empresa: string, sede: string, anio: number, numero: number): string {
-  return `${empresa}-${sede}-${anio}-${String(numero).padStart(4, '0')}`;
+/**
+ * Consecutivo como lo maneja Karen (jul-2026): EMPRESA-CIUDAD-NÚMERO, SIN año.
+ *  - Empresa en código corto: EQT→ET, CUM→CU, ING→IG, LAP→LT.
+ *  - Sede por CIUDAD (sin el prefijo de empresa del catálogo): CMO/IMO/LMO→MOS,
+ *    CBO/IBO→BOG, CME→MED, CCL→CAL, CIB→IBA, CBA→BAR, CDU→DUI, CVI→VIL.
+ *  - Número corre por empresa (contador único), sin ceros a la izquierda.
+ * Ej.: EQT + MOS + 1004 → "ET-MOS-1004".
+ */
+export const EMPRESA_CONSEC: Record<string, string> = {
+  EQT: 'ET',
+  CUM: 'CU',
+  ING: 'IG',
+  LAP: 'LT',
+};
+export const SEDE_CONSEC: Record<string, string> = {
+  MOS: 'MOS', BOG: 'BOG', // Equitel
+  CMO: 'MOS', CBO: 'BOG', CME: 'MED', CCL: 'CAL', CIB: 'IBA', CBA: 'BAR', CDU: 'DUI', CVI: 'VIL', // Cummins
+  IMO: 'MOS', IBO: 'BOG', // Ingenergía
+  LMO: 'MOS', // LAP
+};
+export function formatearConsecutivo(empresa: string, sede: string, numero: number): string {
+  const e = EMPRESA_CONSEC[empresa] ?? empresa;
+  const s = SEDE_CONSEC[sede] ?? sede;
+  return `${e}-${s}-${numero}`;
 }
 
 export const onVacanteCreate = onDocumentCreated(
@@ -35,14 +57,11 @@ export const onVacanteCreate = onDocumentCreated(
       return;
     }
 
-    const creadoEn = data.creado_en?.toDate?.() ?? new Date();
-    const anio = creadoEn.getFullYear();
     // Consecutivo POR EMPRESA (reu Karen jul-2026): cada empresa lleva un único
-    // conteo de procesos, continuo entre sedes y años ("por cada empresa vamos en
-    // número de procesos distintos"). El contador es por empresa; la sede y el año
-    // se siguen mostrando en el código EMPRESA-SEDE-AÑO-####, pero el número no se
-    // reinicia por sede ni por año. Los contadores se siembran con el número real
-    // de cada empresa (CUM/EQT/ING/LAP) para continuar desde donde va Karen.
+    // conteo de procesos, continuo entre sedes ("por cada empresa vamos en número
+    // de procesos distintos"). El número no se reinicia por sede ni por año (el
+    // formato ya NO lleva año). Los contadores se siembran con el número real de
+    // cada empresa (CUM/EQT/ING/LAP) para continuar desde donde va Karen.
     const contadorId = empresa;
     const contadorRef = db.collection('contadores').doc(contadorId);
 
@@ -68,7 +87,7 @@ export const onVacanteCreate = onDocumentCreated(
         return next;
       });
 
-      const consecutivo = formatearConsecutivo(empresa, sede, anio, numero);
+      const consecutivo = formatearConsecutivo(empresa, sede, numero);
       await snap.ref.update({
         consecutivo,
         actualizado_en: FieldValue.serverTimestamp(),
