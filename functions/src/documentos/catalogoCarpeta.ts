@@ -20,6 +20,7 @@ export interface ItemCatalogoCarpeta {
 }
 
 export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
+  { clave: 'verificacion_documentos', seccion: 'generales', nombre: 'Verificación de documentos', opcional: true, aporta_candidato: false, responsable: 'cyd' },
   { clave: 'datos_basicos_integrante', seccion: 'generales', nombre: 'Datos Básicos del Integrante (DGH-F-05)', opcional: false, aporta_candidato: false },
   { clave: 'contrato_trabajo', seccion: 'generales', nombre: 'Contrato de Trabajo', opcional: false, aporta_candidato: false, responsable: 'gh' },
   { clave: 'solicitud_integrantes', seccion: 'generales', nombre: 'Solicitud de Integrantes / Reporte de Novedad', opcional: false, aporta_candidato: false },
@@ -42,6 +43,7 @@ export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'resultado_pruebas_psicologicas', seccion: 'hoja_vida', nombre: 'Resultado de pruebas psicológicas del candidato', opcional: false, aporta_candidato: false },
   { clave: 'pruebas_tecnicas', seccion: 'hoja_vida', nombre: 'Informe de Pruebas Técnicas', opcional: true, aporta_candidato: false },
   { clave: 'verificacion_referencias', seccion: 'hoja_vida', nombre: 'Verificación de Referencias', opcional: false, aporta_candidato: false },
+  { clave: 'aceptacion_condiciones', seccion: 'hoja_vida', nombre: 'Aceptación de condiciones', opcional: true, aporta_candidato: false, responsable: 'cyd' },
 ];
 
 export const ITEM_POR_CLAVE: Record<string, ItemCatalogoCarpeta> = Object.fromEntries(

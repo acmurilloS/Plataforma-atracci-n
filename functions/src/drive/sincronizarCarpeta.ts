@@ -1,7 +1,12 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { db } from '../utils/admin';
-import { CLAVES_OBLIGATORIAS, CLAVES_OBLIGATORIAS_GH } from '../documentos/catalogoCarpeta';
+import {
+  CATALOGO_CARPETA,
+  CLAVES_OBLIGATORIAS,
+  CLAVES_OBLIGATORIAS_GH,
+  ITEM_POR_CLAVE,
+} from '../documentos/catalogoCarpeta';
 import { leerConfigDrive } from './configDrive';
 import { asegurarFolder, listarNombresEnFolder, subirBufferAFolder } from './cliente';
 
@@ -111,7 +116,18 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
     return { ok: false, drive_carpeta_id: folderId, error: 'No se pudo listar la subcarpeta: ' + msg(e) };
   }
 
-  // Reunir todos los archivos: documentos_candidato (CyD + GH) + consentimientos.
+  // Reunir todos los archivos: documentos_candidato (CyD + GH) + consentimientos,
+  // ENUMERADOS para la entrega a GH (reu Karen 27-jul: "entregar enumerado los
+  // documentos"). El número es la POSICIÓN FIJA en el catálogo oficial DGH-F-04
+  // (Contrato = 02, etc.), NO un correlativo del set presente: así, cuando los
+  // documentos de GH (contrato/afiliaciones) llegan tarde y re-sincronizan, no
+  // renumeran ni duplican los ya depositados (dedup por nombre sigue calzando).
+  // Nombre del archivo: "NN - Nombre del documento [(k)] - cédula.ext".
+  const ordinalClave = new Map(CATALOGO_CARPETA.map((it, i) => [it.clave, i + 1]));
+  const baseConsent = CATALOGO_CARPETA.length; // los consentimientos van al final
+  const cedulaSuf = cedula ? ` - ${cedula}` : '';
+  const nn = (n: number) => String(n).padStart(2, '0');
+
   const archivos: { nombre: string; url: string }[] = [];
   const dc = await db
     .collection('documentos_candidato')
@@ -120,6 +136,8 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
   for (const d of dc.docs) {
     const x = d.data() as Record<string, unknown>;
     const clave = String(x.clave ?? 'documento');
+    const nombreDoc = ITEM_POR_CLAVE[clave]?.nombre ?? String(x.nombre ?? clave);
+    const num = ordinalClave.get(clave) ?? 90; // fuera de catálogo → al final
     const lista: { url?: unknown; nombre?: unknown }[] =
       Array.isArray(x.archivos) && x.archivos.length
         ? (x.archivos as { url?: unknown; nombre?: unknown }[])
@@ -130,17 +148,20 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
       const url = String(a.url ?? '').trim();
       if (!url) return;
       const ext = extensionDe(String(a.nombre ?? '') || url);
-      const base = lista.length > 1 ? `${clave}_${i + 1}` : clave;
-      archivos.push({ nombre: `${sanitizar(base)}${ext}`, url });
+      const parteSuf = lista.length > 1 ? ` (${i + 1})` : '';
+      archivos.push({
+        nombre: `${nn(num)} - ${sanitizar(nombreDoc)}${parteSuf}${cedulaSuf}${ext}`,
+        url,
+      });
     });
   }
-  const consents: [string, unknown][] = [
-    ['consentimiento_imagen_y_voz', post.consentimiento_imagen_firma_url],
-    ['autorizacion_tratamiento_datos', post.consentimiento_datos_firma_url],
+  const consents: [number, string, unknown][] = [
+    [baseConsent + 1, 'Acuerdo de uso de imagen y voz', post.consentimiento_imagen_firma_url],
+    [baseConsent + 2, 'Autorización tratamiento de datos personales', post.consentimiento_datos_firma_url],
   ];
-  for (const [nombre, u] of consents) {
+  for (const [num, nombreDoc, u] of consents) {
     const url = String(u ?? '').trim();
-    if (url) archivos.push({ nombre: `${nombre}.pdf`, url });
+    if (url) archivos.push({ nombre: `${nn(num)} - ${sanitizar(nombreDoc)}${cedulaSuf}.pdf`, url });
   }
 
   let subidos = 0;

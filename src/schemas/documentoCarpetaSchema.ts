@@ -62,6 +62,15 @@ export interface DocumentoCarpetaCatalogo {
 export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = [
   // ─── Generales ────────────────────────────────────────────────────────
   {
+    clave: 'verificacion_documentos',
+    seccion: 'generales',
+    nombre: 'Verificación de documentos',
+    opcional: true,
+    aporta_candidato: false,
+    responsable: 'cyd',
+    ayuda: 'Súbelo en PDF. Va de primeras en la entrega enumerada a Gestión Humana (reu Karen 27-jul).',
+  },
+  {
     clave: 'datos_basicos_integrante',
     seccion: 'generales',
     nombre: 'Datos Básicos del Integrante (DGH-F-05)',
@@ -228,6 +237,15 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     opcional: false,
     multiple: true,
     ayuda: 'Formato VIDA-F-12 diligenciado dentro de la plataforma. Admite varios archivos.',
+  },
+  {
+    clave: 'aceptacion_condiciones',
+    seccion: 'hoja_vida',
+    nombre: 'Aceptación de condiciones',
+    opcional: true,
+    aporta_candidato: false,
+    responsable: 'cyd',
+    ayuda: 'Súbelo en PDF: aceptación de condiciones del integrante. Va debajo de Verificación de Referencias (reu Karen 27-jul).',
   },
 ];
 
