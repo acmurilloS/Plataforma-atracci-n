@@ -20,6 +20,8 @@ export { probarConexionDrive, sincronizarCarpetaDrive } from './drive/callablesD
 export { onVacanteCreate } from './vacantes/onVacanteCreate';
 // Asignación MANUAL de la analista por el staff (reu 26-jun): selector en la vacante.
 export { asignarAnalista } from './vacantes/asignarAnalista';
+// Eliminar una vacante completa (solo admin) con cascada + auditoría.
+export { eliminarVacante } from './vacantes/eliminarVacante';
 // Repostular un candidato a otra vacante activa sin re-inscribirlo (reu 26-jun).
 export { repostularCandidato } from './postulaciones/repostularCandidato';
 export { onCandidatoCreate } from './candidatos/onCandidatoCreate';

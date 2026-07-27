@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '../utils/cn';
 import { Card, Pill, type PillTono } from './brand';
+import { EliminarVacanteAdmin } from './vacantes/EliminarVacanteAdmin';
 import type { VacanteDoc } from '../schemas';
 
 /**
@@ -142,7 +143,10 @@ export function VacanteCard({ vacante }: Props) {
               {vacante.cargo_nombre}
             </h3>
           </div>
-          <Pill tono={criticidadTono}>{vacante.criticidad}</Pill>
+          <div className="flex items-center gap-1 shrink-0">
+            <Pill tono={criticidadTono}>{vacante.criticidad}</Pill>
+            <EliminarVacanteAdmin vacante={vacante} />
+          </div>
         </div>
 
         {/* Empresa / sede / unidad */}
