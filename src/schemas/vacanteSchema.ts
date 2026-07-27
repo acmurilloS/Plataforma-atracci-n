@@ -88,6 +88,9 @@ export const vacanteInputSchema = z.object({
 
   lider_uid: z.string().min(1),
   lider_nombre: z.string().min(1),
+  /** Cargo del solicitante (líder). Se captura al crear la vacante y prellena el
+   *  "cargo del solicitante" de la Solicitud de Integrante (antes salía en blanco). */
+  lider_cargo: z.string().max(120).default(''),
 });
 
 export type VacanteInput = z.infer<typeof vacanteInputSchema>;

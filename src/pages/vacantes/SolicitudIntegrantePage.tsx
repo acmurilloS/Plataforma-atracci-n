@@ -112,10 +112,13 @@ export default function SolicitudIntegrantePage() {
     // trae valor propio, ese manda. Antes salían en blanco en el PDF (reu Karen 27-jul).
     const rodDeVacante = vacante?.rodamiento_valor ?? '';
     const vincDeVacante = vinculacionDeTipoSolicitud(vacante?.tipo_solicitud);
+    // El líder captura su cargo al crear la vacante (lider_cargo) → prellena aquí
+    // el "cargo del solicitante" (antes salía en blanco en el PDF; reu Karen 27-jul).
+    const cargoSolicitanteDeVacante = vacante?.lider_cargo ?? '';
     if (solicitud) {
       const rv = solicitud.rodamiento_valor || rodDeVacante;
       setForm({
-        cargo_solicitante: solicitud.cargo_solicitante ?? '',
+        cargo_solicitante: solicitud.cargo_solicitante || cargoSolicitanteDeVacante,
         cargo_reporta: solicitud.cargo_reporta ?? '',
         tipo_vinculacion: solicitud.tipo_vinculacion || vincDeVacante,
         sistemas: solicitud.sistemas ?? '',
@@ -135,6 +138,7 @@ export default function SolicitudIntegrantePage() {
       // Aún no hay solicitud: prefila lo que se puede derivar de la vacante.
       setForm((p) => ({
         ...p,
+        cargo_solicitante: p.cargo_solicitante || cargoSolicitanteDeVacante,
         rodamiento_valor: p.rodamiento_valor || rodDeVacante,
         tipo_vinculacion: p.tipo_vinculacion || vincDeVacante,
       }));

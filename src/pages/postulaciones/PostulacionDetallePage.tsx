@@ -1681,6 +1681,8 @@ function InformeTab({ postulacion }: SubProps) {
     filtros: [['postulacion_id', '==', postulacion.id]],
   });
   const { crear, actualizar } = useMutacion();
+  const { doc: vacante } = useDoc<VacanteDoc>('vacantes', postulacion.vacante_id ?? null);
+  const { perfil } = useAuth();
   const [resumen, setResumen] = useState('');
   const [trayectoria, setTrayectoria] = useState('');
   const [recomendacion, setRecomendacion] = useState<'avanzar' | 'descartar' | 'con_reservas'>(
@@ -1721,6 +1723,28 @@ function InformeTab({ postulacion }: SubProps) {
       ultima_transicion_estado: ahora,
       'marcas.en_terna_en': ahora,
     });
+    // Avisar al líder por campana + correo (reu Karen 27-jul: "también correo").
+    // El correo lo dispara onNotificacionCreate; reply-to al analista via vacante_id.
+    if (vacante?.lider_uid) {
+      try {
+        const analista = perfil ? `${perfil.nombre} ${perfil.apellido}` : 'El equipo de Atracción';
+        await crear('notificaciones', {
+          destinatario_uid: vacante.lider_uid,
+          tipo: 'informe_listo',
+          titulo: 'Informe de un candidato listo para tu revisión',
+          mensaje: `${analista} te compartió el informe de ${postulacion.candidato_nombre}${
+            vacante.consecutivo ? ` (${vacante.consecutivo})` : ''
+          } para el cargo ${postulacion.cargo_nombre}. Ábrelo para revisarlo desde la plataforma.`,
+          link: `/vacantes/${postulacion.vacante_id}/terna`,
+          vacante_id: postulacion.vacante_id,
+          postulacion_id: postulacion.id,
+          leida: false,
+          leida_en: null,
+        });
+      } catch (e) {
+        console.warn('[informe] no se pudo notificar al líder', e);
+      }
+    }
   }
 
   const recomendacionTono = (r: string): PillTono =>

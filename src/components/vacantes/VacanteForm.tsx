@@ -194,6 +194,7 @@ export function VacanteForm() {
       aval_no_requiere: false,
       lider_uid: '',
       lider_nombre: '',
+      lider_cargo: '',
     },
   });
 
@@ -547,6 +548,15 @@ export function VacanteForm() {
               rows={4}
               placeholder="Explica la necesidad de esta vacante: contexto, urgencia, impacto."
               className={textareaClass}
+            />
+          </Campo>
+          {/* Cargo del solicitante (líder). Se guarda en la vacante y prellena el
+              "cargo del solicitante" del formato oficial de Solicitud de Integrante. */}
+          <Campo label="Cargo del solicitante" error={errors.lider_cargo?.message}>
+            <input
+              {...register('lider_cargo')}
+              placeholder="Tu cargo como solicitante (aparece en el formato de Solicitud de Integrante)."
+              className={inputClass}
             />
           </Campo>
         </Seccion>
