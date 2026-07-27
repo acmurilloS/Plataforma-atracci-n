@@ -5,6 +5,7 @@ import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
+import { RODAMIENTO_OPCIONES, RODAMIENTO_FIJOS } from '../../utils/rodamiento';
 import type { SolicitudIntegranteDoc, VacanteDoc } from '../../schemas';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Pill } from '../../components/brand';
@@ -68,19 +69,6 @@ function pesos(n: number | undefined): string {
   return `$ ${n.toLocaleString('es-CO')}`;
 }
 
-/**
- * Valores estándar del auxilio de rodamiento (Karen, jul-2026). El usuario elige
- * de la lista; si el caso no encaja, "Otro valor…" abre un campo libre.
- */
-const RODAMIENTO_OPCIONES: { valor: string; label: string }[] = [
-  { valor: '$460.000', label: '$460.000 · Técnicos postventa / proyectos energía — Mosquera' },
-  { valor: '$415.000', label: '$415.000 · Técnicos postventa / proyectos energía — otras sedes' },
-  { valor: '$400.000', label: '$400.000 · Comerciales (todas las empresas)' },
-  { valor: '$280.000', label: '$280.000 · Mensajeros' },
-  { valor: '$365.000', label: '$365.000 · Gestores SST, ingenieros residentes u otros cargos' },
-  { valor: 'No aplica', label: 'No aplica' },
-];
-const RODAMIENTO_FIJOS = new Set(RODAMIENTO_OPCIONES.map((o) => o.valor));
 
 export default function SolicitudIntegrantePage() {
   const { id } = useParams<{ id: string }>();
@@ -102,26 +90,34 @@ export default function SolicitudIntegrantePage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!solicitud) return;
-    setForm({
-      cargo_solicitante: solicitud.cargo_solicitante ?? '',
-      cargo_reporta: solicitud.cargo_reporta ?? '',
-      tipo_vinculacion: solicitud.tipo_vinculacion ?? '',
-      sistemas: solicitud.sistemas ?? '',
-      preferible_poseer: solicitud.preferible_poseer ?? '',
-      disponibilidad_viajar: solicitud.disponibilidad_viajar ?? '',
-      trabajo_en: solicitud.trabajo_en ?? '',
-      rodamiento_valor: solicitud.rodamiento_valor ?? '',
-      bonificaciones_texto: solicitud.bonificaciones_texto ?? '',
-      garantizado_total: solicitud.garantizado_total ?? '',
-      valor_prestacional: solicitud.valor_prestacional ?? '',
-      valor_no_prestacional: solicitud.valor_no_prestacional ?? '',
-      garantizado_tiempo: solicitud.garantizado_tiempo ?? '',
-      observaciones: solicitud.observaciones ?? '',
-    });
-    const rv = solicitud.rodamiento_valor ?? '';
-    setRodOtro(!!rv && !RODAMIENTO_FIJOS.has(rv));
-  }, [solicitud]);
+    // El valor de rodamiento se prefila desde la vacante (lo eligió el líder al
+    // crearla); si la solicitud ya trae uno propio, ese manda.
+    const rodDeVacante = vacante?.rodamiento_valor ?? '';
+    if (solicitud) {
+      const rv = solicitud.rodamiento_valor || rodDeVacante;
+      setForm({
+        cargo_solicitante: solicitud.cargo_solicitante ?? '',
+        cargo_reporta: solicitud.cargo_reporta ?? '',
+        tipo_vinculacion: solicitud.tipo_vinculacion ?? '',
+        sistemas: solicitud.sistemas ?? '',
+        preferible_poseer: solicitud.preferible_poseer ?? '',
+        disponibilidad_viajar: solicitud.disponibilidad_viajar ?? '',
+        trabajo_en: solicitud.trabajo_en ?? '',
+        rodamiento_valor: rv,
+        bonificaciones_texto: solicitud.bonificaciones_texto ?? '',
+        garantizado_total: solicitud.garantizado_total ?? '',
+        valor_prestacional: solicitud.valor_prestacional ?? '',
+        valor_no_prestacional: solicitud.valor_no_prestacional ?? '',
+        garantizado_tiempo: solicitud.garantizado_tiempo ?? '',
+        observaciones: solicitud.observaciones ?? '',
+      });
+      setRodOtro(!!rv && !RODAMIENTO_FIJOS.has(rv));
+    } else if (rodDeVacante) {
+      // Aún no hay solicitud: al menos prefila el rodamiento desde la vacante.
+      setForm((p) => ({ ...p, rodamiento_valor: rodDeVacante }));
+      setRodOtro(!RODAMIENTO_FIJOS.has(rodDeVacante));
+    }
+  }, [solicitud, vacante]);
 
   function set<K extends keyof FormSolicitud>(k: K, v: string) {
     setForm((prev) => ({ ...prev, [k]: v }));

@@ -16,6 +16,7 @@ import {
 } from '../../hooks/useCatalogos';
 import { useVacantes } from '../../hooks/useVacantes';
 import { useAuth } from '../../hooks/useAuth';
+import { RODAMIENTO_OPCIONES, RODAMIENTO_FIJOS } from '../../utils/rodamiento';
 import {
   vacanteInputSchema,
   type CargoDoc,
@@ -139,6 +140,8 @@ export function VacanteForm() {
   const [cargoSel, setCargoSel] = useState<CargoDoc | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [errorSubmit, setErrorSubmit] = useState<string | null>(null);
+  // Rodamiento: true cuando el valor elegido no es de la lista (modo "Otro valor").
+  const [rodOtro, setRodOtro] = useState(false);
   const [creadaId, setCreadaId] = useState<string | null>(null);
 
   const anioActual = useMemo(() => new Date().getFullYear(), []);
@@ -180,6 +183,7 @@ export function VacanteForm() {
       salario_base: undefined as unknown as number,
       comisiones_texto: '',
       rodamiento: false,
+      rodamiento_valor: '',
       garantizado_texto: '',
       en_banda: null,
       sin_banda_validada: false,
@@ -194,6 +198,7 @@ export function VacanteForm() {
   });
 
   const empresaCodigo = watch('empresa_codigo');
+  const rodamientoValor = watch('rodamiento_valor');
   const sedeCodigo = watch('sede_codigo');
   const unidadId = watch('unidad_id');
   const salario = watch('salario_base');
@@ -286,6 +291,9 @@ export function VacanteForm() {
     try {
       const payload: VacanteInput = {
         ...data,
+        // El boolean `rodamiento` se deriva del valor elegido en el desplegable:
+        // vacío o "No aplica" = sin rodamiento; cualquier otro valor = sí.
+        rodamiento: data.rodamiento_valor.trim() !== '' && data.rodamiento_valor.trim() !== 'No aplica',
         // Aval pendiente solo si NO se adjuntó PDF y NO se marcó "no requiere".
         aval_pendiente: (!data.aval_url || data.aval_url.length === 0) && !data.aval_no_requiere,
         // Si no requiere aval, no arrastramos URL/archivo.
@@ -502,16 +510,37 @@ export function VacanteForm() {
               />
             </Campo>
           </div>
-          <label className="flex items-center gap-2.5 cursor-pointer">
-            <input
-              type="checkbox"
-              {...register('rodamiento')}
-              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300/40"
-            />
-            <span className="text-[13px] text-text-body">
-              Incluye auxilio de rodamiento
-            </span>
-          </label>
+          <Campo label="Auxilio de rodamiento">
+            <select
+              value={rodOtro ? '__otro__' : RODAMIENTO_FIJOS.has(rodamientoValor ?? '') ? rodamientoValor : ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '__otro__') {
+                  setRodOtro(true);
+                  setValue('rodamiento_valor', '');
+                } else {
+                  setRodOtro(false);
+                  setValue('rodamiento_valor', v);
+                }
+              }}
+              className={selectClass}
+            >
+              <option value="">Selecciona…</option>
+              {RODAMIENTO_OPCIONES.map((o) => (
+                <option key={o.valor} value={o.valor}>
+                  {o.label}
+                </option>
+              ))}
+              <option value="__otro__">Otro valor…</option>
+            </select>
+            {rodOtro && (
+              <input
+                {...register('rodamiento_valor')}
+                placeholder="Escribe el valor del rodamiento"
+                className={inputClass + ' mt-2'}
+              />
+            )}
+          </Campo>
           <Campo label="Justificación" requerido error={errors.justificacion?.message}>
             <textarea
               {...register('justificacion')}

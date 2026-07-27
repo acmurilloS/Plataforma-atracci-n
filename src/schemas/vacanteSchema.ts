@@ -48,6 +48,8 @@ export const vacanteInputSchema = z.object({
     .max(100_000_000, 'Valor fuera de rango'),
   comisiones_texto: z.string().max(500).default(''),
   rodamiento: z.boolean().default(false),
+  /** Valor del auxilio de rodamiento (lista de Karen o texto libre). Vacío / "No aplica" = sin rodamiento. */
+  rodamiento_valor: z.string().max(120).default(''),
   garantizado_texto: z.string().max(500).default(''),
   en_banda: z.boolean().nullable(),
   sin_banda_validada: z.boolean().default(false),
