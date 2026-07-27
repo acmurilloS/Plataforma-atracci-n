@@ -69,6 +69,23 @@ function pesos(n: number | undefined): string {
   return `$ ${n.toLocaleString('es-CO')}`;
 }
 
+/**
+ * Deriva el "tipo de vinculación" del tipo de solicitud de la vacante, para
+ * prellenar ese campo de la solicitud (antes salía en blanco en el PDF).
+ * Reemplazo/aumento = De planta; necesidad temporal = Temporal.
+ */
+function vinculacionDeTipoSolicitud(tipo: string | undefined | null): string {
+  if (tipo === 'necesidad_temporal') return 'Temporal';
+  if (
+    tipo === 'reemplazo_indefinido' ||
+    tipo === 'aumento_planta' ||
+    tipo === 'reemplazo' ||
+    tipo === 'aumento'
+  ) {
+    return 'De planta';
+  }
+  return '';
+}
 
 export default function SolicitudIntegrantePage() {
   const { id } = useParams<{ id: string }>();
@@ -90,15 +107,17 @@ export default function SolicitudIntegrantePage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    // El valor de rodamiento se prefila desde la vacante (lo eligió el líder al
-    // crearla); si la solicitud ya trae uno propio, ese manda.
+    // Prefill desde la vacante: rodamiento (lo eligió el líder al crearla) y el
+    // tipo de vinculación (derivado del tipo de solicitud). Si la solicitud ya
+    // trae valor propio, ese manda. Antes salían en blanco en el PDF (reu Karen 27-jul).
     const rodDeVacante = vacante?.rodamiento_valor ?? '';
+    const vincDeVacante = vinculacionDeTipoSolicitud(vacante?.tipo_solicitud);
     if (solicitud) {
       const rv = solicitud.rodamiento_valor || rodDeVacante;
       setForm({
         cargo_solicitante: solicitud.cargo_solicitante ?? '',
         cargo_reporta: solicitud.cargo_reporta ?? '',
-        tipo_vinculacion: solicitud.tipo_vinculacion ?? '',
+        tipo_vinculacion: solicitud.tipo_vinculacion || vincDeVacante,
         sistemas: solicitud.sistemas ?? '',
         preferible_poseer: solicitud.preferible_poseer ?? '',
         disponibilidad_viajar: solicitud.disponibilidad_viajar ?? '',
@@ -112,10 +131,14 @@ export default function SolicitudIntegrantePage() {
         observaciones: solicitud.observaciones ?? '',
       });
       setRodOtro(!!rv && !RODAMIENTO_FIJOS.has(rv));
-    } else if (rodDeVacante) {
-      // Aún no hay solicitud: al menos prefila el rodamiento desde la vacante.
-      setForm((p) => ({ ...p, rodamiento_valor: rodDeVacante }));
-      setRodOtro(!RODAMIENTO_FIJOS.has(rodDeVacante));
+    } else {
+      // Aún no hay solicitud: prefila lo que se puede derivar de la vacante.
+      setForm((p) => ({
+        ...p,
+        rodamiento_valor: p.rodamiento_valor || rodDeVacante,
+        tipo_vinculacion: p.tipo_vinculacion || vincDeVacante,
+      }));
+      if (rodDeVacante) setRodOtro(!RODAMIENTO_FIJOS.has(rodDeVacante));
     }
   }, [solicitud, vacante]);
 
@@ -151,6 +174,14 @@ export default function SolicitudIntegrantePage() {
   /** Genera el formato OFICIAL VIDA-F-01 estampado con los datos reales y lo descarga. */
   async function descargarOficial() {
     if (!vacante) return;
+    // No dejar descargar con campos clave en blanco (reu Karen 27-jul: el cargo
+    // del solicitante y el tipo de vinculación salían vacíos en el PDF oficial).
+    if (!form.cargo_solicitante.trim() || !form.tipo_vinculacion.trim()) {
+      setErr(
+        'Completa el "cargo del solicitante" y el "tipo de vinculación" antes de descargar el formato oficial.',
+      );
+      return;
+    }
     setDescargando(true);
     setErr(null);
     try {

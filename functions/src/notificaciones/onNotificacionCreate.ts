@@ -67,11 +67,27 @@ export const onNotificacionCreate = onDocumentCreated(
       email = usr.email ?? '';
       nombre = usr.displayName ?? '';
     } catch (e) {
-      logger.error('onNotificacionCreate · user no encontrado', { uid, e: String(e) });
-      return;
+      logger.warn('onNotificacionCreate · user no encontrado en Auth, intento el doc', {
+        uid,
+        e: String(e),
+      });
+    }
+    // Fallback: si el Auth no trae email (p.ej. cuenta recreada, o creada sin
+    // provider) leemos usuarios/{uid}.email. Antes, sin correo en Auth, la
+    // notificación al LÍDER se caía en silencio (reu Karen 27-jul: un líder no
+    // recibió el aviso del concepto).
+    if (!email || !nombre) {
+      try {
+        const doc = await db.collection('usuarios').doc(uid).get();
+        const d = doc.data() ?? {};
+        if (!email) email = String(d.email ?? '');
+        if (!nombre) nombre = `${String(d.nombre ?? '')} ${String(d.apellido ?? '')}`.trim();
+      } catch (e) {
+        logger.warn('onNotificacionCreate · no se pudo leer el doc usuarios', { uid, e: String(e) });
+      }
     }
     if (!email) {
-      logger.warn('onNotificacionCreate · user sin email', { uid });
+      logger.warn('onNotificacionCreate · user sin email (ni Auth ni doc)', { uid });
       return;
     }
 
