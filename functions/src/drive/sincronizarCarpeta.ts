@@ -123,7 +123,10 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
   // documentos de GH (contrato/afiliaciones) llegan tarde y re-sincronizan, no
   // renumeran ni duplican los ya depositados (dedup por nombre sigue calzando).
   // Nombre del archivo: "NN - Nombre del documento [(k)] - cédula.ext".
-  const ordinalClave = new Map(CATALOGO_CARPETA.map((it, i) => [it.clave, i + 1]));
+  // Numeración 0-based por el orden del listado (Karen 27-jul: "verificación de
+  // documentos arranque con 0, Datos básicos 1 y así sucesivamente"). Se conserva
+  // el relleno a 2 dígitos (00, 01, …) para que la carpeta ordene bien en Drive.
+  const ordinalClave = new Map(CATALOGO_CARPETA.map((it, i) => [it.clave, i]));
   const baseConsent = CATALOGO_CARPETA.length; // los consentimientos van al final
   const cedulaSuf = cedula ? ` - ${cedula}` : '';
   const nn = (n: number) => String(n).padStart(2, '0');
@@ -156,8 +159,8 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
     });
   }
   const consents: [number, string, unknown][] = [
-    [baseConsent + 1, 'Acuerdo de uso de imagen y voz', post.consentimiento_imagen_firma_url],
-    [baseConsent + 2, 'Autorización tratamiento de datos personales', post.consentimiento_datos_firma_url],
+    [baseConsent, 'Acuerdo de uso de imagen y voz', post.consentimiento_imagen_firma_url],
+    [baseConsent + 1, 'Autorización tratamiento de datos personales', post.consentimiento_datos_firma_url],
   ];
   for (const [num, nombreDoc, u] of consents) {
     const url = String(u ?? '').trim();
