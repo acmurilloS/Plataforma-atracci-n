@@ -190,8 +190,8 @@ export async function enviarOrdenAGestores(
       </p>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;">
         <tr><td style="border-radius:8px;background:#be1e0d;">
-          <a href="${APP_URL}/examenes-medicos" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
-            Subir el resultado en la plataforma →
+          <a href="${APP_URL}/examenes-medicos?examen=${encodeURIComponent(examenId)}" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
+            Abrir este examen en la plataforma →
           </a>
         </td></tr>
       </table>

@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
@@ -150,6 +150,20 @@ export default function ExamenesMedicosPage() {
   const { actualizar } = useMutacion();
   const [procesando, setProcesando] = useState<string | null>(null);
   const [reenviando, setReenviando] = useState<string | null>(null);
+
+  // Deep-link desde el correo a gestores (/examenes-medicos?examen=<id>): hace
+  // scroll y resalta ese examen puntual — acceso directo al caso, no a la lista.
+  const [searchParams] = useSearchParams();
+  const examenFocus = searchParams.get('examen');
+  const [resaltado, setResaltado] = useState<string | null>(examenFocus);
+  useEffect(() => {
+    if (!examenFocus || docs.length === 0) return;
+    const el = document.getElementById(`examen-${examenFocus}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const t = setTimeout(() => setResaltado(null), 4500);
+    return () => clearTimeout(t);
+  }, [examenFocus, docs.length]);
 
   // Panel abierto (uno a la vez): enviar orden (16), subir resultado, o decidir.
   const [accion, setAccion] = useState<{
@@ -406,7 +420,16 @@ export default function ExamenesMedicosPage() {
           const info = resolverInfo(ex);
           const abierto = accion?.id === ex.id;
           return (
-            <Card key={ex.id} padding="md">
+            <Card
+              key={ex.id}
+              id={`examen-${ex.id}`}
+              padding="md"
+              className={
+                resaltado === ex.id
+                  ? 'ring-2 ring-brand-500 ring-offset-2 transition-shadow'
+                  : undefined
+              }
+            >
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0 flex-1">
                   {info.consecutivo && (
