@@ -43,6 +43,10 @@ export const onPostulacionEnExamenes = onDocumentUpdated(
     let cargoNombre = String(after.cargo_nombre ?? '');
     let consecutivo = String(after.vacante_consecutivo ?? '');
     let procesoId = String(after.proceso_id ?? '');
+    // Cédula del candidato: los gestores SST la necesitan para tramitar la orden
+    // (reu Karen 28-jul) y NO pueden leer candidatos/postulaciones (PII), así que
+    // se denormaliza en el propio doc de examen.
+    let documentoNumero = String(after.documento_numero ?? '');
     try {
       if (vacanteId) {
         const v = await db.collection('vacantes').doc(vacanteId).get();
@@ -58,8 +62,12 @@ export const onPostulacionEnExamenes = onDocumentUpdated(
           if (!procesoId) procesoId = String(vd.proceso_activo_id ?? '');
         }
       }
+      if (!documentoNumero && after.candidato_id) {
+        const c = await db.collection('candidatos').doc(String(after.candidato_id)).get();
+        if (c.exists) documentoNumero = String(c.data()?.documento_numero ?? '');
+      }
     } catch (e) {
-      logger.warn('onPostulacionEnExamenes · no se pudo leer la vacante', {
+      logger.warn('onPostulacionEnExamenes · no se pudo leer la vacante/candidato', {
         post_id: postId,
         msg: e instanceof Error ? e.message : String(e),
       });
@@ -87,6 +95,7 @@ export const onPostulacionEnExamenes = onDocumentUpdated(
           vacante_id: vacanteId,
           proceso_id: procesoId,
           candidato_nombre: String(after.candidato_nombre ?? ''),
+          documento_numero: documentoNumero,
           discapacidad,
           discapacidad_observacion: String(after.discapacidad_observacion ?? ''),
           requiere_autorizacion_gh: discapacidad,

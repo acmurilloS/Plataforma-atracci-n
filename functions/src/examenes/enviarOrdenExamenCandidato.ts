@@ -28,7 +28,7 @@ export const enviarOrdenExamenCandidato = onCall(
   async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const rol = req.auth.token.rol as string | undefined;
-    if (!['analista', 'coordinador', 'gh', 'admin'].includes(rol ?? '')) {
+    if (!['analista', 'coordinador', 'gh', 'admin', 'gestor'].includes(rol ?? '')) {
       throw new HttpsError('permission-denied', 'Rol no autorizado.');
     }
 

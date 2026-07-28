@@ -54,6 +54,8 @@ interface ExamenDoc {
   vacante_consecutivo?: string;
   empresa_codigo?: string;
   sede_codigo?: string;
+  sede_nombre?: string;
+  documento_numero?: string;
   solicitada_en: Timestamp;
   enviada_al_candidato_en: Timestamp | null;
   centro_medico: string | null;
@@ -123,11 +125,19 @@ async function subirArchivoResultado(
   return getDownloadURL(r);
 }
 
+// Orden de exámenes (PDF/imagen) que sube quien envía la orden (GH o gestor SST).
+async function subirArchivoOrden(examenId: string, file: File): Promise<string> {
+  const limpio = `${Date.now()}_orden_${file.name}`.replace(/[^\w.\-]+/g, '_');
+  const r = storageRef(storage, `ordenes_examenes/${examenId}/${limpio}`);
+  await uploadBytes(r, file);
+  return getDownloadURL(r);
+}
+
 export default function ExamenesMedicosPage() {
   const { rol } = useAuth();
   const esGestor = rol === 'gestor';
   const esGH = rol === 'gh' || rol === 'coordinador' || rol === 'admin';
-  const puedeEnviarOrden = esGH; // paso 16 (no el gestor, no el analista)
+  const puedeEnviarOrden = esGH || esGestor; // paso 16: GH o el gestor SST (reu Karen 28-jul)
   const puedeSubirResultado = esGestor || esGH;
   const puedeDecidir = esGH; // decide la novedad (Diego/Paola/coordinación)
 
@@ -156,14 +166,6 @@ export default function ExamenesMedicosPage() {
   const [searchParams] = useSearchParams();
   const examenFocus = searchParams.get('examen');
   const [resaltado, setResaltado] = useState<string | null>(examenFocus);
-  useEffect(() => {
-    if (!examenFocus || docs.length === 0) return;
-    const el = document.getElementById(`examen-${examenFocus}`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const t = setTimeout(() => setResaltado(null), 4500);
-    return () => clearTimeout(t);
-  }, [examenFocus, docs.length]);
 
   // Panel abierto (uno a la vez): enviar orden (16), subir resultado, o decidir.
   const [accion, setAccion] = useState<{
@@ -176,6 +178,32 @@ export default function ExamenesMedicosPage() {
   const [ordenUrl, setOrdenUrl] = useState('');
   const [direccion, setDireccion] = useState('');
   const [instrucciones, setInstrucciones] = useState('');
+  const ordenFileRef = useRef<HTMLInputElement>(null);
+
+  // Pestañas: "Solicitudes" (falta enviar la orden) vs "Resultados" (orden
+  // enviada → subir/ver resultado). Petición gestores (reu 28-jul) para no
+  // confundir las tareas.
+  const [pestana, setPestana] = useState<'solicitudes' | 'resultados'>('solicitudes');
+
+  // Deep-link desde el correo (/examenes-medicos?examen=<id>): abre la pestaña
+  // correcta, hace scroll al examen y lo resalta unos segundos.
+  const focusAplicado = useRef(false);
+  useEffect(() => {
+    if (!examenFocus || focusAplicado.current || docs.length === 0) return;
+    const ex = docs.find((d) => d.id === examenFocus);
+    if (ex) {
+      setPestana(ex.estado === 'solicitada' ? 'solicitudes' : 'resultados');
+      focusAplicado.current = true;
+    }
+  }, [examenFocus, docs]);
+  useEffect(() => {
+    if (!examenFocus) return;
+    const el = document.getElementById(`examen-${examenFocus}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const t = setTimeout(() => setResaltado(null), 4500);
+    return () => clearTimeout(t);
+  }, [examenFocus, pestana, docs.length]);
 
   // Subir resultado (gestor).
   const [novedad, setNovedad] = useState<'sin_novedad' | 'con_novedad' | null>(null);
@@ -195,6 +223,8 @@ export default function ExamenesMedicosPage() {
       consecutivo: ex.vacante_consecutivo ?? post?.vacante_consecutivo ?? null,
       empresa: ex.empresa_codigo ?? null,
       sede: ex.sede_codigo ?? null,
+      cedula: ex.documento_numero || null,
+      ciudad: ex.sede_nombre || null,
     };
   }
 
@@ -247,6 +277,7 @@ export default function ExamenesMedicosPage() {
     setOrdenUrl(ex.orden_url || '');
     setDireccion(ex.orden_direccion || '');
     setInstrucciones(ex.orden_instrucciones || '');
+    if (ordenFileRef.current) ordenFileRef.current.value = '';
     setAccion({ id: ex.id, tipo: 'enviar' });
   }
 
@@ -272,9 +303,14 @@ export default function ExamenesMedicosPage() {
     if (!centroMedico.trim()) return;
     setProcesando(ex.id);
     try {
+      // Si el gestor/GH sube el PDF de la orden, se guarda en Storage; si no,
+      // se usa la URL pegada (o la que ya tenía).
+      const ordenFile = ordenFileRef.current?.files?.[0] ?? null;
+      let urlOrden = ordenUrl.trim();
+      if (ordenFile) urlOrden = await subirArchivoOrden(ex.id, ordenFile);
       await actualizar('examenes_medicos', ex.id, {
         centro_medico: centroMedico.trim(),
-        orden_url: ordenUrl.trim() || null,
+        orden_url: urlOrden || null,
         orden_direccion: direccion.trim(),
         orden_instrucciones: instrucciones.trim(),
         enviada_al_candidato_en: Timestamp.now(),
@@ -383,8 +419,13 @@ export default function ExamenesMedicosPage() {
   if (cargando && docs.length === 0) return <CargandoPagina />;
 
   const descripcion = esGestor
-    ? 'Sube el resultado del examen de cada integrante y marca si viene sin o con novedad. Con novedad, don Diego revisa y decide.'
+    ? 'En "Solicitudes" subes y envías la orden al integrante; en "Resultados" cargas el resultado y marcas si viene sin o con novedad. Con novedad, don Diego revisa y decide.'
     : 'GH envía la orden al centro médico. El gestor SST sube el resultado; si viene con novedad, Cultura y Desarrollo decide si continúa la contratación.';
+
+  // Filtro por pestaña: Solicitudes = orden aún sin enviar; Resultados = el resto.
+  const docsPestana = docs.filter((d) =>
+    pestana === 'solicitudes' ? d.estado === 'solicitada' : d.estado !== 'solicitada',
+  );
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
@@ -405,17 +446,42 @@ export default function ExamenesMedicosPage() {
         <MiniStat label="No aptos" valor={stats.no_aptos} tono="danger" />
       </div>
 
-      {!cargando && docs.length === 0 && (
+      {/* Pestañas: Solicitudes (enviar orden) / Resultados (subir/ver resultado). */}
+      <div className="inline-flex gap-1 rounded-lg bg-slate-100 p-1">
+        {([
+          ['solicitudes', 'Solicitudes', stats.solicitadas],
+          ['resultados', 'Resultados', stats.total - stats.solicitadas],
+        ] as const).map(([clave, label, n]) => (
+          <button
+            key={clave}
+            type="button"
+            onClick={() => setPestana(clave)}
+            className={
+              pestana === clave
+                ? 'rounded-md bg-white px-4 py-1.5 text-[13px] font-semibold text-text-strong shadow-sm'
+                : 'rounded-md px-4 py-1.5 text-[13px] font-medium text-text-muted hover:text-text-strong'
+            }
+          >
+            {label} <span className="tabular-nums text-text-subtle">({n})</span>
+          </button>
+        ))}
+      </div>
+
+      {!cargando && docsPestana.length === 0 && (
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
-          <p className="text-[14px] font-medium text-text-strong">Sin exámenes pendientes</p>
+          <p className="text-[14px] font-medium text-text-strong">
+            {pestana === 'solicitudes' ? 'Sin órdenes por enviar' : 'Sin resultados pendientes'}
+          </p>
           <p className="text-[12px] text-text-muted mt-1">
-            Cuando el líder apruebe un integrante en la terna, aparecerá aquí la solicitud.
+            {pestana === 'solicitudes'
+              ? 'Cuando el líder apruebe un integrante en la terna, aparecerá aquí la solicitud de exámenes.'
+              : 'Aquí aparecen los exámenes cuya orden ya se envió, para subir o ver el resultado.'}
           </p>
         </div>
       )}
 
       <div className="space-y-3">
-        {docs.map((ex) => {
+        {docsPestana.map((ex) => {
           const tono = ESTADO_TONO[ex.estado] ?? 'neutral';
           const info = resolverInfo(ex);
           const abierto = accion?.id === ex.id;
@@ -465,6 +531,19 @@ export default function ExamenesMedicosPage() {
                         {info.empresa}
                         {info.sede && ` / ${info.sede}`}
                       </span>
+                    </p>
+                  )}
+                  {/* Cédula + ciudad: los gestores SST las necesitan para tramitar
+                      la orden (reu 28-jul). */}
+                  {(info.cedula || info.ciudad) && (
+                    <p className="mt-1 text-[11px] text-text-muted">
+                      {info.cedula && (
+                        <span>
+                          CC <span className="tabular-nums font-medium text-text-body">{info.cedula}</span>
+                        </span>
+                      )}
+                      {info.cedula && info.ciudad && ' · '}
+                      {info.ciudad && <span>{info.ciudad}</span>}
                     </p>
                   )}
                   <p className="text-[12px] text-text-muted mt-1.5 inline-flex items-center gap-2 flex-wrap">
@@ -627,6 +706,13 @@ export default function ExamenesMedicosPage() {
                       <input value={ordenUrl} onChange={(e) => setOrdenUrl(e.target.value)} className={inputClass} placeholder="https://…" />
                     </label>
                   </div>
+                  <label className="block">
+                    <span className="block text-[11px] font-medium text-text-muted mb-1">Subir la orden (PDF o imagen)</span>
+                    <input ref={ordenFileRef} type="file" accept="application/pdf,image/*" className="block w-full text-[12px] text-text-body file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-brand-700 hover:file:bg-brand-100" />
+                    {ex.orden_url && (
+                      <span className="text-[11px] text-text-subtle mt-1 inline-block">Ya hay una orden cargada; sube una nueva solo si la vas a reemplazar.</span>
+                    )}
+                  </label>
                   <label className="block">
                     <span className="block text-[11px] font-medium text-text-muted mb-1">Dirección</span>
                     <input value={direccion} onChange={(e) => setDireccion(e.target.value)} className={inputClass} placeholder="Dirección del centro médico" />

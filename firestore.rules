@@ -325,7 +325,11 @@ service cloud.firestore {
       // server-only — esas van por registrarResultadoExamen / decisionCulturaExamen
       // (Admin SDK), para que GH no pueda puentear a Diego cuando hay novedad.
       allow create: if false;
-      allow update: if (staff() || isAnalista())
+      // staff/analista Y el gestor SST (reu Karen 28-jul: los gestores suben y
+      // envían la orden, paso 16). Los guardas siguen impidiendo fijar
+      // concepto/resultado/novedad/decisión desde el cliente — eso solo por
+      // registrarResultadoExamen / decisionCulturaExamen (Admin SDK).
+      allow update: if (staff() || isAnalista() || isGestor())
         && !(request.resource.data.estado in ['apto', 'no_apto', 'en_revision_cd'])
         && request.resource.data.get('apto', null) == resource.data.get('apto', null)
         && request.resource.data.get('resultado_url', null) == resource.data.get('resultado_url', null)

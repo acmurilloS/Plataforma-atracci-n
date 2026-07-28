@@ -65,6 +65,41 @@ export const aceptarCondicionesLaborales = onCall({ region: 'us-central1' }, asy
     creado_por: 'candidato_portal',
   });
 
+  // Avisar al analista (campana + correo) que el candidato aceptó. Antes no
+  // llegaba nada y el equipo no tenía cómo verificar la aceptación (reu Karen
+  // 28-jul); la notificación queda como evidencia y linkea al proceso.
+  try {
+    const vacId = String(pd.vacante_id ?? '');
+    let analistaUid = '';
+    if (vacId) {
+      const v = await db.collection('vacantes').doc(vacId).get();
+      if (v.exists) analistaUid = String(v.data()?.analista_uid ?? '');
+    }
+    if (analistaUid) {
+      const nombre = String(pd.candidato_nombre ?? 'El candidato');
+      const cargo = String(pd.cargo_nombre ?? '');
+      await db.collection('notificaciones').add({
+        destinatario_uid: analistaUid,
+        tipo: 'condiciones_aceptadas',
+        titulo: 'El candidato aceptó las condiciones laborales',
+        mensaje: `${nombre}${
+          cargo ? ` (${cargo})` : ''
+        } aceptó las condiciones laborales desde su portal. Queda como evidencia en su proceso; puedes adjuntarla en "Aceptación de condiciones" de la carpeta.`,
+        link: `/postulaciones/${postId}`,
+        vacante_id: vacId,
+        postulacion_id: postId,
+        leida: false,
+        leida_en: null,
+        creado_en: FieldValue.serverTimestamp(),
+        creado_por: 'system',
+        actualizado_en: FieldValue.serverTimestamp(),
+        actualizado_por: 'system',
+      });
+    }
+  } catch (e) {
+    logger.warn('[condiciones] no se pudo notificar al analista', { postId, e: String(e) });
+  }
+
   logger.info('[condiciones] aceptadas en portal', { postId });
   return { ok: true as const };
 });
