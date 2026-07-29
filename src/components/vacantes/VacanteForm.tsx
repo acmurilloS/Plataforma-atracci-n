@@ -42,6 +42,29 @@ import { cn } from '../../utils/cn';
  * brand (bg-slate-50, focus brand-400). Submit en brand-primary.
  */
 
+// Etiqueta amable por campo, para avisar al líder QUÉ le falta cuando el envío
+// se bloquea (antes, si el campo obligatorio estaba en una sección colapsada,
+// el error quedaba oculto y "no lo dejaba enviar" sin decir por qué).
+const ETIQUETA_CAMPO: Record<string, string> = {
+  empresa_codigo: 'Empresa',
+  empresa_nombre: 'Empresa',
+  sede_codigo: 'Sede',
+  sede_nombre: 'Sede',
+  unidad_id: 'Unidad',
+  unidad_nombre: 'Unidad',
+  cargo_id: 'Cargo',
+  cargo_nombre: 'Cargo',
+  criticidad: 'Criticidad',
+  tipo_solicitud: 'Tipo de solicitud',
+  reemplaza_a_nombre: 'A quién reemplaza',
+  temporalidad_meses: 'Tiempo de temporalidad',
+  justificacion: 'Justificación (mínimo 20 caracteres)',
+  salario_base: 'Salario base mensual',
+  en_banda: 'Validación de banda salarial',
+  fecha_entrevista_propuesta: 'Fecha de entrevista propuesta',
+  lider_nombre: 'Líder solicitante',
+};
+
 function Seccion({
   titulo,
   eyebrow,
@@ -133,9 +156,9 @@ export function VacanteForm() {
 
   const [abiertas, setAbiertas] = useState<Record<string, boolean>>({
     empresa: true,
-    condiciones: false,
-    aval: false,
-    agendamiento: false,
+    condiciones: true, // tiene el salario obligatorio → visible desde el inicio
+    aval: false, // opcional
+    agendamiento: true, // tiene la fecha de entrevista obligatoria → visible
   });
   const [cargoSel, setCargoSel] = useState<CargoDoc | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -327,7 +350,21 @@ export function VacanteForm() {
 
   return (
     <>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form
+        onSubmit={handleSubmit(onSubmit, (errs) => {
+          // Envío bloqueado por validación: abrir TODAS las secciones para que se
+          // vean los campos en rojo (uno puede estar en una sección colapsada) y
+          // decirle al líder exactamente qué falta.
+          setAbiertas({ empresa: true, condiciones: true, aval: true, agendamiento: true });
+          const faltan = [...new Set(Object.keys(errs).map((k) => ETIQUETA_CAMPO[k] ?? k))];
+          setErrorSubmit(
+            `Faltan campos por completar antes de enviar: ${faltan.join(
+              ', ',
+            )}. Revisa lo marcado en rojo.`,
+          );
+        })}
+        className="space-y-6"
+      >
         {/* ─── Empresa y cargo ──────────────────────────────────── */}
         <Seccion
           eyebrow="Identificación"
