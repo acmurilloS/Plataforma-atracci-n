@@ -645,6 +645,20 @@ export default function ExamenesMedicosPage() {
                   </Button>
                 )}
 
+                {/* Orden ya enviada: reprogramar/editar (candidato no asistió, dato
+                    errado…) sin recrear todo — reabre el mismo panel y reenvía. */}
+                {ex.estado === 'enviada' && puedeEnviarOrden && !abierto && (
+                  <Button
+                    onClick={() => abrirEnvio(ex)}
+                    disabled={procesando === ex.id}
+                    variant="neutral-secondary"
+                    size="small"
+                    icon={<RefreshCw size={13} strokeWidth={1.75} />}
+                  >
+                    Reprogramar / editar orden
+                  </Button>
+                )}
+
                 {(ex.estado === 'enviada' || ex.estado === 'solicitada') &&
                   puedeSubirResultado &&
                   !abierto && (
@@ -695,7 +709,11 @@ export default function ExamenesMedicosPage() {
               {/* Panel · enviar orden (paso 16) */}
               {abierto && accion?.tipo === 'enviar' && (
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-                  <p className="text-[12px] font-semibold text-text-strong">Enviar orden al integrante · paso 16</p>
+                  <p className="text-[12px] font-semibold text-text-strong">
+                    {ex.estado === 'enviada'
+                      ? 'Reprogramar / editar la orden'
+                      : 'Enviar orden al integrante · paso 16'}
+                  </p>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <label className="block">
                       <span className="block text-[11px] font-medium text-text-muted mb-1">Centro médico</span>
@@ -724,7 +742,7 @@ export default function ExamenesMedicosPage() {
                   <div className="flex gap-2 justify-end">
                     <Button onClick={cerrarAccion} variant="neutral-secondary" size="small">Cancelar</Button>
                     <Button onClick={() => confirmarEnvio(ex)} disabled={!centroMedico.trim() || procesando === ex.id} loading={procesando === ex.id} variant="brand-primary" size="small" icon={<Send size={13} strokeWidth={1.75} />}>
-                      Confirmar envío
+                      {ex.estado === 'enviada' ? 'Reprogramar y reenviar' : 'Confirmar envío'}
                     </Button>
                   </div>
                 </div>

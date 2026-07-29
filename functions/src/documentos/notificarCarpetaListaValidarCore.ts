@@ -71,6 +71,28 @@ export async function notificarCarpetaListaValidarCore(
     notificados++;
   }
 
+  // Copia por correo a Cumplimiento (buzón, no usuario de la plataforma): recibe
+  // el mismo aviso cuando la carpeta queda lista (reu Karen 28-jul). `email_a`
+  // hace que onNotificacionCreate lo envíe a esa dirección; sin destinatario_uid
+  // no aparece en ninguna campana, y `leida:true` evita cualquier conteo.
+  await db.collection('notificaciones').add({
+    destinatario_uid: '',
+    email_a: 'cumplimiento@equitel.com.co',
+    email_a_nombre: 'Cumplimiento',
+    tipo: 'generica',
+    titulo: 'Carpeta lista para validación (GH)',
+    mensaje: `La carpeta de ${nombre}${
+      cargo ? ` (${cargo})` : ''
+    } está completa por la parte de Cultura y Desarrollo. Se avisó a Gestión Humana para su validación.`,
+    link: '/carpetas',
+    leida: true,
+    leida_en: FieldValue.serverTimestamp(),
+    creado_en: FieldValue.serverTimestamp(),
+    creado_por: 'system',
+    actualizado_en: FieldValue.serverTimestamp(),
+    actualizado_por: 'system',
+  });
+
   await db.collection('eventos').add({
     tipo: 'carpeta_lista_validar',
     postulacion_id: postulacionId,

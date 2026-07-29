@@ -54,29 +54,38 @@ export const onNotificacionCreate = onDocumentCreated(
       return;
     }
 
+    // email_a: destinatario EXPLÍCITO (buzón que no es usuario de la plataforma,
+    // p. ej. cumplimiento@ / ucorporativa@). Si viene, se usa tal cual y se omite
+    // la resolución por uid.
+    const emailExplicito = String(noti.email_a ?? '').trim();
     const uid = String(noti.destinatario_uid ?? '');
-    if (!uid) {
-      logger.warn('onNotificacionCreate · sin destinatario_uid', { id: snap.id });
-      return;
-    }
 
     let email = '';
     let nombre = '';
-    try {
-      const usr = await getAuth().getUser(uid);
-      email = usr.email ?? '';
-      nombre = usr.displayName ?? '';
-    } catch (e) {
-      logger.warn('onNotificacionCreate · user no encontrado en Auth, intento el doc', {
-        uid,
-        e: String(e),
-      });
+    if (emailExplicito) {
+      email = emailExplicito;
+      nombre = String(noti.email_a_nombre ?? '');
+    } else {
+      if (!uid) {
+        logger.warn('onNotificacionCreate · sin destinatario_uid', { id: snap.id });
+        return;
+      }
+      try {
+        const usr = await getAuth().getUser(uid);
+        email = usr.email ?? '';
+        nombre = usr.displayName ?? '';
+      } catch (e) {
+        logger.warn('onNotificacionCreate · user no encontrado en Auth, intento el doc', {
+          uid,
+          e: String(e),
+        });
+      }
     }
     // Fallback: si el Auth no trae email (p.ej. cuenta recreada, o creada sin
     // provider) leemos usuarios/{uid}.email. Antes, sin correo en Auth, la
     // notificación al LÍDER se caía en silencio (reu Karen 27-jul: un líder no
     // recibió el aviso del concepto).
-    if (!email || !nombre) {
+    if (!emailExplicito && (!email || !nombre)) {
       try {
         const doc = await db.collection('usuarios').doc(uid).get();
         const d = doc.data() ?? {};
