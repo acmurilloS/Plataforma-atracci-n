@@ -60,11 +60,12 @@ export const enviarOrdenExamenCandidato = onCall(
       );
     }
 
-    // Reply-to al analista del proceso.
+    // Reply-to al analista del proceso (+ guardamos su uid para avisarle abajo).
     let analistaEmail = '';
+    let analistaUid = '';
     if (ex.vacante_id) {
       const v = await db.collection('vacantes').doc(String(ex.vacante_id)).get();
-      const analistaUid = String(v.data()?.analista_uid ?? '').trim();
+      analistaUid = String(v.data()?.analista_uid ?? '').trim();
       if (analistaUid) {
         const u = await db.collection('usuarios').doc(analistaUid).get();
         if (u.exists) analistaEmail = String(u.data()?.email ?? '').trim();
@@ -200,6 +201,29 @@ export const enviarOrdenExamenCandidato = onCall(
       creado_en: FieldValue.serverTimestamp(),
       creado_por: req.auth.uid,
     });
+
+    // Avisar al ANALISTA a cargo que la orden ya salió al candidato (reu Karen
+    // 28-jul: cuando el gestor envía, el analista se entera). Campana + correo vía
+    // onNotificacionCreate. No se auto-avisa si el propio analista fue quien envió.
+    if (analistaUid && analistaUid !== req.auth.uid) {
+      await db.collection('notificaciones').add({
+        destinatario_uid: analistaUid,
+        tipo: 'orden_examen_enviada',
+        titulo: 'Orden de exámenes enviada al integrante',
+        mensaje: `Se le envió la orden de exámenes médicos a ${
+          nombreCandidato || 'el candidato'
+        }${cargo && cargo !== 'tu proceso' ? ` (${cargo})` : ''} · ${email}.`,
+        link: '/examenes-medicos',
+        vacante_id: String(ex.vacante_id ?? ''),
+        postulacion_id: postId || '',
+        leida: false,
+        leida_en: null,
+        creado_en: FieldValue.serverTimestamp(),
+        creado_por: 'system',
+        actualizado_en: FieldValue.serverTimestamp(),
+        actualizado_por: 'system',
+      });
+    }
 
     return { ok: true as const, email_destinatario: to.join(', ') };
   },
