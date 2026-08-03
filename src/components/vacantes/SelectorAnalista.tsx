@@ -9,26 +9,30 @@ interface Props {
 }
 
 /**
- * SelectorAnalista · dropdown del STAFF ACTIVO que puede quedar como responsable
- * de una vacante. Incluye analistas Y coordinador/admin (reu 28-jul: Karen —que
- * es admin— también quería quedar en el listado para asignarse procesos, sin
- * perder su rol). Filtra inactivos en cliente para no requerir índice compuesto.
- * Devuelve uid + nombre (snapshot) al elegir.
+ * SelectorAnalista · dropdown de responsables de una vacante. Base = analistas
+ * activas; MÁS los usuarios habilitados puntualmente con `asignable_como_analista=true`
+ * (reu 28-jul: Karen —que es admin— quedó en el listado para asignarse procesos
+ * sin perder su rol, SIN meter a todos los admin). Dos queries + merge para no
+ * requerir índice compuesto; se filtran inactivos en cliente.
  */
 export function SelectorAnalista({ value, onChange, disabled }: Props) {
-  const { docs, cargando } = useColeccion<UsuarioDoc>('usuarios', {
-    filtros: [['rol', 'in', ['analista', 'coordinador', 'admin']]],
+  const { docs: analistasDocs, cargando: c1 } = useColeccion<UsuarioDoc>('usuarios', {
+    filtros: [['rol', '==', 'analista']],
   });
+  const { docs: habilitadosDocs, cargando: c2 } = useColeccion<UsuarioDoc>('usuarios', {
+    filtros: [['asignable_como_analista', '==', true]],
+  });
+  const cargando = c1 || c2;
 
-  const analistas = useMemo(
-    () =>
-      docs
-        .filter((u) => u.activo !== false)
-        .sort((a, b) =>
-          `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`, 'es'),
-        ),
-    [docs],
-  );
+  const analistas = useMemo(() => {
+    const porId = new Map<string, UsuarioDoc>();
+    for (const u of [...analistasDocs, ...habilitadosDocs]) porId.set(u.id, u);
+    return [...porId.values()]
+      .filter((u) => u.activo !== false)
+      .sort((a, b) =>
+        `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`, 'es'),
+      );
+  }, [analistasDocs, habilitadosDocs]);
 
   return (
     <select

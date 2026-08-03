@@ -38,15 +38,17 @@ export const asignarAnalista = onCall({ region: 'us-central1' }, async (req) => 
   if (!vacSnap.exists) throw new HttpsError('not-found', 'La vacante no existe.');
   const vac = vacSnap.data() as Record<string, unknown>;
 
-  // La persona asignada debe ser staff ACTIVO (analista o coordinador/admin, que
-  // también pueden llevar procesos — reu Karen 28-jul).
+  // La persona asignada debe ser una analista ACTIVA, o alguien habilitado
+  // puntualmente como responsable (asignable_como_analista=true) — p.ej. Karen,
+  // que es admin (reu 28-jul). No se abre a todos los admin/coordinador.
   const usrSnap = await db.collection('usuarios').doc(analistaUid).get();
   if (!usrSnap.exists) throw new HttpsError('not-found', 'El usuario seleccionado no existe.');
   const usr = usrSnap.data() as Record<string, unknown>;
-  if (!['analista', 'coordinador', 'admin'].includes(String(usr.rol))) {
+  const habilitado = usr.rol === 'analista' || usr.asignable_como_analista === true;
+  if (!habilitado) {
     throw new HttpsError(
       'failed-precondition',
-      'Solo puedes asignar analistas, coordinación o admin.',
+      'Ese usuario no está habilitado como responsable de procesos.',
     );
   }
   if (usr.activo === false) {
