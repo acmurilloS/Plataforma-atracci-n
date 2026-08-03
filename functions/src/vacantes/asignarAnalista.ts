@@ -38,15 +38,19 @@ export const asignarAnalista = onCall({ region: 'us-central1' }, async (req) => 
   if (!vacSnap.exists) throw new HttpsError('not-found', 'La vacante no existe.');
   const vac = vacSnap.data() as Record<string, unknown>;
 
-  // La persona asignada debe ser una analista ACTIVA.
+  // La persona asignada debe ser staff ACTIVO (analista o coordinador/admin, que
+  // también pueden llevar procesos — reu Karen 28-jul).
   const usrSnap = await db.collection('usuarios').doc(analistaUid).get();
   if (!usrSnap.exists) throw new HttpsError('not-found', 'El usuario seleccionado no existe.');
   const usr = usrSnap.data() as Record<string, unknown>;
-  if (usr.rol !== 'analista') {
-    throw new HttpsError('failed-precondition', 'Solo puedes asignar usuarios con rol de analista.');
+  if (!['analista', 'coordinador', 'admin'].includes(String(usr.rol))) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Solo puedes asignar analistas, coordinación o admin.',
+    );
   }
   if (usr.activo === false) {
-    throw new HttpsError('failed-precondition', 'Esa analista está inactiva.');
+    throw new HttpsError('failed-precondition', 'Ese usuario está inactivo.');
   }
   const analistaNombre =
     `${usr.nombre ?? ''} ${usr.apellido ?? ''}`.trim() || String(usr.email ?? '') || 'Analista';

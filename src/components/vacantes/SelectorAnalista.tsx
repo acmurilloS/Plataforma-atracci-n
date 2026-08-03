@@ -9,15 +9,15 @@ interface Props {
 }
 
 /**
- * SelectorAnalista · dropdown de analistas ACTIVAS para que el staff
- * (coordinador/admin) asigne la responsable de una vacante (reu 26-jun).
- *
- * Lee la colección usuarios (rol=analista) y filtra inactivas en cliente para
- * no requerir un índice compuesto. Devuelve uid + nombre (snapshot) al elegir.
+ * SelectorAnalista · dropdown del STAFF ACTIVO que puede quedar como responsable
+ * de una vacante. Incluye analistas Y coordinador/admin (reu 28-jul: Karen —que
+ * es admin— también quería quedar en el listado para asignarse procesos, sin
+ * perder su rol). Filtra inactivos en cliente para no requerir índice compuesto.
+ * Devuelve uid + nombre (snapshot) al elegir.
  */
 export function SelectorAnalista({ value, onChange, disabled }: Props) {
   const { docs, cargando } = useColeccion<UsuarioDoc>('usuarios', {
-    filtros: [['rol', '==', 'analista']],
+    filtros: [['rol', 'in', ['analista', 'coordinador', 'admin']]],
   });
 
   const analistas = useMemo(
