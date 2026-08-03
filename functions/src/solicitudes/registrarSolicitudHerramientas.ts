@@ -333,6 +333,13 @@ export const registrarSolicitudHerramientas = onCall(
         'SOLICITUD_HERRAMIENTAS_SHEET_ID no configurada. Pide al admin que la sembre.',
       );
     }
+    // La escritura en la hoja es BEST-EFFORT: si falla (p. ej. la hoja de IT tiene
+    // celdas/rango protegidos y la cuenta de servicio no puede agregar filas), NO
+    // abortamos — el correo a IT es la notificación crítica y debe salir igual
+    // (reu Karen 03-ago: "no le llega el correo a IT" era justo esto). El error se
+    // registra para arreglar la protección de la hoja; la trazabilidad se repone
+    // cuando se quite la protección (o IT agrega la fila a mano con los datos del correo).
+    let hojaError: string | null = null;
     try {
       const yaEnHoja = consecutivo
         ? await valorExisteEnColumna({
@@ -367,11 +374,11 @@ export const registrarSolicitudHerramientas = onCall(
         });
       }
     } catch (e) {
-      logger.error('[registrarSolicitudHerramientas] error escribiendo hoja', {
-        err: e instanceof Error ? e.message : String(e),
-        vacante_id,
-      });
-      throw new HttpsError('internal', 'No pudimos escribir en la hoja de IT.');
+      hojaError = e instanceof Error ? e.message : String(e);
+      logger.error(
+        '[registrarSolicitudHerramientas] error escribiendo hoja (se continúa y se envía el correo igual)',
+        { err: hojaError, vacante_id },
+      );
     }
 
     // 2) Enviar el correo de notificación a IT.
@@ -425,11 +432,13 @@ export const registrarSolicitudHerramientas = onCall(
       requiere_herramientas: !!sol.requiere,
       correo_enviado: correoEnviado,
       correo_error: correoError,
+      hoja_ok: hojaError === null,
+      hoja_error: hojaError,
       usuario_uid: req.auth.uid,
       creado_en: FieldValue.serverTimestamp(),
       creado_por: req.auth.uid,
     });
 
-    return { yaEnviada: false, correoEnviado, correoError };
+    return { yaEnviada: false, correoEnviado, correoError, hojaError };
   },
 );
