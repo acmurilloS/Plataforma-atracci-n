@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Timestamp, doc, getDoc } from 'firebase/firestore';
 import { ArrowLeft, Check, FileDown, Plus, Printer, Save, Send, Trash2 } from 'lucide-react';
@@ -568,13 +568,33 @@ function CeldaTextarea({
   onChange: (v: string) => void;
   soloLectura?: boolean;
 }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  // Auto-crece hasta mostrar TODO el texto: antes tenía alto fijo (rows=3) y lo
+  // que pasaba se quedaba con scroll → al imprimir/exportar a PDF salía cortado
+  // (reu Karen 04-ago). Al ajustar la altura al contenido, se ve completo en
+  // pantalla y en el PDF.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [valor]);
   return (
-    <textarea
-      value={valor}
-      onChange={(e) => onChange(e.target.value)}
-      rows={3}
-      readOnly={soloLectura}
-      className="w-full px-2 py-1.5 text-[11px] border-0 resize-none focus:bg-brand-50/40 focus:outline-none print:bg-transparent read-only:cursor-default read-only:focus:bg-transparent"
-    />
+    <>
+      {/* Editable en pantalla (auto-crece). Oculto al imprimir. */}
+      <textarea
+        ref={ref}
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        rows={2}
+        readOnly={soloLectura}
+        className="w-full px-2 py-1.5 text-[11px] border-0 resize-none overflow-hidden focus:bg-brand-50/40 focus:outline-none read-only:cursor-default read-only:focus:bg-transparent print:hidden"
+      />
+      {/* Solo al imprimir/exportar: muestra TODO el texto sin cortar (div que crece
+          con el contenido, independiente del ancho de la página). */}
+      <div className="hidden print:block px-2 py-1.5 text-[11px] whitespace-pre-wrap break-words leading-snug">
+        {valor}
+      </div>
+    </>
   );
 }

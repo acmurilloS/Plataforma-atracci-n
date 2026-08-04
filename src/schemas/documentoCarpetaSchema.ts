@@ -171,6 +171,8 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     nombre: 'Certificados Laborales (2)',
     opcional: false,
     aporta_candidato: true,
+    multiple: true,
+    ayuda: 'Admite varios archivos (una certificación por empleador).',
   },
   {
     clave: 'certificados_estudio',
@@ -178,6 +180,8 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     nombre: 'Fotocopias de los Certificados de Estudio',
     opcional: false,
     aporta_candidato: true,
+    multiple: true,
+    ayuda: 'Admite varios archivos (bachiller, técnico, tecnólogo, profesional…).',
   },
   {
     clave: 'certificado_medico',
