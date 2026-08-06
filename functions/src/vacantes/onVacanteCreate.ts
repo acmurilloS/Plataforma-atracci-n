@@ -4,6 +4,7 @@ import { logger } from 'firebase-functions/v2';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db } from '../utils/admin';
 import { avisarCondicionesCultura } from './avisarCondicionesCultura';
+import { avisarNuevaVacante } from './avisarNuevaVacante';
 
 // Necesarios para que el aviso a Cultura y Desarrollo (Diego) salga por Gmail.
 const GMAIL_USER = defineSecret('GMAIL_USER');
@@ -117,6 +118,21 @@ export const onVacanteCreate = onDocumentCreated(
         logger.info('onVacanteCreate · aviso a cultura', { vacante_id: snap.id, estado: r.estado });
       } catch (e) {
         logger.error('onVacanteCreate · error avisando a cultura', {
+          vacante_id: snap.id,
+          msg: e instanceof Error ? e.message : String(e),
+        });
+      }
+
+      // Aviso a Andrea (acmurillo@) de cada vacante nueva, salvo cargos técnicos
+      // (pedido 04-ago). Best-effort, en su propio try/catch.
+      try {
+        const rn = await avisarNuevaVacante(snap.id);
+        logger.info('onVacanteCreate · aviso nueva vacante a Andrea', {
+          vacante_id: snap.id,
+          estado: rn.estado,
+        });
+      } catch (e) {
+        logger.error('onVacanteCreate · error avisando nueva vacante', {
           vacante_id: snap.id,
           msg: e instanceof Error ? e.message : String(e),
         });
