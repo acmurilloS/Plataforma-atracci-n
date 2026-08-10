@@ -470,6 +470,53 @@ function DocumentoRow({
     });
   }
 
+  // Certificado médico "no aplica" por contratación TEMPORAL: los exámenes los
+  // hace la empresa temporal. Marca no_aplica + avisa a los gestores SST que no
+  // esperen orden de exámenes para este proceso (reu Karen 04-ago).
+  async function marcarTemporalSinExamenes() {
+    if (
+      !window.confirm(
+        'Marcar el certificado médico como NO aplica porque la contratación es TEMPORAL (los exámenes los tramita la empresa temporal). Se avisará a los gestores SST. ¿Continuar?',
+      )
+    )
+      return;
+    const obs =
+      'Contratación temporal — no aplica exámenes médicos (los tramita la empresa temporal).';
+    if (doc) {
+      await actualizar('documentos_candidato', doc.id, { estado: 'no_aplica', observaciones: obs });
+    } else {
+      await crear('documentos_candidato', {
+        postulacion_id: postulacion.id,
+        candidato_id: postulacion.candidato_id,
+        candidato_nombre: postulacion.candidato_nombre,
+        clave: catalogo.clave,
+        seccion: catalogo.seccion,
+        nombre: catalogo.nombre,
+        estado: 'no_aplica',
+        archivo_url: null,
+        nombre_archivo: null,
+        tamano_bytes: null,
+        observaciones: obs,
+        fecha_entrega: null,
+        verificado_en: null,
+        verificado_por_uid: null,
+        verificado_por_nombre: null,
+      });
+    }
+    try {
+      const fn = httpsCallable(functions, 'avisarGestoresTemporalSinExamenes');
+      await fn({ postulacion_id: postulacion.id });
+      window.alert(
+        'Listo. Se marcó como contratación temporal (sin exámenes) y se avisó a los gestores SST.',
+      );
+    } catch (e) {
+      window.alert(
+        'Se marcó como no aplica, pero no se pudo avisar a los gestores: ' +
+          (e instanceof Error ? e.message : String(e)),
+      );
+    }
+  }
+
   const inputId = `up-${catalogo.clave}`;
 
   return (
@@ -618,14 +665,23 @@ function DocumentoRow({
               onChange={subirArchivo}
               accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
             />
-            {catalogo.opcional && estado === 'pendiente' && (
-              <button
-                onClick={marcarNoAplica}
-                className="text-[11px] text-text-muted hover:text-text-strong hover:underline"
-              >
-                No aplica
-              </button>
-            )}
+            {catalogo.opcional &&
+              estado === 'pendiente' &&
+              (catalogo.clave === 'certificado_medico' ? (
+                <button
+                  onClick={marcarTemporalSinExamenes}
+                  className="text-[11px] text-text-muted hover:text-text-strong hover:underline text-right leading-tight"
+                >
+                  Contratación temporal ·<br />no aplica exámenes
+                </button>
+              ) : (
+                <button
+                  onClick={marcarNoAplica}
+                  className="text-[11px] text-text-muted hover:text-text-strong hover:underline"
+                >
+                  No aplica
+                </button>
+              ))}
           </>
         )}
         {estado === 'entregado' && (

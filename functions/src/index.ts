@@ -56,6 +56,8 @@ export { onExamenMedicoCreate } from './examenes/onExamenMedicoCreate';
 export { reenviarOrdenGestores } from './examenes/reenviarOrdenGestores';
 // Correo de la orden de exámenes al candidato (paso 16, 2026-06-16).
 export { enviarOrdenExamenCandidato } from './examenes/enviarOrdenExamenCandidato';
+// Aviso a gestores SST cuando una contratación TEMPORAL no lleva exámenes (reu 04-ago).
+export { avisarGestoresTemporalSinExamenes } from './examenes/avisarGestoresTemporalSinExamenes';
 // El gestor SST sube el resultado + novedad + acta (reu Karen 09-jul).
 export { registrarResultadoExamen } from './examenes/registrarResultadoExamen';
 // Don Diego (C&D) decide continúa / no-continúa una novedad (reu Karen 09-jul).
