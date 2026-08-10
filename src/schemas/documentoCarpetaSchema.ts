@@ -251,6 +251,14 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     responsable: 'cyd',
     ayuda: 'Súbelo en PDF: aceptación de condiciones del integrante. Va debajo de Verificación de Referencias (reu Karen 27-jul).',
   },
+  {
+    clave: 'foto',
+    seccion: 'hoja_vida',
+    nombre: 'Fotografía (foto reciente)',
+    opcional: true,
+    aporta_candidato: true,
+    ayuda: 'Foto reciente del integrante. La sube el candidato desde su portal (o el equipo desde la carpeta).',
+  },
 ];
 
 export const SECCIONES_LABEL: Record<SeccionDocumento, string> = {

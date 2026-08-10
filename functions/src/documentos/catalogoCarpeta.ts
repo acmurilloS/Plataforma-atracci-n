@@ -44,6 +44,7 @@ export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'pruebas_tecnicas', seccion: 'hoja_vida', nombre: 'Informe de Pruebas Técnicas', opcional: true, aporta_candidato: false },
   { clave: 'verificacion_referencias', seccion: 'hoja_vida', nombre: 'Verificación de Referencias', opcional: false, aporta_candidato: false },
   { clave: 'aceptacion_condiciones', seccion: 'hoja_vida', nombre: 'Aceptación de condiciones', opcional: true, aporta_candidato: false, responsable: 'cyd' },
+  { clave: 'foto', seccion: 'hoja_vida', nombre: 'Fotografía (foto reciente)', opcional: true, aporta_candidato: true },
 ];
 
 export const ITEM_POR_CLAVE: Record<string, ItemCatalogoCarpeta> = Object.fromEntries(
