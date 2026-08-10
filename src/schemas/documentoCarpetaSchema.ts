@@ -186,10 +186,12 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
   {
     clave: 'certificado_medico',
     seccion: 'hoja_vida',
+    // Opcional para poder marcarlo "no aplica" cuando la contratación es temporal
+    // (no hay examen médico) y no dejar la carpeta pegada en pendiente (reu Karen 04-ago).
+    opcional: true,
     nombre: 'Certificado médico de aptitud laboral',
-    opcional: false,
     multiple: true,
-    ayuda: 'Admite varios archivos: el concepto de aptitud y, si el candidato ingresa con recomendaciones médicas, el documento firmado de aceptación.',
+    ayuda: 'Admite varios archivos: el concepto de aptitud y, si el candidato ingresa con recomendaciones médicas, el documento firmado de aceptación. Márcalo "no aplica" si la contratación es temporal.',
   },
   {
     clave: 'hoja_vida',

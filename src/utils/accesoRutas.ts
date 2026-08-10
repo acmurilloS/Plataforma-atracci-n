@@ -49,9 +49,12 @@ export const ROLES_POSTULACION_DETALLE: RolUsuario[] = [...ROLES_PROCESO, 'gh', 
 /** Roles acotados a la carpeta: ven la postulación solo para sus documentos. */
 export const ROLES_SOLO_CARPETA: RolUsuario[] = ['gh', 'documentacion'];
 
-export const ROLES_NUEVA_VACANTE: RolUsuario[] = ['lider', 'coordinador', 'admin'];
-/** "Mis vacantes" es del líder (filtra por lider_uid); admin entra para revisar. */
-export const ROLES_MIS_VACANTES: RolUsuario[] = ['lider', 'admin'];
+// 'gh' incluido para que Diego (C&D) también pueda solicitar personal (reu Karen
+// 04-ago). Crear una vacante no expone PII; el resto del acceso de GH no cambia.
+export const ROLES_NUEVA_VACANTE: RolUsuario[] = ['lider', 'coordinador', 'admin', 'gh'];
+/** "Mis vacantes" es del líder (filtra por lider_uid); admin/gh entran a revisar
+ *  lo que ellos mismos solicitaron. */
+export const ROLES_MIS_VACANTES: RolUsuario[] = ['lider', 'admin', 'gh'];
 /**
  * "Vacantes de mis áreas" (gerente): solo-lectura, filtra por unidad_id ∈
  * unidades_gerente. Admin entra para revisar. La reu Karen jul-2026.

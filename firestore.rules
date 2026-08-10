@@ -212,6 +212,9 @@ service cloud.firestore {
       // GH/Coord la gestione después. Política tomada 2026-05-26.
       allow create: if (
         (isLider() && request.resource.data.lider_uid == request.auth.uid)
+        // Diego (C&D, rol gh) también puede solicitar personal (reu Karen 04-ago):
+        // crea su propia vacante (lider_uid == su uid), igual que un líder.
+        || (isGH() && request.resource.data.lider_uid == request.auth.uid)
         || isCoord()
         || isAdmin()
       ) && nuevoConAuditoria()

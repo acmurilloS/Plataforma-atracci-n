@@ -35,7 +35,7 @@ export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'certificado_judicial', seccion: 'hoja_vida', nombre: 'Certificado Judicial Vigente y antecedentes', opcional: false, aporta_candidato: true },
   { clave: 'certificados_laborales', seccion: 'hoja_vida', nombre: 'Certificados Laborales (2)', opcional: false, aporta_candidato: true },
   { clave: 'certificados_estudio', seccion: 'hoja_vida', nombre: 'Fotocopias de los Certificados de Estudio', opcional: false, aporta_candidato: true },
-  { clave: 'certificado_medico', seccion: 'hoja_vida', nombre: 'Certificado médico de aptitud laboral', opcional: false, aporta_candidato: false },
+  { clave: 'certificado_medico', seccion: 'hoja_vida', nombre: 'Certificado médico de aptitud laboral', opcional: true, aporta_candidato: false },
   { clave: 'hoja_vida', seccion: 'hoja_vida', nombre: 'Hoja de Vida', opcional: false, aporta_candidato: true },
   { clave: 'autorizacion_datos', seccion: 'hoja_vida', nombre: 'Autorización para recolección y tratamiento de datos personales', opcional: false, aporta_candidato: false },
   { clave: 'debida_diligencia', seccion: 'hoja_vida', nombre: 'Debida Diligencia / SAGRILAFT (F-CAR-01)', opcional: false, aporta_candidato: false },
