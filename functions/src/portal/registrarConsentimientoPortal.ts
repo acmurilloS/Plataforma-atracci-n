@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { upsertFormatoEnCarpeta } from './upsertFormatoEnCarpeta';
 import { urlPortalDocValida } from './urlPortalDocValida';
 import { verificarCedula } from './verificarCedula';
 
@@ -77,6 +78,19 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
 
   // El PDF firmado queda visible para el analista en la carpeta (DocumentosTab).
   if (firmaUrl) {
+    // Refleja el PDF firmado como documento ENTREGADO en la carpeta real
+    // (documentos_candidato), igual que SAGRILAFT: aparece con "Ver PDF", cuenta
+    // en la completitud y evita que el equipo tenga que descargarlo del portal y
+    // volver a subirlo a mano (reu Karen 11-ago). 'datos' → slot autorizacion_datos
+    // (obligatorio); 'imagen' → slot acuerdo_imagen_voz (opcional).
+    await upsertFormatoEnCarpeta({
+      postulacionId,
+      clave: tipo === 'datos' ? 'autorizacion_datos' : 'acuerdo_imagen_voz',
+      pdfUrl: firmaUrl,
+      candidatoId: String(t.candidato_id ?? ''),
+      candidatoNombre: String(t.candidato_nombre ?? ''),
+    });
+
     const titulo =
       tipo === 'datos'
         ? 'Autorización tratamiento de datos (firmada)'

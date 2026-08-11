@@ -45,6 +45,9 @@ export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'verificacion_referencias', seccion: 'hoja_vida', nombre: 'Verificación de Referencias', opcional: false, aporta_candidato: false },
   { clave: 'aceptacion_condiciones', seccion: 'hoja_vida', nombre: 'Aceptación de condiciones', opcional: true, aporta_candidato: false, responsable: 'cyd' },
   { clave: 'foto', seccion: 'hoja_vida', nombre: 'Fotografía (foto reciente)', opcional: true, aporta_candidato: true },
+  // Va al final para NO correr los ordinales de numeración en Drive de los ítems
+  // anteriores (ver sincronizarCarpeta: el número = posición fija en el catálogo).
+  { clave: 'acuerdo_imagen_voz', seccion: 'hoja_vida', nombre: 'Acuerdo de uso de imagen y voz', opcional: true, aporta_candidato: false },
 ];
 
 export const ITEM_POR_CLAVE: Record<string, ItemCatalogoCarpeta> = Object.fromEntries(

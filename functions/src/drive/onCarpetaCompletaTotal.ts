@@ -60,7 +60,13 @@ export const onCarpetaCompletaTotal = onDocumentWritten(
     const ya = (await carpetaRef.get()).data()?.drive_sincronizada_en;
     const entroAOk =
       !ESTADOS_OK.has(String(before?.estado ?? '')) && ESTADOS_OK.has(String(after?.estado ?? ''));
-    if (ya && !entroAOk) return;
+    // También re-sincroniza si a un ítem ya depositado le AGREGARON un archivo
+    // después (p. ej. el 2º antecedente judicial): el estado sigue en 'entregado'
+    // (no hay transición a OK), pero el contenido cambió y el archivo nuevo quedaría
+    // huérfano en Drive sin este disparo. La sync es incremental (dedup por nombre).
+    const urlsAntes = new Set(urlsDeArchivos(before));
+    const hayArchivoNuevo = urlsDeArchivos(after).some((u) => !urlsAntes.has(u));
+    if (ya && !entroAOk && !hayArchivoNuevo) return;
 
     // Depósito con lock (serializa con el reintento manual). Único punto que toca
     // los flags drive_*. `ya` → re-sync incremental de lo que llegó tarde.
@@ -81,3 +87,13 @@ export const onCarpetaCompletaTotal = onDocumentWritten(
     // 'ocupado' / 'ya_sincronizada' / 'sin_carpeta' → no-op
   },
 );
+
+/** URLs de todos los archivos del documento (los ítems múltiples usan `archivos[]`). */
+function urlsDeArchivos(d: Record<string, unknown> | undefined): string[] {
+  if (!d) return [];
+  const arr = Array.isArray(d.archivos) ? (d.archivos as { url?: unknown }[]) : [];
+  const urls = arr.map((a) => String(a?.url ?? '').trim()).filter(Boolean);
+  if (urls.length) return urls;
+  const single = String(d.archivo_url ?? '').trim();
+  return single ? [single] : [];
+}

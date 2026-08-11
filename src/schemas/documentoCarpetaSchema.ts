@@ -261,6 +261,16 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
     aporta_candidato: true,
     ayuda: 'Foto reciente del integrante. La sube el candidato desde su portal (o el equipo desde la carpeta).',
   },
+  {
+    // Va al final para NO correr los ordinales de numeración en Drive de los ítems
+    // anteriores (el número = posición fija en el catálogo, ver sincronizarCarpeta).
+    clave: 'acuerdo_imagen_voz',
+    seccion: 'hoja_vida',
+    nombre: 'Acuerdo de uso de imagen y voz',
+    opcional: true,
+    aporta_candidato: false,
+    ayuda: 'Lo firma el candidato desde su portal. Se carga automáticamente en la carpeta al firmarlo.',
+  },
 ];
 
 export const SECCIONES_LABEL: Record<SeccionDocumento, string> = {

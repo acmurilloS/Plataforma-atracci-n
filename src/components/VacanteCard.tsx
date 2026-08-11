@@ -122,6 +122,14 @@ export function VacanteCard({ vacante }: Props) {
   const terminada = ['cerrada', 'desierta', 'cancelada'].includes(vacante.estado);
   const faseActiva = faseIdx >= 0 ? FASES[faseIdx] : FASES[0];
   const sem = semaforoDias(dias);
+  // Duración TOTAL del proceso (apertura → cierre) para las vacantes cerradas.
+  // Días calendario = lo más intuitivo para "cuánto duró". Guarda contra cerrada_en
+  // null (docs viejos o instante entre escritura y confirmación del serverTimestamp).
+  const cerradaEn = vacante.cerrada_en?.toDate?.() ?? null;
+  const diasProceso =
+    terminada && cerradaEn
+      ? Math.max(0, Math.round((cerradaEn.getTime() - creadoEn.getTime()) / (1000 * 60 * 60 * 24)))
+      : null;
 
   const criticidadTono: PillTono =
     vacante.criticidad === 'Alta'
@@ -238,11 +246,17 @@ export function VacanteCard({ vacante }: Props) {
               <Clock3 size={10} strokeWidth={1.5} />
               <span className="tabular-nums">{relativo}</span>
             </div>
-            {!terminada && (
+            {!terminada ? (
               <Pill tono={sem.tono} className="mt-1 !text-[9px] !py-0 !px-1.5">
                 {sem.etiqueta} · {dias}d
               </Pill>
-            )}
+            ) : diasProceso !== null ? (
+              <Pill tono="neutral" className="mt-1 !text-[9px] !py-0 !px-1.5">
+                {diasProceso === 0
+                  ? 'Cerrada el mismo día'
+                  : `Duró ${diasProceso} ${diasProceso === 1 ? 'día' : 'días'}`}
+              </Pill>
+            ) : null}
           </div>
         </div>
       </Card>

@@ -67,8 +67,9 @@ export interface ResultadoSync {
 }
 
 /**
- * Deposita TODOS los documentos de la carpeta (CyD + GH) + los consentimientos
- * firmados en una subcarpeta del integrante dentro de la Unidad Compartida de GH.
+ * Deposita TODOS los documentos de la carpeta (CyD + GH, incluidos los
+ * consentimientos firmados en el portal que ahora son slots documentos_candidato)
+ * en una subcarpeta del integrante dentro de la Unidad Compartida de GH.
  * Idempotente: reutiliza la subcarpeta (por nombre) y NO re-sube los archivos que
  * ya están (por nombre) → un reintento tras una subida a medias no duplica.
  */
@@ -116,7 +117,10 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
     return { ok: false, drive_carpeta_id: folderId, error: 'No se pudo listar la subcarpeta: ' + msg(e) };
   }
 
-  // Reunir todos los archivos: documentos_candidato (CyD + GH) + consentimientos,
+  // Reunir todos los archivos desde documentos_candidato (CyD + GH). Los
+  // consentimientos firmados en el portal (autorización de datos, imagen y voz)
+  // ahora también entran por aquí como slots (documentos_candidato), igual que
+  // SAGRILAFT — ya NO se anexan aparte desde los campos de la postulación.
   // ENUMERADOS para la entrega a GH (reu Karen 27-jul: "entregar enumerado los
   // documentos"). El número es la POSICIÓN FIJA en el catálogo oficial DGH-F-04
   // (Contrato = 02, etc.), NO un correlativo del set presente: así, cuando los
@@ -127,7 +131,6 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
   // documentos arranque con 0, Datos básicos 1 y así sucesivamente"). Se conserva
   // el relleno a 2 dígitos (00, 01, …) para que la carpeta ordene bien en Drive.
   const ordinalClave = new Map(CATALOGO_CARPETA.map((it, i) => [it.clave, i]));
-  const baseConsent = CATALOGO_CARPETA.length; // los consentimientos van al final
   const cedulaSuf = cedula ? ` - ${cedula}` : '';
   const nn = (n: number) => String(n).padStart(2, '0');
 
@@ -151,22 +154,18 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
       const url = String(a.url ?? '').trim();
       if (!url) return;
       const ext = extensionDe(String(a.nombre ?? '') || url);
-      const parteSuf = lista.length > 1 ? ` (${i + 1})` : '';
+      // Sufijo estable e idempotente: el 1er archivo va SIN sufijo (compatible con
+      // depósitos viejos de un solo archivo); los siguientes con " (2)", " (3)"…
+      // Antes se basaba en `lista.length`, lo que era inestable: el mismo archivo
+      // cambiaba de nombre según cuántos hubiera al sincronizar, y un re-sync podía
+      // duplicar el primero al no calzar con el ya subido.
+      const parteSuf = i === 0 ? '' : ` (${i + 1})`;
       archivos.push({
         nombre: `${nn(num)} - ${sanitizar(nombreDoc)}${parteSuf}${cedulaSuf}${ext}`,
         url,
       });
     });
   }
-  const consents: [number, string, unknown][] = [
-    [baseConsent, 'Acuerdo de uso de imagen y voz', post.consentimiento_imagen_firma_url],
-    [baseConsent + 1, 'Autorización tratamiento de datos personales', post.consentimiento_datos_firma_url],
-  ];
-  for (const [num, nombreDoc, u] of consents) {
-    const url = String(u ?? '').trim();
-    if (url) archivos.push({ nombre: `${nn(num)} - ${sanitizar(nombreDoc)}${cedulaSuf}.pdf`, url });
-  }
-
   let subidos = 0;
   const fallidos: string[] = [];
   for (const a of archivos) {
