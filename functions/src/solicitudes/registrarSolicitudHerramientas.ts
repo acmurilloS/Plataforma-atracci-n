@@ -339,7 +339,20 @@ export const registrarSolicitudHerramientas = onCall(
     // (reu Karen 03-ago: "no le llega el correo a IT" era justo esto). El error se
     // registra para arreglar la protección de la hoja; la trazabilidad se repone
     // cuando se quite la protección (o IT agrega la fila a mano con los datos del correo).
+    const fila = construirFila({
+      correoSolicitante,
+      consecutivo,
+      empresa,
+      unidad,
+      cargo,
+      ciudad,
+      sol,
+      liderNombre,
+      tipoSolicitud,
+      reemplazaA,
+    });
     let hojaError: string | null = null;
+    let hojaEscrita = false;
     try {
       const yaEnHoja = consecutivo
         ? await valorExisteEnColumna({
@@ -355,28 +368,15 @@ export const registrarSolicitudHerramientas = onCall(
           '[registrarSolicitudHerramientas] consecutivo ya en la hoja, se omite fila (reconciliación de idempotencia)',
           { consecutivo, vacante_id },
         );
+        hojaEscrita = true;
       } else {
-        await agregarFilaSheet({
-          spreadsheetId: sheetId,
-          hoja: HOJA,
-          valores: construirFila({
-            correoSolicitante,
-            consecutivo,
-            empresa,
-            unidad,
-            cargo,
-            ciudad,
-            sol,
-            liderNombre,
-            tipoSolicitud,
-            reemplazaA,
-          }),
-        });
+        await agregarFilaSheet({ spreadsheetId: sheetId, hoja: HOJA, valores: fila });
+        hojaEscrita = true;
       }
     } catch (e) {
       hojaError = e instanceof Error ? e.message : String(e);
       logger.error(
-        '[registrarSolicitudHerramientas] error escribiendo hoja (se continúa y se envía el correo igual)',
+        '[registrarSolicitudHerramientas] error escribiendo hoja (se continúa, se envía correo y se ENCOLA para reintento)',
         { err: hojaError, vacante_id },
       );
     }
@@ -417,9 +417,21 @@ export const registrarSolicitudHerramientas = onCall(
       logger.warn('[registrarSolicitudHerramientas] GMAIL_* ausentes, correo omitido');
     }
 
-    // 3) Marcar como enviada (idempotencia) + auditoría.
+    // 3) Marcar como enviada (idempotencia del correo) + COLA auto-sanadora de la
+    // hoja + auditoría. Si el append a la hoja de IT falló (p. ej. protección de
+    // rango que bloquea a la cuenta de servicio), NO se pierde la fila: se guarda
+    // en `solicitud_hoja_fila` con el flag `solicitud_hoja_pendiente`, y la función
+    // programada `reintentarSolicitudesHojaIT` la escribe sola cuando IT reabra el
+    // acceso (y alerta si sigue bloqueada). Antes, un fallo dejaba el flag "enviada"
+    // marcado y la idempotencia impedía reintentar → la fila se perdía en silencio.
     await procesoRef.update({
       solicitud_herramientas_enviada_en: FieldValue.serverTimestamp(),
+      solicitud_hoja_pendiente: !hojaEscrita,
+      solicitud_hoja_fila: hojaEscrita ? FieldValue.delete() : fila,
+      solicitud_hoja_pendiente_desde: hojaEscrita
+        ? FieldValue.delete()
+        : FieldValue.serverTimestamp(),
+      solicitud_hoja_error: hojaError,
       actualizado_en: FieldValue.serverTimestamp(),
       actualizado_por: req.auth.uid,
     });

@@ -38,6 +38,7 @@ export {
 export { onNotificacionCreate } from './notificaciones/onNotificacionCreate';
 export { analizarPerfilIA } from './perfilamiento/analizarPerfilIA';
 export { registrarSolicitudHerramientas } from './solicitudes/registrarSolicitudHerramientas';
+export { reintentarSolicitudesHojaIT } from './solicitudes/reintentarSolicitudesHojaIT';
 
 // Referidos internos (módulo v1, 2026-06-03).
 export { generarInvitacionesReferidos } from './referidos/generarInvitaciones';
