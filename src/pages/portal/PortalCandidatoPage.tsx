@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
   Check,
+  ChevronDown,
   ClipboardList,
   FileText,
   HelpCircle,
@@ -16,6 +17,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
+import { cn } from '../../utils/cn';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Input } from '../../components/brand';
 import {
@@ -643,6 +645,18 @@ function AutorizacionesTab({
     'text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-brand-400 ' +
     'focus:ring-2 focus:ring-brand-300/40';
 
+  // Progreso de autorizaciones (reu 18-ago: los candidatos no bajaban y dejaban
+  // unas sin diligenciar → barra + acordeón para que vean cuánto falta).
+  const itemsAutorizacion = [
+    { hecho: datosAceptado },
+    { hecho: imagenAceptado },
+    { hecho: debidaDiligenciaEnviada },
+    ...(condiciones ? [{ hecho: condicionesAceptadas }] : []),
+  ];
+  const hechas = itemsAutorizacion.filter((i) => i.hecho).length;
+  const totalItems = itemsAutorizacion.length;
+  const pct = totalItems ? Math.round((hechas / totalItems) * 100) : 0;
+
   return (
     <div className="space-y-6">
       <section className="bg-white rounded-xl border border-slate-200 shadow-brand-card overflow-hidden">
@@ -689,58 +703,145 @@ function AutorizacionesTab({
         </div>
       </section>
 
-      <ConsentimientoCard
-        tipo="datos"
-        token={token}
-        empresa={empresa}
-        empresaCodigo={empresaCodigo}
-        cargo={cargo}
-        nombreCompleto={nombreCompleto}
-        documentoNumero={documentoNumero}
-        ciudad={ciudadExpedicion}
-        celular={celular}
-        correo={correo}
-        bloqueado={!completo}
-        aceptado={datosAceptado}
-        firmaUrl={datosFirmaUrl}
-        onAceptar={(url, img) => aceptar('datos', url, img)}
-      />
-      <ConsentimientoCard
-        tipo="imagen"
-        token={token}
-        empresa={empresa}
-        empresaCodigo={empresaCodigo}
-        cargo={cargo}
-        nombreCompleto={nombreCompleto}
-        documentoNumero={documentoNumero}
-        ciudad={ciudadExpedicion}
-        celular={celular}
-        correo={correo}
-        bloqueado={!completo}
-        aceptado={imagenAceptado}
-        firmaUrl={imagenFirmaUrl}
-        onAceptar={(url, img) => aceptar('imagen', url, img)}
-      />
-      <DebidaDiligenciaPortalCard
-        token={token}
-        cedula={cedula}
-        empresaNombre={empresa.nombre}
-        nombreCompleto={nombreCompleto}
-        documentoNumero={documentoNumero}
-        cargoNombre={cargo}
-        celular={celular}
-        correo={correo}
-        yaEnviado={debidaDiligenciaEnviada}
-        firmaUrl={debidaDiligenciaFirmaUrl}
-      />
-      {condiciones && (
-        <CondicionesCard
+      {/* Barra de progreso: cuántas autorizaciones faltan. */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-brand-card px-5 sm:px-7 py-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[13px] font-semibold text-text-strong">
+            {hechas === totalItems ? '¡Listo! Diligenciaste todas 🎉' : `Vas en ${pct}%`}
+          </p>
+          <p className="text-[12px] text-text-muted tabular-nums">
+            {hechas}/{totalItems}
+            {hechas < totalItems ? ` · te faltan ${totalItems - hechas}` : ''}
+          </p>
+        </div>
+        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div
+            className={cn(
+              'h-full transition-all duration-300',
+              hechas === totalItems ? 'bg-success-500' : 'bg-brand-600',
+            )}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="text-[11px] text-text-subtle mt-2">
+          Toca cada autorización para abrirla y diligenciarla. Diligéncialas todas.
+        </p>
+      </div>
+
+      <Acordeon titulo="Autorización de tratamiento de datos" hecho={datosAceptado}>
+        <ConsentimientoCard
+          tipo="datos"
+          token={token}
+          empresa={empresa}
+          empresaCodigo={empresaCodigo}
+          cargo={cargo}
+          nombreCompleto={nombreCompleto}
+          documentoNumero={documentoNumero}
+          ciudad={ciudadExpedicion}
+          celular={celular}
+          correo={correo}
+          bloqueado={!completo}
+          aceptado={datosAceptado}
+          firmaUrl={datosFirmaUrl}
+          onAceptar={(url, img) => aceptar('datos', url, img)}
+        />
+      </Acordeon>
+      <Acordeon titulo="Acuerdo de uso de imagen y voz" hecho={imagenAceptado}>
+        <ConsentimientoCard
+          tipo="imagen"
+          token={token}
+          empresa={empresa}
+          empresaCodigo={empresaCodigo}
+          cargo={cargo}
+          nombreCompleto={nombreCompleto}
+          documentoNumero={documentoNumero}
+          ciudad={ciudadExpedicion}
+          celular={celular}
+          correo={correo}
+          bloqueado={!completo}
+          aceptado={imagenAceptado}
+          firmaUrl={imagenFirmaUrl}
+          onAceptar={(url, img) => aceptar('imagen', url, img)}
+        />
+      </Acordeon>
+      <Acordeon titulo="Debida diligencia (SAGRILAFT)" hecho={debidaDiligenciaEnviada}>
+        <DebidaDiligenciaPortalCard
           token={token}
           cedula={cedula}
-          condiciones={condiciones}
-          aceptadas={condicionesAceptadas}
+          empresaNombre={empresa.nombre}
+          nombreCompleto={nombreCompleto}
+          documentoNumero={documentoNumero}
+          cargoNombre={cargo}
+          celular={celular}
+          correo={correo}
+          yaEnviado={debidaDiligenciaEnviada}
+          firmaUrl={debidaDiligenciaFirmaUrl}
         />
+      </Acordeon>
+      {condiciones && (
+        <Acordeon titulo="Condiciones laborales" hecho={condicionesAceptadas}>
+          <CondicionesCard
+            token={token}
+            cedula={cedula}
+            condiciones={condiciones}
+            aceptadas={condicionesAceptadas}
+          />
+        </Acordeon>
       )}
+    </div>
+  );
+}
+
+/**
+ * Acordeón para cada autorización del portal (reu 18-ago): cabecera con estado
+ * (Pendiente/Aceptado) + chevron; abierta por defecto si está pendiente para que
+ * el candidato la diligencie y no la pase por alto.
+ */
+function Acordeon({
+  titulo,
+  hecho,
+  children,
+}: {
+  titulo: string;
+  hecho: boolean;
+  children: React.ReactNode;
+}) {
+  const [abierto, setAbierto] = useState(!hecho);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white shadow-brand-card overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setAbierto((a) => !a)}
+        className="w-full flex items-center justify-between gap-3 px-5 sm:px-7 py-4 text-left hover:bg-slate-50/60 transition-colors"
+      >
+        <span className="flex items-center gap-2.5 min-w-0">
+          <span
+            className={cn(
+              'flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-bold shrink-0',
+              hecho ? 'bg-success-500 text-white' : 'border-2 border-slate-300 text-transparent',
+            )}
+          >
+            ✓
+          </span>
+          <span className="text-[15px] font-semibold text-text-strong truncate">{titulo}</span>
+        </span>
+        <span className="flex items-center gap-2 shrink-0">
+          <span
+            className={cn(
+              'text-[11px] font-semibold uppercase tracking-wide',
+              hecho ? 'text-success-700' : 'text-warning-700',
+            )}
+          >
+            {hecho ? 'Aceptado' : 'Pendiente'}
+          </span>
+          <ChevronDown
+            size={18}
+            strokeWidth={2}
+            className={cn('text-text-subtle transition-transform', abierto && 'rotate-180')}
+          />
+        </span>
+      </button>
+      {abierto && <div className="border-t border-slate-100 p-3 sm:p-4">{children}</div>}
     </div>
   );
 }
