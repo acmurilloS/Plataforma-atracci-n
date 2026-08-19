@@ -9,6 +9,7 @@ import {
   Leaf,
   Plus,
   Search,
+  X,
 } from 'lucide-react';
 import { VacanteCard } from '../components/VacanteCard';
 import { useAuth } from '../hooks/useAuth';
@@ -55,6 +56,8 @@ export default function SeguimientoPage() {
   const [filtro, setFiltro] = useState<Filtro>('activas');
   const [empresaFiltro, setEmpresaFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  // Drill-down: al hundir una card se abre un pop-up con las vacantes de ese grupo.
+  const [drill, setDrill] = useState<{ titulo: string; lista: VacanteDoc[] } | null>(null);
 
   const filtrosRol: FiltroTupla[] = useMemo(() => {
     if (rol === 'lider' && user) return [['lider_uid', '==', user.uid]];
@@ -116,6 +119,10 @@ export default function SeguimientoPage() {
     };
   }, [vacantes]);
 
+  // Listas por grupo (para el pop-up de cada card).
+  const activasList = useMemo(() => vacantes.filter((v) => !TERMINADAS.includes(v.estado)), [vacantes]);
+  const cerradasList = useMemo(() => vacantes.filter((v) => TERMINADAS.includes(v.estado)), [vacantes]);
+
   if (cargando && vacantes.length === 0) return <CargandoPagina />;
 
   return (
@@ -148,6 +155,7 @@ export default function SeguimientoPage() {
           caption="Vacantes abiertas desde el inicio del periodo."
           icono={<Layers size={18} strokeWidth={1.75} />}
           tono="neutral"
+          onClick={() => setDrill({ titulo: 'Total histórico', lista: vacantes })}
         />
         <KpiCard
           eyebrow="Activas"
@@ -155,6 +163,7 @@ export default function SeguimientoPage() {
           caption="En cualquier etapa del flujograma."
           icono={<Activity size={18} strokeWidth={1.75} />}
           tono="brand"
+          onClick={() => setDrill({ titulo: 'Activas', lista: activasList })}
         />
         <KpiCard
           eyebrow="Cerradas"
@@ -162,6 +171,7 @@ export default function SeguimientoPage() {
           caption="Contratadas, desiertas o canceladas."
           icono={<CheckCircle2 size={18} strokeWidth={1.75} />}
           tono="success"
+          onClick={() => setDrill({ titulo: 'Cerradas', lista: cerradasList })}
         />
       </div>
 
@@ -178,6 +188,12 @@ export default function SeguimientoPage() {
               ? { valor: stats.criticasActivas, total: stats.activas }
               : undefined
           }
+          onClick={() =>
+            setDrill({
+              titulo: 'Críticas · flujo completo',
+              lista: activasList.filter((v) => v.criticidad === 'Alta'),
+            })
+          }
         />
         <KpiCard
           eyebrow="No críticas · flujo simplificado"
@@ -189,6 +205,12 @@ export default function SeguimientoPage() {
             stats.activas > 0
               ? { valor: stats.noCriticasActivas, total: stats.activas }
               : undefined
+          }
+          onClick={() =>
+            setDrill({
+              titulo: 'No críticas · flujo simplificado',
+              lista: activasList.filter((v) => v.criticidad !== 'Alta'),
+            })
           }
         />
       </div>
@@ -208,6 +230,12 @@ export default function SeguimientoPage() {
               eyebrow={`${f.clave} · ${f.label}`}
               valor={stats.porFase[f.clave] ?? 0}
               tono={f.tono}
+              onClick={() =>
+                setDrill({
+                  titulo: `Fase ${f.clave} · ${f.label}`,
+                  lista: activasList.filter((v) => f.estados.includes(v.estado)),
+                })
+              }
             />
           ))}
         </div>
@@ -294,6 +322,74 @@ export default function SeguimientoPage() {
           <VacanteCard key={v.id} vacante={v} />
         ))}
       </div>
+
+      {drill && (
+        <DrillModal titulo={drill.titulo} lista={drill.lista} onClose={() => setDrill(null)} />
+      )}
+    </div>
+  );
+}
+
+/** Pop-up que lista las vacantes de un grupo al hundir su card (reu 18-ago). */
+function DrillModal({
+  titulo,
+  lista,
+  onClose,
+}: {
+  titulo: string;
+  lista: VacanteDoc[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <p className="text-[14px] font-semibold text-text-strong">
+            {titulo} · <span className="tabular-nums">{lista.length}</span>
+          </p>
+          <button
+            onClick={onClose}
+            className="text-text-subtle hover:text-text-strong"
+            aria-label="Cerrar"
+          >
+            <X size={18} strokeWidth={1.75} />
+          </button>
+        </div>
+        <div className="overflow-y-auto divide-y divide-slate-100">
+          {lista.length === 0 && (
+            <p className="px-5 py-10 text-center text-[13px] text-text-muted">
+              Ninguna vacante en este grupo.
+            </p>
+          )}
+          {lista.map((v) => (
+            <Link
+              key={v.id}
+              to={`/vacantes/${v.id}`}
+              onClick={onClose}
+              className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 transition-colors"
+            >
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-subtle">
+                  {v.consecutivo || 'pendiente'}
+                </p>
+                <p className="text-[13px] font-medium text-text-strong truncate">{v.cargo_nombre}</p>
+                <p className="text-[11px] text-text-muted truncate">
+                  {v.empresa_nombre} · {v.sede_nombre}
+                </p>
+              </div>
+              <span className="text-[11px] text-text-muted whitespace-nowrap capitalize">
+                {(v.estado ?? '').replace(/_/g, ' ')}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -306,10 +402,12 @@ function KpiCardCompact({
   eyebrow,
   valor,
   tono,
+  onClick,
 }: {
   eyebrow: string;
   valor: number;
   tono: 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  onClick?: () => void;
 }) {
   const TONO: Record<typeof tono, { dot: string; label: string; valor: string }> = {
     brand: { dot: 'bg-brand-500', label: 'text-brand-700', valor: 'text-brand-700' },
@@ -321,7 +419,11 @@ function KpiCardCompact({
   };
   const t = TONO[tono];
   return (
-    <div className="bg-white rounded-md border border-slate-200 p-4 shadow-brand-card transition-shadow duration-200 hover:shadow-brand-card-hover">
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left w-full bg-white rounded-md border border-slate-200 p-4 shadow-brand-card transition-shadow duration-200 hover:shadow-brand-card-hover cursor-pointer"
+    >
       <div className="flex items-center gap-1.5 mb-3">
         <span className={cn('w-1.5 h-1.5 rounded-full', t.dot)} />
         <p className={cn('text-[10px] font-bold tracking-[0.10em] uppercase', t.label)}>
@@ -336,7 +438,7 @@ function KpiCardCompact({
       >
         {valor}
       </span>
-    </div>
+    </button>
   );
 }
 
