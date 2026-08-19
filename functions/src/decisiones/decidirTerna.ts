@@ -299,6 +299,18 @@ export const decidirTerna = onCall({ region: 'us-central1' }, async (req) => {
       );
     }
 
+    // No reabrir una vacante ya CERRADA: si el ganador de la terna ya se contrató
+    // (vacante cerrada/desierta/cancelada), aprobar a otro candidato de la misma
+    // terna llenaría un cupo inexistente Y reabriría la vacante a 'seleccionado'
+    // (volvía a salir activa). Auditoría forense 18-ago: mismo patrón que ya se
+    // cubrió en exámenes; aquí faltaba el guard.
+    if (aprobado && ['cerrada', 'desierta', 'cancelada'].includes(String(vac.estado ?? ''))) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Esta vacante ya se cerró (el cupo se llenó). No se puede seleccionar otro candidato de la terna.',
+      );
+    }
+
     const ahora = FieldValue.serverTimestamp();
 
     // Decisión (append-only) dentro de la transacción, para atomicidad.
