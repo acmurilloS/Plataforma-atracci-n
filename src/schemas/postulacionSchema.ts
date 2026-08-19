@@ -210,4 +210,13 @@ export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
   condiciones_aceptadas_en?: Timestamp | null;
   /** Solicitud de dotación enviada a compras/gestores (subpaso de carpeta, reu 26-jun). */
   solicitud_dotacion_enviada_en?: Timestamp | null;
+  /**
+   * Fecha REAL de vinculación/ingreso del integrante, que la analista registra a
+   * mano en la fase de contratación. Distinta del estado 'contratado' (que marca
+   * cuándo se aprobó la carpeta, no la fecha de ingreso). Reu 18-ago: "no nos queda
+   * en ningún lado y lo necesitamos para el indicador".
+   */
+  fecha_vinculacion?: Timestamp | null;
+  fecha_vinculacion_registrada_por?: string | null;
+  fecha_vinculacion_registrada_en?: Timestamp | null;
 }

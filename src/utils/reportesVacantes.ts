@@ -40,6 +40,8 @@ export interface ConteoVacante {
   postulados: number;
   enTerna: number;
   contratado: boolean;
+  /** Fecha real de ingreso del contratado (reu 18-ago), formateada; '' si no hay. */
+  fechaVinculacion: string;
 }
 
 /** No cuentan como "postulado" real los perfiles aún sin contacto humano. */
@@ -51,10 +53,14 @@ export function agruparPostulaciones(postulaciones: PostulacionDoc[]): Map<strin
   for (const p of postulaciones) {
     const vid = p.vacante_id;
     if (!vid) continue;
-    const c = mapa.get(vid) ?? { postulados: 0, enTerna: 0, contratado: false };
+    const c = mapa.get(vid) ?? { postulados: 0, enTerna: 0, contratado: false, fechaVinculacion: '' };
     if (!NO_POSTULADO.has(p.estado)) c.postulados += 1;
     if (p.estado === 'en_terna') c.enTerna += 1;
-    if (p.estado === 'contratado') c.contratado = true;
+    if (p.estado === 'contratado') {
+      c.contratado = true;
+      const fv = aDate(p.fecha_vinculacion);
+      if (fv) c.fechaVinculacion = formatearFecha(fv);
+    }
     mapa.set(vid, c);
   }
   return mapa;
@@ -122,7 +128,7 @@ export function construirBaseVacantes(
   hoy: Date,
 ): FilaExcel[] {
   return vacantes.map((v) => {
-    const c = conteos.get(v.id) ?? { postulados: 0, enTerna: 0, contratado: false };
+    const c = conteos.get(v.id) ?? { postulados: 0, enTerna: 0, contratado: false, fechaVinculacion: '' };
     const transcurridos = diasTranscurridos(v, festivos, hoy);
     const aTerna = diasHabilesATerna(v, festivos);
     return {
@@ -145,6 +151,7 @@ export function construirBaseVacantes(
       Postulados: c.postulados,
       'En terna': c.enTerna,
       Contratado: c.contratado ? 'Sí' : 'No',
+      'Fecha de vinculación': c.fechaVinculacion,
       'Salario base': typeof v.salario_base === 'number' ? v.salario_base : '',
     };
   });

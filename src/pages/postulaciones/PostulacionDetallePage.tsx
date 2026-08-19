@@ -636,6 +636,9 @@ export default function PostulacionDetallePage() {
                 : 'Enviar condiciones laborales'}
             </button>
           )}
+          {(post.estado === 'en_contratacion' || post.estado === 'contratado') && (
+            <FechaVinculacionInline postulacion={post} />
+          )}
           {post.estado === 'en_examenes_medicos' && (
             <button
               onClick={abrirExamen}
@@ -1006,6 +1009,67 @@ export default function PostulacionDetallePage() {
 
 interface SubProps {
   postulacion: PostulacionDoc;
+}
+
+// ───────────────────────────────────────────────────────────────
+// Fecha de vinculación (reu 18-ago): la analista registra a mano la fecha REAL de
+// ingreso del integrante en la fase de contratación (distinta del estado
+// 'contratado'). Alimenta el indicador. Escritura directa — las reglas permiten a
+// staff/analista/documentación actualizar la postulación sin cambiar el estado.
+// ───────────────────────────────────────────────────────────────
+function FechaVinculacionInline({ postulacion }: SubProps) {
+  const { actualizar } = useMutacion();
+  const { user } = useAuth();
+  const actual = postulacion.fecha_vinculacion?.toDate?.();
+  const [fecha, setFecha] = useState(actual ? actual.toISOString().slice(0, 10) : '');
+  const [guardando, setGuardando] = useState(false);
+  const [ok, setOk] = useState(false);
+
+  async function guardar() {
+    if (!fecha) return;
+    setGuardando(true);
+    setOk(false);
+    try {
+      await actualizar('postulaciones', postulacion.id, {
+        fecha_vinculacion: Timestamp.fromDate(new Date(`${fecha}T12:00:00`)),
+        fecha_vinculacion_registrada_por: user?.uid ?? null,
+        fecha_vinculacion_registrada_en: Timestamp.now(),
+      });
+      setOk(true);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-3 py-2.5 print:hidden">
+      <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-muted mb-1.5">
+        Fecha de vinculación
+      </p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="date"
+          value={fecha}
+          onChange={(e) => {
+            setFecha(e.target.value);
+            setOk(false);
+          }}
+          className="rounded-md border border-slate-300 px-2 py-1.5 text-[12px] text-text-strong"
+        />
+        <button
+          onClick={guardar}
+          disabled={guardando || !fecha}
+          className="rounded-md bg-brand-600 text-white px-3 py-1.5 text-[12px] font-semibold hover:bg-brand-500 disabled:opacity-50"
+        >
+          {guardando ? 'Guardando…' : 'Guardar'}
+        </button>
+        {ok && <span className="text-[11px] text-success-700 font-medium">✓ Guardada</span>}
+      </div>
+      <p className="text-[10px] text-text-subtle mt-1.5">
+        Fecha real de ingreso del integrante (alimenta el indicador del proceso).
+      </p>
+    </div>
+  );
 }
 
 // ───────────────────────────────────────────────────────────────
