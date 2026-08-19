@@ -16,7 +16,7 @@ import { Card, KpiCard, Pill, type PillTono } from '../../components/brand';
 import { ReportesDescarga } from '../../components/dashboard/ReportesDescarga';
 import { SemaforoANS } from '../../components/ui/SemaforoANS';
 import { cn } from '../../utils/cn';
-import { diasTranscurridos, esVacanteCerrada } from '../../utils/reportesVacantes';
+import { diasTranscurridos, esVacanteCerrada, tiemposPorEtapa } from '../../utils/reportesVacantes';
 import type { PostulacionDoc, VacanteDoc } from '../../schemas';
 import { SaludoInicio } from '../../components/SaludoInicio';
 import { DrillDownVacantes, type DrillItem } from '../../components/dashboard/DrillDownVacantes';
@@ -104,6 +104,8 @@ export default function DashboardCoordPage() {
   }, [activasFull]);
 
   const criticas = useMemo(() => activasFull.filter((a) => a.dias > 10).slice(0, 10), [activasFull]);
+  const tramos = useMemo(() => tiemposPorEtapa(vacantes, festivos), [vacantes, festivos]);
+  const maxTramo = Math.max(...tramos.map((t) => t.promedio), 1);
 
   const stats = useMemo(() => {
     const porCriticidad: Record<string, number> = {};
@@ -325,6 +327,46 @@ export default function DashboardCoordPage() {
           />
         </div>
       </div>
+
+      {/* ── Tiempos promedio por etapa (cuellos de botella) ────────── */}
+      {tramos.length > 0 && (
+        <Card padding="lg">
+          <SectionHeader
+            dotClass="bg-warning-500"
+            eyebrow="Tiempos"
+            titulo="Días hábiles por etapa"
+            sub="Promedio por tramo del proceso · ordenado por cuello de botella"
+          />
+          <ul className="space-y-3.5 mt-6">
+            {tramos.map((t) => {
+              const barPct = Math.round((t.promedio / maxTramo) * 100);
+              return (
+                <li key={t.etiqueta}>
+                  <div className="flex items-center justify-between text-[12px] mb-1 gap-3">
+                    <span className="text-text-body truncate">
+                      {t.etiqueta} <span className="text-text-subtle">· {t.actor}</span>
+                    </span>
+                    <span className="text-text-subtle tabular-nums shrink-0">
+                      <span className="font-semibold text-text-strong">{t.promedio}</span> días · n=
+                      {t.n}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-warning-500 transition-all duration-300 ease-cult"
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-[11px] text-text-subtle mt-4">
+            "Aprobación del aval" aproxima la aprobación de Cultura/GH (Diego responde por correo,
+            fuera del sistema). Cada tramo promedia solo las vacantes que llegaron a esa etapa (n).
+          </p>
+        </Card>
+      )}
 
       {/* ── ROW 3 · Vacantes con ANS crítico ──────────────────────── */}
       <Card padding="lg">

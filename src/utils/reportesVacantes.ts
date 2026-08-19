@@ -94,6 +94,47 @@ export function diasHabilesATerna(v: VacanteDoc, festivos: Set<string>): number 
   return diasHabilesEntre(apertura, terna, festivos);
 }
 
+/**
+ * Tiempo PROMEDIO (días hábiles) por etapa/actor del proceso, para ver cuellos de
+ * botella (reu 18-ago). Cada tramo promedia solo las vacantes que tienen los DOS
+ * timestamps (excluye las que no llegaron a esa etapa). Ordenado de mayor a menor
+ * para resaltar dónde se demora más.
+ */
+export interface TramoTiempo {
+  etiqueta: string;
+  actor: string;
+  promedio: number;
+  n: number;
+}
+export function tiemposPorEtapa(vacantes: VacanteDoc[], festivos: Set<string>): TramoTiempo[] {
+  const promedioTramo = (ini: (v: VacanteDoc) => unknown, fin: (v: VacanteDoc) => unknown) => {
+    const dias: number[] = [];
+    for (const v of vacantes) {
+      const a = aDate(ini(v));
+      const b = aDate(fin(v));
+      if (a && b && b.getTime() >= a.getTime()) dias.push(diasHabilesEntre(a, b, festivos));
+    }
+    const n = dias.length;
+    return { promedio: n ? Math.round((dias.reduce((s, d) => s + d, 0) / n) * 10) / 10 : 0, n };
+  };
+  const defs: Array<{
+    etiqueta: string;
+    actor: string;
+    ini: (v: VacanteDoc) => unknown;
+    fin: (v: VacanteDoc) => unknown;
+  }> = [
+    { etiqueta: 'Aprobación del aval', actor: 'GH / Cultura', ini: (v) => v.creado_en, fin: (v) => v.aval_aprobado_en },
+    { etiqueta: 'Asignación de analista', actor: 'Coordinación', ini: (v) => v.aval_aprobado_en, fin: (v) => v.analista_asignado_en },
+    { etiqueta: 'Reclutamiento → terna', actor: 'Analista', ini: (v) => v.analista_asignado_en, fin: (v) => v.terna_enviada_en },
+    { etiqueta: 'Decisión de la terna', actor: 'Líder', ini: (v) => v.terna_enviada_en, fin: (v) => v.terna_respondida_en },
+    { etiqueta: 'Proceso completo', actor: 'Extremo a extremo', ini: (v) => v.creado_en, fin: (v) => v.cerrada_en },
+  ];
+  return defs
+    .map((d) => ({ etiqueta: d.etiqueta, actor: d.actor, ...promedioTramo(d.ini, d.fin) }))
+    .filter((t) => t.n > 0)
+    .sort((a, b) => b.promedio - a.promedio);
+}
+
 /** Texto de cumplimiento del ANS de terna para la base. */
 export function cumplimientoANS(
   diasATerna: number | null,
