@@ -57,7 +57,15 @@ const FASE_RECLUTAMIENTO = ['borrador', 'aprobada', 'lista_para_publicar', 'publ
 const FASE_TERNA = ['terna_enviada', 'seleccionado'];
 const FASE_CONTRATACION = ['en_contratacion'];
 
-type DrillMode = 'vencidas' | 'en_riesgo' | 'reclutamiento' | 'terna' | 'contratacion' | 'contratadas';
+type DrillMode =
+  | 'vencidas'
+  | 'en_riesgo'
+  | 'reclutamiento'
+  | 'terna'
+  | 'contratacion'
+  | 'contratadas'
+  | `crit:${string}`
+  | `emp:${string}`;
 
 function fechaDe(ts: unknown): Date | null {
   return (ts as { toDate?: () => Date } | null | undefined)?.toDate?.() ?? null;
@@ -186,6 +194,32 @@ export default function DashboardCoordPage() {
       };
     }
 
+    if (drill.startsWith('crit:') || drill.startsWith('emp:')) {
+      const esCrit = drill.startsWith('crit:');
+      const valor = drill.slice(esCrit ? 5 : 4);
+      const arr = vacantes.filter((v) =>
+        esCrit ? String(v.criticidad ?? '') === valor : v.empresa_codigo === valor,
+      );
+      return {
+        titulo: esCrit ? `Criticidad · ${valor}` : `Empresa · ${valor}`,
+        descripcion: 'todas las vacantes de este grupo',
+        tono: esCrit ? ('danger' as const) : ('brand' as const),
+        icono: esCrit ? (
+          <BarChart3 size={20} strokeWidth={1.75} />
+        ) : (
+          <Building2 size={20} strokeWidth={1.75} />
+        ),
+        items: arr.map((v) => ({
+          ...base(v),
+          right: (
+            <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
+              {v.estado.replace(/_/g, ' ')}
+            </Pill>
+          ),
+        })),
+      };
+    }
+
     // contratadas del mes
     const now = new Date();
     const y = now.getFullYear();
@@ -279,6 +313,7 @@ export default function DashboardCoordPage() {
             icono={<BarChart3 size={14} strokeWidth={1.75} />}
             datos={stats.porCriticidad}
             getTono={(k) => CRITICIDAD_TONO[k] ?? 'neutral'}
+            onRowClick={(k) => setDrill(`crit:${k}`)}
           />
           <DistribCard
             titulo="Por empresa"
@@ -286,6 +321,7 @@ export default function DashboardCoordPage() {
             datos={stats.porEmpresa}
             getTono={() => 'brand'}
             monoLabel
+            onRowClick={(k) => setDrill(`emp:${k}`)}
           />
         </div>
       </div>
@@ -596,12 +632,14 @@ function DistribCard({
   datos,
   getTono,
   monoLabel = false,
+  onRowClick,
 }: {
   titulo: string;
   icono: React.ReactNode;
   datos: Record<string, number>;
   getTono: (k: string) => PillTono;
   monoLabel?: boolean;
+  onRowClick?: (k: string) => void;
 }) {
   const entries = Object.entries(datos).sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((s, [, n]) => s + n, 0);
@@ -636,25 +674,35 @@ function DistribCard({
           const tono = getTono(k);
           return (
             <li key={k}>
-              <div className="flex items-center justify-between text-[12px] mb-1">
-                <span
-                  className={cn(
-                    'text-text-body',
-                    monoLabel ? 'font-mono uppercase tracking-wide' : 'capitalize',
-                  )}
-                >
-                  {k.replace(/_/g, ' ')}
-                </span>
-                <span className="text-text-subtle tabular-nums">
-                  <span className="font-semibold text-text-strong">{v}</span> · {pct}%
-                </span>
-              </div>
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className={cn('h-full transition-all duration-300 ease-cult', barClass(tono))}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
+              <button
+                type="button"
+                onClick={onRowClick ? () => onRowClick(k) : undefined}
+                disabled={!onRowClick}
+                className={cn(
+                  'block w-full text-left',
+                  onRowClick && 'cursor-pointer hover:opacity-80 transition-opacity',
+                )}
+              >
+                <div className="flex items-center justify-between text-[12px] mb-1">
+                  <span
+                    className={cn(
+                      'text-text-body',
+                      monoLabel ? 'font-mono uppercase tracking-wide' : 'capitalize',
+                    )}
+                  >
+                    {k.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-text-subtle tabular-nums">
+                    <span className="font-semibold text-text-strong">{v}</span> · {pct}%
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={cn('h-full transition-all duration-300 ease-cult', barClass(tono))}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </button>
             </li>
           );
         })}
