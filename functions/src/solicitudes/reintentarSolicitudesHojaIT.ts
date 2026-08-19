@@ -3,7 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../utils/admin';
-import { agregarFilaSheet, valorExisteEnColumna } from '../sheets/cliente';
+import { agregarFilaSheet, valorExisteEnColumna, HOJA_REGISTRO_IT } from '../sheets/cliente';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 
 /**
@@ -34,7 +34,7 @@ const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 const SOLICITUD_HERRAMIENTAS_SHEET_ID = defineSecret('SOLICITUD_HERRAMIENTAS_SHEET_ID');
 
-const HOJA = 'Registro';
+const HOJA = HOJA_REGISTRO_IT;
 const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 /** A quién avisar cuando la hoja sigue bloqueada. */
 const ALERTA_DESTINOS = ['acmurillo@equitel.com.co'];
@@ -155,7 +155,7 @@ async function alertarSiCorresponde(consecutivos: string[]): Promise<void> {
         <span style="display:inline-block;background:#fef2f2;color:#b91c1c;font-size:11px;font-weight:700;letter-spacing:.06em;padding:6px 12px;border-radius:999px;">HOJA DE IT BLOQUEADA</span>
         <h1 style="margin:16px 0 10px;font-size:22px;color:#0f172a;">${n} solicitud(es) de herramientas represada(s)</h1>
         <p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:#334155;">
-          La plataforma no pudo escribir en la pestaña <strong>"Registro"</strong> de la hoja de IT
+          La plataforma no pudo escribir en la pestaña <strong>"${HOJA}"</strong> de la hoja de IT
           (la cuenta de servicio <strong>drive-uploader@ptm-atraccion.iam.gserviceaccount.com</strong>
           está bloqueada, probablemente por una protección de rango). Las filas quedaron <strong>encoladas</strong>
           y se escribirán solas en cuanto IT reabra el acceso — no se pierde nada.
@@ -163,7 +163,7 @@ async function alertarSiCorresponde(consecutivos: string[]): Promise<void> {
         <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Consecutivos represados:</p>
         <p style="margin:0 0 18px;font-size:13px;color:#0f172a;font-weight:600;word-break:break-word;">${lista}</p>
         <p style="margin:0;font-size:13px;line-height:1.55;color:#334155;">
-          <strong>Acción:</strong> pedir a IT que en "Registro" (Datos → Proteger hojas y rangos) agregue a la
+          <strong>Acción:</strong> pedir a IT que en "${HOJA}" (Datos → Proteger hojas y rangos) agregue a la
           cuenta de servicio como editor, o que proteja solo sus columnas y no toda la hoja.
         </p>
       </td></tr>
@@ -178,7 +178,7 @@ async function alertarSiCorresponde(consecutivos: string[]): Promise<void> {
       to: ALERTA_DESTINOS,
       subject: `⚠️ Hoja de IT bloqueada · ${n} solicitud(es) represada(s)`,
       html,
-      text: `La hoja de IT ("Registro") está bloqueada para la cuenta de servicio. ${n} solicitud(es) represada(s): ${lista}. Quedaron encoladas y se escribirán solas al reabrir el acceso. Pedir a IT agregar la SA como editor en la protección o proteger solo sus columnas.`,
+      text: `La hoja de IT ("${HOJA}") está bloqueada para la cuenta de servicio. ${n} solicitud(es) represada(s): ${lista}. Quedaron encoladas y se escribirán solas al reabrir el acceso. Pedir a IT agregar la SA como editor en la protección o proteger solo sus columnas.`,
     });
     await ref.set(
       { ultimo_aviso_en: FieldValue.serverTimestamp(), ultima_cantidad: n },

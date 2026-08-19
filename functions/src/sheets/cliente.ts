@@ -12,6 +12,16 @@ import { google, sheets_v4 } from 'googleapis';
  * IT (reemplazo del Google Forms). Reunión Sebastián Orozco 2026-05-28.
  */
 
+/**
+ * Pestaña de la hoja REAL de IT donde la plataforma vuelca la solicitud de
+ * herramientas. Cambió de "Registro" → "Registros_app" el 2026-08-19: IT volvió a
+ * proteger TODA la pestaña "Registro" (bloqueando a la cuenta de servicio), así
+ * que Sebastián Orozco creó una pestaña nueva y limpia "Registros_app" para que la
+ * app escriba ahí sin chocar con el aseguramiento. Una sola fuente para el writer
+ * y el reintento auto-sanador. Si IT vuelve a cambiarla, es este único valor.
+ */
+export const HOJA_REGISTRO_IT = 'Registros_app';
+
 let cachedSheets: sheets_v4.Sheets | null = null;
 
 function getSheetsClient(): sheets_v4.Sheets {

@@ -4,7 +4,7 @@ import { logger } from 'firebase-functions/v2';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { db } from '../utils/admin';
-import { agregarFilaSheet, valorExisteEnColumna } from '../sheets/cliente';
+import { agregarFilaSheet, valorExisteEnColumna, HOJA_REGISTRO_IT } from '../sheets/cliente';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { emailAnalistaDeVacante } from '../notificaciones/emailAnalista';
 
@@ -30,12 +30,11 @@ const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 const SOLICITUD_HERRAMIENTAS_SHEET_ID = defineSecret('SOLICITUD_HERRAMIENTAS_SHEET_ID');
 
 /**
- * Pestaña de la hoja REAL "Solicitud de herramientas tecnológicas (respuestas)"
- * donde IT lleva su seguimiento. Producción = "Registro" (reu Karen 03-jul;
- * verificado que la pestaña existe en la hoja). La pestaña "Prueba de registros"
- * queda como respaldo de pruebas.
+ * Pestaña destino en la hoja REAL de IT. Vive en un solo lugar (sheets/cliente.ts):
+ * hoy "Registros_app" (Sebastián Orozco creó la pestaña nueva el 19-ago tras volver
+ * a proteger toda la pestaña "Registro").
  */
-const HOJA = 'Registro';
+const HOJA = HOJA_REGISTRO_IT;
 
 /** Remitente unificado de todo correo saliente de la plataforma. */
 const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
