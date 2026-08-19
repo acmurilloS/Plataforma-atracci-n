@@ -116,3 +116,5 @@ export { regenerarFormatoOficial } from './formatos/regenerarFormatoOficial';
 // Condiciones laborales: envío al candidato + aceptación en el portal (E, 2026-06-16).
 export { enviarCondicionesLaborales } from './condiciones/enviarCondicionesLaborales';
 export { aceptarCondicionesLaborales } from './condiciones/aceptarCondicionesLaborales';
+// Carta de bienvenida: envío al candidato con el PDF adjunto (#4b, reu 18-ago).
+export { enviarCartaBienvenida } from './cartas/enviarCartaBienvenida';

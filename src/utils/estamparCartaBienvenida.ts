@@ -22,6 +22,12 @@ export interface CartaBienvenidaDatos {
   familiares?: string;
   /** Fecha en texto largo (ej. "19 de agosto de 2026"). Por defecto, hoy en Bogotá. */
   fecha?: string;
+  /**
+   * URL de una plantilla personalizada subida desde admin. Por defecto usa la
+   * incluida en la app. OJO: debe mantener el MISMO diseño (posición de fecha,
+   * saludo y párrafo de familia) para que los datos caigan en el lugar correcto.
+   */
+  plantillaUrl?: string;
 }
 
 export const RUTA_CARTA_BIENVENIDA = '/formatos/carta-bienvenida.pdf';
@@ -61,7 +67,7 @@ function envolver(texto: string, font: PDFFont, size: number, maxAncho: number):
 }
 
 export async function estamparCartaBienvenida(datos: CartaBienvenidaDatos): Promise<Blob> {
-  const resp = await fetch(RUTA_CARTA_BIENVENIDA);
+  const resp = await fetch(datos.plantillaUrl?.trim() || RUTA_CARTA_BIENVENIDA);
   if (!resp.ok) throw new Error('No se pudo cargar el formato de la carta de bienvenida.');
   const base = await resp.arrayBuffer();
 

@@ -7,6 +7,7 @@ import {
   Database,
   Users2,
   Cloud,
+  FileText,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -17,6 +18,7 @@ import { CargosTab } from '../../components/admin/CargosTab';
 import { SeedTab } from '../../components/admin/SeedTab';
 import { ReferidosTab } from '../../components/admin/ReferidosTab';
 import { IntegracionesTab } from '../../components/admin/IntegracionesTab';
+import { CartaBienvenidaTab } from '../../components/admin/CartaBienvenidaTab';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
@@ -30,7 +32,15 @@ import { cn } from '../../utils/cn';
  * (p.ej. Karen coordinadora) no las ve.
  */
 
-type Tab = 'empresas' | 'sedes' | 'unidades' | 'cargos' | 'referidos' | 'integraciones' | 'seed';
+type Tab =
+  | 'empresas'
+  | 'sedes'
+  | 'unidades'
+  | 'cargos'
+  | 'referidos'
+  | 'integraciones'
+  | 'carta'
+  | 'seed';
 
 const TABS: { key: Tab; label: string; icono: LucideIcon; soloAdmin?: boolean }[] = [
   { key: 'empresas', label: 'Empresas', icono: Building2 },
@@ -39,6 +49,7 @@ const TABS: { key: Tab; label: string; icono: LucideIcon; soloAdmin?: boolean }[
   { key: 'cargos', label: 'Cargos', icono: Briefcase },
   { key: 'referidos', label: 'Referidos', icono: Users2, soloAdmin: true },
   { key: 'integraciones', label: 'Integraciones', icono: Cloud, soloAdmin: true },
+  { key: 'carta', label: 'Carta bienvenida', icono: FileText, soloAdmin: true },
   { key: 'seed', label: 'Seed', icono: Database, soloAdmin: true },
 ];
 
@@ -89,6 +100,7 @@ export default function CatalogosAdminPage() {
         {/* Solo admin pleno — el permiso 'catalogos' no da acceso a estas. */}
         {tab === 'referidos' && esAdmin && <ReferidosTab />}
         {tab === 'integraciones' && esAdmin && <IntegracionesTab />}
+        {tab === 'carta' && esAdmin && <CartaBienvenidaTab />}
         {tab === 'seed' && esAdmin && <SeedTab />}
       </div>
     </div>

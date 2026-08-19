@@ -104,6 +104,15 @@ service firebase.storage {
       allow write: if tieneRol() && esPdf() && request.resource.size < 10 * 1024 * 1024;
     }
 
+    // Plantillas editables de formatos (hoy: carta de bienvenida, #4b reu 18-ago).
+    // Solo ADMIN las sube; el staff (con rol) las lee para generar el documento
+    // personalizado. Un archivo por formato (se sobrescribe al reemplazar).
+    match /configuracion/{file} {
+      allow read: if tieneRol();
+      allow write: if request.auth != null && request.auth.token.rol == 'admin'
+        && esPdf() && request.resource.size < 10 * 1024 * 1024;
+    }
+
     // Todo lo demás: denegado. Antes había un catch-all (read/write si auth!=null)
     // que dejaba a cualquier candidato anónimo leer TODO el bucket (avales,
     // carpetas con cédulas y PII) y sobrescribirlo.
