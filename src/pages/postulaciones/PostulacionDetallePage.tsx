@@ -35,6 +35,7 @@ import { politicaParaCriticidad } from '../../schemas';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 import { FaseCandidato, etiquetaEstado } from '../../components/postulaciones/FaseCandidato';
 import { EditarDatosModal } from '../../components/postulaciones/EditarDatosModal';
+import { CartaBienvenidaModal } from '../../components/postulaciones/CartaBienvenidaModal';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { esSoloCarpeta } from '../../utils/accesoRutas';
 import { cn } from '../../utils/cn';
@@ -162,6 +163,7 @@ export default function PostulacionDetallePage() {
   });
   const puedeEditarDatos = ['analista', 'coordinador', 'gh', 'admin'].includes(rol ?? '');
   const [editarDatosAbierto, setEditarDatosAbierto] = useState(false);
+  const [cartaBienvenidaAbierta, setCartaBienvenidaAbierta] = useState(false);
   const [tab, setTab] = useState<Tab>('pruebas');
   // GH / Documentación solo ven los tabs de carpeta. Como el `rol` llega async,
   // corregimos en render: si el tab actual no les corresponde, cae al primero
@@ -646,6 +648,15 @@ export default function PostulacionDetallePage() {
           {(post.estado === 'en_contratacion' || post.estado === 'contratado') && (
             <FechaVinculacionInline postulacion={post} />
           )}
+          {(post.estado === 'en_contratacion' || post.estado === 'contratado') && (
+            <button
+              onClick={() => setCartaBienvenidaAbierta(true)}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+            >
+              <FileText size={12} strokeWidth={1.75} />
+              Carta de bienvenida
+            </button>
+          )}
           {post.estado === 'en_examenes_medicos' && (
             <button
               onClick={abrirExamen}
@@ -679,6 +690,10 @@ export default function PostulacionDetallePage() {
           postulacionEstado={post.estado}
           onClose={() => setEditarDatosAbierto(false)}
         />
+      )}
+
+      {cartaBienvenidaAbierta && (
+        <CartaBienvenidaModal postulacion={post} onClose={() => setCartaBienvenidaAbierta(false)} />
       )}
 
       {agradecerAbierto && (
