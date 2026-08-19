@@ -159,11 +159,14 @@ export const CATALOGO_DOCUMENTOS_CARPETA: readonly DocumentoCarpetaCatalogo[] = 
   {
     clave: 'certificado_judicial',
     seccion: 'hoja_vida',
+    // NO lo aporta el candidato: es un dato delicado que cargan las analistas
+    // (reu 18-ago). Se saca del portal del candidato y del correo-listado; sigue
+    // obligatorio en la carpeta del staff.
+    aporta_candidato: false,
     nombre: 'Certificado Judicial Vigente y antecedentes',
     opcional: false,
-    aporta_candidato: true,
     multiple: true,
-    ayuda: 'Admite varios archivos: antecedentes de Policía e Informa Colombia y, si hubo novedad, el concepto de Jurídica (trazabilidad de la validación).',
+    ayuda: 'Admite varios archivos: antecedentes de Policía e Informa Colombia y, si hubo novedad, el concepto de Jurídica (trazabilidad de la validación). Lo cargan las analistas, no el candidato.',
   },
   {
     clave: 'certificados_laborales',

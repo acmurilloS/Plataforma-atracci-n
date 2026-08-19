@@ -78,13 +78,34 @@ export const aceptarCondicionesLaborales = onCall({ region: 'us-central1' }, asy
     if (analistaUid) {
       const nombre = String(pd.candidato_nombre ?? 'El candidato');
       const cargo = String(pd.cargo_nombre ?? '');
+      // Desglose de las condiciones que se le enviaron: evidencia que pide GH (reu
+      // 18-ago: la notificación llegaba sin decir QUÉ condiciones aceptó). Texto
+      // plano con \n (onNotificacionCreate lo pasa a <br> y escapa el HTML).
+      const cl = (pd.condiciones_laborales ?? {}) as Record<string, unknown>;
+      const linea = (etiqueta: string, valor: unknown) => {
+        const v = String(valor ?? '').trim();
+        return v ? `• ${etiqueta}: ${v}` : '';
+      };
+      const desglose = [
+        linea('Cargo', cl.cargo ?? cargo),
+        linea('Empresa', cl.empresa),
+        linea('Unidad', cl.unidad),
+        linea('Tipo de contrato', cl.tipo_contrato),
+        linea('Tiempo de contrato', cl.tiempo_contrato),
+        linea('Salario', cl.salario ?? cl.salario_base),
+        linea('Comisiones', cl.comisiones),
+        linea('Rodamiento', cl.rodamiento),
+        linea('Horario', cl.horario ?? cl.horario_laboral),
+      ]
+        .filter(Boolean)
+        .join('\n');
       await db.collection('notificaciones').add({
         destinatario_uid: analistaUid,
         tipo: 'condiciones_aceptadas',
         titulo: 'El candidato aceptó las condiciones laborales',
-        mensaje: `${nombre}${
-          cargo ? ` (${cargo})` : ''
-        } aceptó las condiciones laborales desde su portal. Queda como evidencia en su proceso; puedes adjuntarla en "Aceptación de condiciones" de la carpeta.`,
+        mensaje: `${nombre}${cargo ? ` (${cargo})` : ''} aceptó las condiciones laborales desde su portal.${
+          desglose ? `\n\nCondiciones enviadas y aceptadas:\n${desglose}` : ''
+        }\n\nQueda como evidencia en su proceso; puedes adjuntarla en "Aceptación de condiciones" de la carpeta.`,
         link: `/postulaciones/${postId}`,
         vacante_id: vacId,
         postulacion_id: postId,
