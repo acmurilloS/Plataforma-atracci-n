@@ -207,6 +207,9 @@ export function VacanteForm() {
       comisiones_texto: '',
       rodamiento: false,
       rodamiento_valor: '',
+      horario_laboral: '',
+      tipo_contrato: 'indefinido',
+      tiempo_contrato: '',
       garantizado_texto: '',
       en_banda: null,
       sin_banda_validada: false,
@@ -578,6 +581,31 @@ export function VacanteForm() {
                 className={inputClass + ' mt-2'}
               />
             )}
+          </Campo>
+          {/* Horario y tipo de contrato: se prellenan (bloqueados) en el panel de
+              condiciones laborales al candidato, para que la analista no los edite
+              (reu 18-ago). */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Campo label="Horario laboral">
+              <input
+                {...register('horario_laboral')}
+                placeholder="L–V 8:00–17:00"
+                className={inputClass}
+              />
+            </Campo>
+            <Campo label="Tipo de contrato">
+              <select {...register('tipo_contrato')} className={selectClass}>
+                <option value="indefinido">Indefinido</option>
+                <option value="temporal">Temporal</option>
+              </select>
+            </Campo>
+          </div>
+          <Campo label="Tiempo del contrato (si es temporal)">
+            <input
+              {...register('tiempo_contrato')}
+              placeholder="6 meses / 1 año — solo si el contrato es temporal"
+              className={inputClass}
+            />
           </Campo>
           <Campo label="Justificación" requerido error={errors.justificacion?.message}>
             <textarea

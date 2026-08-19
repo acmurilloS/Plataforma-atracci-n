@@ -145,6 +145,11 @@ export default function PostulacionDetallePage() {
   const { doc: post } = useDoc<PostulacionDoc>('postulaciones', id);
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', post?.vacante_id ?? null);
   const { doc: cargo } = useDoc<CargoDoc>('cargos_catalogo', vacante?.cargo_id ?? null);
+  // Horario/tipo de contrato quedan BLOQUEADOS en el panel de condiciones si la
+  // vacante los define (reu 18-ago: que la analista no los edite). Si la vacante no
+  // los trae (vacantes viejas), quedan editables para no bloquear el envío.
+  const horarioBloqueado = !!String(vacante?.horario_laboral ?? '').trim();
+  const tipoBloqueado = !!String(vacante?.tipo_contrato ?? '').trim();
   const { actualizar } = useMutacion();
   const { rol } = useAuth();
   // examenes_medicos solo lo pueden leer staff/analista/gestor (dato médico). Sin
@@ -336,19 +341,21 @@ export default function PostulacionDetallePage() {
       setSalario(c.salario || salarioVacante);
       setComisiones(c.comisiones && c.comisiones !== 'No aplica' ? c.comisiones : '');
       setRodamiento(c.rodamiento && c.rodamiento !== 'No aplica' ? c.rodamiento : '');
-      setHorario(c.horario || '');
-      if (c.tiempo_contrato) {
-        setTipoContrato('temporal');
-        setTiempoContrato(c.tiempo_contrato);
-      } else {
-        setTipoContrato('indefinido');
-        setTiempoContrato('');
-      }
     } else {
       setSalario(salarioVacante);
       setComisiones('');
       setRodamiento('');
-      setHorario('');
+    }
+    // Horario y tipo de contrato se PRELLENAN desde la vacante (reu 18-ago); si la
+    // vacante no los define, caen a lo ya enviado o quedan vacíos/editables.
+    const horarioVac = String(vacante?.horario_laboral ?? '').trim();
+    const tipoVac = String(vacante?.tipo_contrato ?? '').trim();
+    const tiempoVac = String(vacante?.tiempo_contrato ?? '').trim();
+    setHorario(horarioVac || c?.horario || '');
+    if (tipoVac === 'temporal' || (!tipoVac && c?.tiempo_contrato)) {
+      setTipoContrato('temporal');
+      setTiempoContrato(tiempoVac || c?.tiempo_contrato || '');
+    } else {
       setTipoContrato('indefinido');
       setTiempoContrato('');
     }
@@ -753,11 +760,20 @@ export default function PostulacionDetallePage() {
               />
             </label>
             <label className="block">
-              <span className="block text-[11px] font-medium text-text-muted mb-1">Horario</span>
+              <span className="block text-[11px] font-medium text-text-muted mb-1">
+                Horario
+                {horarioBloqueado && (
+                  <span className="font-normal text-text-subtle"> · definido en la vacante</span>
+                )}
+              </span>
               <input
                 value={horario}
                 onChange={(e) => setHorario(e.target.value)}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                readOnly={horarioBloqueado}
+                className={cn(
+                  'w-full rounded-md border border-slate-300 px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40',
+                  horarioBloqueado ? 'bg-slate-50 text-text-muted' : 'bg-white',
+                )}
                 placeholder="L–V 8:00–17:00"
               />
             </label>
@@ -790,11 +806,18 @@ export default function PostulacionDetallePage() {
             <label className="block">
               <span className="block text-[11px] font-medium text-text-muted mb-1">
                 Tipo de contrato
+                {tipoBloqueado && (
+                  <span className="font-normal text-text-subtle"> · definido en la vacante</span>
+                )}
               </span>
               <select
                 value={tipoContrato}
                 onChange={(e) => setTipoContrato(e.target.value as 'indefinido' | 'temporal')}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                disabled={tipoBloqueado}
+                className={cn(
+                  'w-full rounded-md border border-slate-300 px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40',
+                  tipoBloqueado ? 'bg-slate-50 text-text-muted' : 'bg-white',
+                )}
               >
                 <option value="indefinido">Indefinido</option>
                 <option value="temporal">Temporal</option>
@@ -808,7 +831,11 @@ export default function PostulacionDetallePage() {
                 <input
                   value={tiempoContrato}
                   onChange={(e) => setTiempoContrato(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+                  readOnly={tipoBloqueado}
+                  className={cn(
+                    'w-full rounded-md border border-slate-300 px-3 py-2 text-[13px] focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40',
+                    tipoBloqueado ? 'bg-slate-50 text-text-muted' : 'bg-white',
+                  )}
                   placeholder="6 meses / 1 año"
                 />
               </label>

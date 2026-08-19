@@ -50,6 +50,12 @@ export const vacanteInputSchema = z.object({
   rodamiento: z.boolean().default(false),
   /** Valor del auxilio de rodamiento (lista de Karen o texto libre). Vacío / "No aplica" = sin rodamiento. */
   rodamiento_valor: z.string().max(120).default(''),
+  /** Horario y tipo de contrato: se prellenan (y bloquean) al enviar las
+   *  condiciones laborales al candidato, para que la analista no los edite; los
+   *  define quien crea la vacante (reu 18-ago). Opcionales por retro-compat. */
+  horario_laboral: z.string().max(200).default(''),
+  tipo_contrato: z.enum(['indefinido', 'temporal']).default('indefinido'),
+  tiempo_contrato: z.string().max(60).default(''),
   garantizado_texto: z.string().max(500).default(''),
   en_banda: z.boolean().nullable(),
   sin_banda_validada: z.boolean().default(false),
