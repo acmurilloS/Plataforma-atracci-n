@@ -249,6 +249,34 @@ export async function enviarSolicitudDotacionCore(opts: {
     /* el correo ya salió; un fallo del log no debe romper */
   }
 
+  // Acuse a la analista de que la dotación SÍ se envió (reu 18-ago: "no sabemos si
+  // se envía o no"). La notificación da campana in-app + correo automático
+  // (onNotificacionCreate). Cubre tanto la vía manual como la automática (por tallas).
+  if (analistaUid) {
+    try {
+      await db.collection('notificaciones').add({
+        destinatario_uid: analistaUid,
+        tipo: 'dotacion_enviada',
+        titulo: 'Dotación solicitada',
+        mensaje: `Se envió la solicitud de dotación de ${nombre || 'el integrante'}${
+          cargo ? ` (${cargo})` : ''
+        } a compras/gestores (${to.length} destinatario${to.length === 1 ? '' : 's'}).`,
+        link: '/carpetas',
+        postulacion_id: postulacionId,
+        vacante_id: post.vacante_id ?? null,
+        leida: false,
+        leida_en: null,
+        creado_en: FieldValue.serverTimestamp(),
+        creado_por: 'system',
+      });
+    } catch (e) {
+      logger.warn('enviarSolicitudDotacion · no se pudo notificar a la analista', {
+        postulacionId,
+        msg: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
   logger.info('enviarSolicitudDotacion', { postulacionId, destinatarios: to.length, por: porUid });
   return { destinatarios: to, sinSecrets: false };
 }

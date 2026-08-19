@@ -1039,6 +1039,7 @@ function PruebasTab({
   const [enviandoCorreo, setEnviandoCorreo] = useState(false);
   const [registrando, setRegistrando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'err'; texto: string } | null>(null);
+  const [subiendoIdx, setSubiendoIdx] = useState<number | null>(null);
 
   const emailCandidato = (postulacion.candidato_email ?? '').trim();
   const filasCompletas = filas.filter((f) => f.nombre.trim() && f.link.trim());
@@ -1053,6 +1054,38 @@ function PruebasTab({
   }
   function quitarFila(i: number) {
     setFilas((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
+
+  // Sube un PDF de la prueba a Storage y usa su URL de descarga como link: esa URL
+  // (con token) SÍ abre para el integrante sin cuenta, a diferencia de un Drive
+  // restringido que le pedía "solicitar acceso" (reu 18-ago).
+  async function subirPdf(i: number, file: File) {
+    if (file.type !== 'application/pdf') {
+      setMsg({ tipo: 'err', texto: 'El archivo debe ser un PDF.' });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setMsg({ tipo: 'err', texto: 'El PDF supera 10 MB.' });
+      return;
+    }
+    setSubiendoIdx(i);
+    setMsg(null);
+    try {
+      const limpio = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80);
+      const r = storageRef(storage, `pruebas_docs/${postulacion.id}/${Date.now()}_${limpio}`);
+      await uploadBytes(r, file, { contentType: 'application/pdf' });
+      const url = await getDownloadURL(r);
+      setFilas((prev) =>
+        prev.map((f, idx) =>
+          idx === i ? { nombre: f.nombre.trim() || file.name.replace(/\.pdf$/i, ''), link: url } : f,
+        ),
+      );
+      setMsg({ tipo: 'ok', texto: 'PDF subido. El integrante lo abrirá desde el correo.' });
+    } catch (e) {
+      setMsg({ tipo: 'err', texto: e instanceof Error ? e.message : 'No se pudo subir el PDF.' });
+    } finally {
+      setSubiendoIdx(null);
+    }
   }
 
   // Pre-carga los nombres de las pruebas definidas para el cargo (matriz
@@ -1199,9 +1232,28 @@ function PruebasTab({
               <input
                 value={f.link}
                 onChange={(e) => setFila(i, { link: e.target.value })}
-                placeholder="Link (Magneto, formulario…) — https://…"
+                placeholder="Link (Magneto, formulario…) o sube un PDF →"
                 className={cn(inputClass, 'flex-1 min-w-[200px]')}
               />
+              <label
+                className={cn(
+                  'cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-2 text-[11px] font-medium text-text-muted hover:bg-slate-50 whitespace-nowrap',
+                  subiendoIdx === i && 'opacity-60 pointer-events-none',
+                )}
+                title="Sube un PDF (se aloja para que el integrante lo abra desde el correo)"
+              >
+                {subiendoIdx === i ? 'Subiendo…' : 'Subir PDF'}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void subirPdf(i, file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
               {filas.length > 1 && (
                 <button
                   type="button"

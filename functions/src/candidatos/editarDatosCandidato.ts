@@ -118,7 +118,12 @@ export const editarDatosCandidato = onCall({ region: 'us-central1' }, async (req
   const nombreCambio = 'nombres' in limpio || 'apellidos' in limpio;
   const emailCambio = 'email' in limpio;
   const telCambio = 'telefono' in limpio;
-  if (nombreCambio || emailCambio || telCambio) {
+  // La cédula vive COPIADA en la postulación y CONGELADA en el doc de examen; sin
+  // re-denormalizarla, la orden a gestores (y nómina) siguen con el valor viejo
+  // (reu 18-ago: una orden salió con el número de celular en vez de la cédula).
+  const docNumCambio = 'documento_numero' in limpio;
+  const docTipoCambio = 'documento_tipo' in limpio;
+  if (nombreCambio || emailCambio || telCambio || docNumCambio || docTipoCambio) {
     const nuevoNombre = `${('nombres' in limpio ? limpio.nombres : actual.nombres) ?? ''} ${
       ('apellidos' in limpio ? limpio.apellidos : actual.apellidos) ?? ''
     }`.trim();
@@ -128,7 +133,25 @@ export const editarDatosCandidato = onCall({ region: 'us-central1' }, async (req
       if (nombreCambio) patch.candidato_nombre = nuevoNombre;
       if (emailCambio) patch.candidato_email = limpio.email;
       if (telCambio) patch.candidato_telefono = limpio.telefono;
+      if (docNumCambio) patch.documento_numero = limpio.documento_numero;
+      if (docTipoCambio) patch.documento_tipo = limpio.documento_tipo;
       batch.update(p.ref, patch);
+    }
+  }
+
+  // 2b) Sincroniza el snapshot de cédula en los exámenes del candidato (se congela
+  // al entrar a exámenes). Así la pantalla de Exámenes y el botón "Reenviar a
+  // gestores" quedan ya con la cédula corregida (reu 18-ago).
+  if (docNumCambio || docTipoCambio) {
+    const exams = await db
+      .collection('examenes_medicos')
+      .where('candidato_id', '==', candidatoId)
+      .get();
+    for (const ex of exams.docs) {
+      const patch: Record<string, unknown> = { actualizado_por: req.auth.uid, actualizado_en: ahora };
+      if (docNumCambio) patch.documento_numero = limpio.documento_numero;
+      if (docTipoCambio) patch.documento_tipo = limpio.documento_tipo;
+      batch.update(ex.ref, patch);
     }
   }
 

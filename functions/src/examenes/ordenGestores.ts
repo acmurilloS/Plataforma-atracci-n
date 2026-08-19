@@ -96,9 +96,14 @@ export async function enviarOrdenAGestores(
   let analistaNombre = '';
 
   try {
-    if (!cc && ex.candidato_id) {
+    // Fuente de verdad = el candidato. Preferimos SIEMPRE su cédula sobre el
+    // snapshot congelado del examen: si la analista la corrigió, la orden (y el
+    // reenvío) sale con el valor bueno aunque el snapshot esté viejo — reu 18-ago
+    // (una orden salió con el número de celular en vez de la cédula).
+    if (ex.candidato_id) {
       const c = await db.collection('candidatos').doc(String(ex.candidato_id)).get();
-      if (c.exists) cc = String(c.data()?.documento_numero ?? '').trim();
+      const fresca = c.exists ? String(c.data()?.documento_numero ?? '').trim() : '';
+      if (fresca) cc = fresca;
     }
     if (ex.vacante_id) {
       const v = await db.collection('vacantes').doc(String(ex.vacante_id)).get();

@@ -87,6 +87,15 @@ service firebase.storage {
         && esPdfOImagen() && request.resource.size < 15 * 1024 * 1024;
     }
 
+    // PDF de una prueba psicotécnica que el staff sube para enviárselo al
+    // integrante (reu 18-ago: los links de PDF en Drive no abrían para el candidato
+    // sin cuenta). Solo el staff sube/lee; el integrante lo abre por la URL de
+    // descarga (token) desde el correo, igual que la orden de exámenes.
+    match /pruebas_docs/{postulacion}/{file} {
+      allow read: if tieneRol();
+      allow write: if tieneRol() && esPdf() && request.resource.size < 10 * 1024 * 1024;
+    }
+
     // Formato oficial REGENERADO al corregir un campo (Datos Básicos / SAGRILAFT).
     // Lo sube el staff (con rol); cada versión queda con su propio archivo, el
     // anterior NO se borra (trazabilidad de Calidad). Registro en formatos_versiones.
