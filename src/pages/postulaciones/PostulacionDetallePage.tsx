@@ -1102,6 +1102,37 @@ function FechaVinculacionInline({ postulacion }: SubProps) {
 // ───────────────────────────────────────────────────────────────
 // Pruebas (paso 7)
 // ───────────────────────────────────────────────────────────────
+/** Pruebas estándar que se envían siempre (Karen 19-ago): 2 formularios de Google
+ *  + "Queremos conocerte". Las que son PDF se cargan con el botón "Subir PDF". */
+const PRUEBAS_ESTANDAR = {
+  filas: [
+    { nombre: 'Test 1', link: 'https://forms.gle/RXXbMJrRteqGiy1L7' },
+    {
+      nombre: 'Test 2',
+      link: 'https://docs.google.com/forms/d/e/1FAIpQLSfCvLYIM1V_zjn6K37BxrPY67mzNV2goMIv1UShYGYYQDh_rg/viewform',
+    },
+    {
+      nombre: 'Queremos conocerte',
+      link: 'https://docs.google.com/forms/d/e/1FAIpQLSd6DYIcZlO5m_YW_wVyJxHAiuApCJ67ytimgSigRzDPbTm-SQ/viewform',
+    },
+  ],
+  instrucciones: [
+    'Buen día,',
+    '',
+    'Recibe un cordial saludo.',
+    '',
+    'Para continuar nuestro proceso de atracción, a continuación encontrarás las instrucciones para que puedas realizar o diligenciar los siguientes test y formularios en el menor tiempo posible y de manera concentrada. Lee las instrucciones para compartir los resultados de cada uno.',
+    '',
+    'Test 1. Encontrarás un formulario de preguntas muy simples; esta prueba no tiene tiempo determinado, no existen respuestas correctas o incorrectas. Tus respuestas ayudarán a conocer cómo piensas, cómo te sientes y cómo te comportas generalmente.',
+    '',
+    'Test 2. Encontrarás un formulario con instrucciones claras. En la Parte A, marca 1 en las frases que sean muy descriptivas de ti y 0 en las que no; en la Parte B, califica de 0 a 5 qué tanto te describen los párrafos, siendo 0 (en absoluto) y 5 (completamente).',
+    '',
+    'Formulario "Queremos conocerte": buscamos conocer un poco más de ti y de tu contexto.',
+    '',
+    'Agradecemos tu atención y quedamos atentos a cualquier inquietud.',
+  ].join('\n'),
+};
+
 function PruebasTab({
   postulacion,
   pruebasSugeridas = [],
@@ -1202,6 +1233,24 @@ function PruebasTab({
       return [...base, ...nuevas];
     });
     setMsg({ tipo: 'ok', texto: `Se cargaron ${nuevas.length} prueba(s) del cargo. Pega los links.` });
+  }
+
+  // Carga las 2 pruebas de Google + "Queremos conocerte" con sus links e instrucciones fijos.
+  function cargarEstandar() {
+    const yaLinks = new Set(filas.map((f) => f.link.trim()).filter(Boolean));
+    const nuevas = PRUEBAS_ESTANDAR.filas.filter((f) => !yaLinks.has(f.link));
+    setFilas((prev) => {
+      const base = prev.filter((f) => f.nombre.trim() || f.link.trim());
+      return [...base, ...nuevas];
+    });
+    if (!instrucciones.trim()) setInstrucciones(PRUEBAS_ESTANDAR.instrucciones);
+    setMsg({
+      tipo: 'ok',
+      texto:
+        nuevas.length > 0
+          ? `Se cargaron ${nuevas.length} prueba(s) estándar. Los PDF se suben aparte con "Subir PDF".`
+          : 'Las pruebas estándar ya estaban en la lista.',
+    });
   }
 
   // Envía un solo correo con todas las pruebas que tengan nombre + link.
@@ -1375,6 +1424,13 @@ function PruebasTab({
                 Cargar pruebas del cargo ({pruebasSugeridas.length})
               </button>
             )}
+            <button
+              type="button"
+              onClick={cargarEstandar}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800"
+            >
+              Cargar pruebas estándar (3)
+            </button>
           </div>
 
           <textarea

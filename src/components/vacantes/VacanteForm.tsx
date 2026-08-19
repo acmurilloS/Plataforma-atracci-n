@@ -24,6 +24,7 @@ import {
 } from '../../schemas';
 import { AvalUploader } from './AvalUploader';
 import { SelectorCargo } from './SelectorCargo';
+import { SelectorLider } from './SelectorLider';
 import { ValidadorSalario } from './ValidadorSalario';
 import { VacanteCreadaModal } from './VacanteCreadaModal';
 import { Button } from '../brand';
@@ -150,7 +151,7 @@ const inputClass = selectClass; // mismas clases base que select
 const textareaClass = selectClass + ' resize-none leading-relaxed';
 
 export function VacanteForm() {
-  const { user, perfil } = useAuth();
+  const { user, perfil, rol } = useAuth();
   const { empresas } = useEmpresas();
   const { crearVacante } = useVacantes();
 
@@ -232,6 +233,10 @@ export function VacanteForm() {
   const avalUrl = watch('aval_url');
   const noRequiereAval = watch('aval_no_requiere');
   const tipoSolicitudActual = watch('tipo_solicitud');
+  const liderUidActual = watch('lider_uid');
+  // Solo staff (admin/coord/gh) puede reasignar la vacante a otro líder: es quien
+  // crea "en nombre de" y quien puede leer la colección `usuarios` (SelectorLider).
+  const esStaffCreador = rol === 'admin' || rol === 'coordinador' || rol === 'gh';
 
   const { sedes } = useSedesDeEmpresa(empresaCodigo || null);
   const { unidades } = useUnidadesDeSede(sedeCodigo || null);
@@ -615,6 +620,30 @@ export function VacanteForm() {
               className={textareaClass}
             />
           </Campo>
+          {/* Líder responsable (Opción A, reu 18-ago): staff puede reasignar la
+              vacante al líder real, que la verá en "Mis vacantes", recibirá las
+              notificaciones y decidirá la terna. Un líder que crea la suya no ve
+              esto (queda como responsable por defecto = él mismo). */}
+          {esStaffCreador && (
+            <Campo label="Líder responsable" error={errors.lider_uid?.message}>
+              <SelectorLider
+                value={liderUidActual || null}
+                creador={
+                  user && perfil
+                    ? { uid: user.uid, nombre: `${perfil.nombre} ${perfil.apellido}`.trim() }
+                    : null
+                }
+                onChange={(uid, nombre) => {
+                  setValue('lider_uid', uid);
+                  setValue('lider_nombre', nombre);
+                }}
+              />
+              <p className="mt-1.5 text-[11px] text-text-subtle">
+                Quien verá la vacante, recibirá las notificaciones y decidirá la terna. Si la
+                creas para otro líder, selecciónalo aquí.
+              </p>
+            </Campo>
+          )}
           {/* Cargo del solicitante (líder). Se guarda en la vacante y prellena el
               "cargo del solicitante" del formato oficial de Solicitud de Integrante. */}
           <Campo label="Cargo del solicitante" error={errors.lider_cargo?.message}>
