@@ -31,6 +31,7 @@ import { cn } from '../../utils/cn';
 import {
   CATALOGO_DOCUMENTOS_CARPETA,
   SECCIONES_LABEL,
+  calcularCompletitudCarpeta,
   type DocumentoCandidatoDoc,
   type EstadoDocumento,
   type PostulacionDoc,
@@ -105,22 +106,29 @@ const SECCIONES: SeccionDocumento[] = ['generales', 'seguridad_social', 'hoja_vi
 export default function CarpetasPage() {
   const { docs: carpetas, cargando } = useColeccion<CarpetaDoc>('carpetas_digitales', {
     orden: ['creado_en', 'desc'],
+    limit: 1000,
   });
   const { docs: postulacionesEnContratacion } = useColeccion<PostulacionDoc>(
     'postulaciones',
     { filtros: [['estado', '==', 'en_contratacion']] },
   );
-  // Una sola lectura de documentos_candidato; agrupamos en cliente.
-  // Si crece a miles esto se debe paginar por postulacion_id.
-  const { docs: todosDocumentos } = useColeccion<DocumentoCandidatoDoc>('documentos_candidato');
-  const { docs: todasPostulaciones } = useColeccion<PostulacionDoc>('postulaciones');
+  // Una sola lectura de documentos_candidato; agrupamos en cliente. Tope ALTO a
+  // propósito: 24 docs × N carpetas supera fácil el default de 100, y sin esto la
+  // completitud de las carpetas se calculaba con datos TRUNCADOS (reu 18-ago).
+  // TODO: cuando crezca a miles, paginar por postulacion_id en vez de subir el tope.
+  const { docs: todosDocumentos } = useColeccion<DocumentoCandidatoDoc>('documentos_candidato', {
+    limit: 5000,
+  });
+  const { docs: todasPostulaciones } = useColeccion<PostulacionDoc>('postulaciones', {
+    limit: 3000,
+  });
   const postPorId = useMemo(
     () => new Map(todasPostulaciones.map((p) => [p.id, p])),
     [todasPostulaciones],
   );
   // Procesos: para saber si el cargo de cada carpeta requiere dotación (flag del
   // perfilamiento) y mostrar el subpaso de solicitud de dotación.
-  const { docs: procesos } = useColeccion<ProcesoDotacion>('procesos');
+  const { docs: procesos } = useColeccion<ProcesoDotacion>('procesos', { limit: 3000 });
   const procPorId = useMemo(() => new Map(procesos.map((p) => [p.id, p])), [procesos]);
   const [dotacion, setDotacion] = useState<{
     postulacionId: string;
@@ -202,25 +210,17 @@ export default function CarpetasPage() {
   function calcularCompletitud(postulacionId: string) {
     const docs = docsPorPostulacion.get(postulacionId) ?? [];
     const docsPorClave = new Map(docs.map((d) => [d.clave, d]));
-    const verif = (cat: { clave: string }) => {
-      const d = docsPorClave.get(cat.clave);
-      return d?.estado === 'verificado' || d?.estado === 'no_aplica';
-    };
-    const pct = (v: number, t: number) => (t > 0 ? Math.round((v / t) * 100) : 100);
-    // BUG 2 · completitud en DOS niveles. La parte de CyD (Atracción) gobierna la
-    // entrega/aprobación; la de GH (contrato, afiliaciones) se muestra aparte y NO
-    // la bloquea — antes los 4 docs de GH dejaban la carpeta topada en ~69%.
-    const oblCyD = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional && c.responsable !== 'gh');
-    const oblGH = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional && c.responsable === 'gh');
-    const verifCyD = oblCyD.filter(verif).length;
-    const verifGH = oblGH.filter(verif).length;
+    // Completitud en DOS niveles (CyD gobierna, GH aparte) con la regla ÚNICA
+    // compartida (verificado | no_aplica = listo) — la MISMA que usa DocumentosTab,
+    // para que la carpeta no salga 100% en una pantalla y 50% en otra (reu 18-ago).
+    const comp = calcularCompletitudCarpeta((clave) => docsPorClave.get(clave)?.estado);
     return {
-      // Compat: `verificados/total/porcentaje` = parte de CyD (gobierna los gates).
-      verificados: verifCyD,
-      total: oblCyD.length,
-      porcentaje: pct(verifCyD, oblCyD.length),
-      gh: { verificados: verifGH, total: oblGH.length, porcentaje: pct(verifGH, oblGH.length) },
-      pendientesGH: oblGH.filter((c) => !verif(c)).map((c) => c.nombre),
+      // Compat con el resto de la pantalla: verificados/total/porcentaje = CyD.
+      verificados: comp.cyd.listos,
+      total: comp.cyd.total,
+      porcentaje: comp.cyd.porcentaje,
+      gh: { verificados: comp.gh.listos, total: comp.gh.total, porcentaje: comp.gh.porcentaje },
+      pendientesGH: comp.pendientesGH,
       docsPorClave,
     };
   }
@@ -880,7 +880,7 @@ function BarraCompletitud({
         <span className="text-text-muted">
           <span className="font-semibold text-text-strong">{etiqueta}</span>{' '}
           <span className="tabular-nums">
-            · {verificados}/{total} verificados
+            · {verificados}/{total} listos
           </span>
         </span>
         <span

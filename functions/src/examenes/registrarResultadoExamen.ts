@@ -121,6 +121,14 @@ export const registrarResultadoExamen = onCall(
         const postEnExamenes =
           !!postSnap && String(postSnap.data()?.estado ?? '') === 'en_examenes_medicos';
 
+        // Leer la vacante ANTES de cualquier escritura (regla de transacciones: los
+        // reads van primero). Sirve para NO reabrir una vacante ya cerrada por otro
+        // contratado: si el examen de un candidato del pool / reintegro se procesa
+        // DESPUÉS del cierre, no debe devolver la vacante a 'en_contratacion' (bug
+        // "cerrado sale activo", reu 18-ago).
+        const vacRef = vacanteId ? db.collection('vacantes').doc(vacanteId) : null;
+        const vacSnap = vacRef && postEnExamenes ? await tx.get(vacRef) : null;
+
         tx.update(exRef, patch);
         if (postRef && postEnExamenes) {
           tx.update(postRef, {
@@ -128,8 +136,12 @@ export const registrarResultadoExamen = onCall(
             ultima_transicion_estado: ahora,
             'marcas.apto_medico_en': ahora,
           });
-          if (vacanteId) {
-            tx.update(db.collection('vacantes').doc(vacanteId), { estado: 'en_contratacion' });
+          if (
+            vacRef &&
+            vacSnap &&
+            !['cerrada', 'desierta', 'cancelada'].includes(String(vacSnap.data()?.estado ?? ''))
+          ) {
+            tx.update(vacRef, { estado: 'en_contratacion' });
           }
         }
       });

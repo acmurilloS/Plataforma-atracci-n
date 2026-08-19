@@ -11,7 +11,8 @@ import { formatearFecha } from '../../utils/fechas';
 import {
   CATALOGO_DOCUMENTOS_CARPETA,
   SECCIONES_LABEL,
-  totalObligatorios,
+  calcularCompletitudCarpeta,
+  docCarpetaListo,
   type ArchivoCarpeta,
   type DocumentoCandidatoDoc,
   type DocumentoCarpetaCatalogo,
@@ -107,18 +108,16 @@ export function DocumentosTab({ postulacion }: Props) {
     }
   }
 
-  const totalReq = totalObligatorios();
-  const verificadosObligatorios = useMemo(
-    () =>
-      CATALOGO_DOCUMENTOS_CARPETA.filter(
-        (cat) =>
-          !cat.opcional &&
-          cat.responsable !== 'gh' &&
-          docsPorClave.get(cat.clave)?.estado === 'verificado',
-      ).length,
+  // Completitud con la regla ÚNICA compartida (verificado | no_aplica = listo).
+  // Antes contaba solo 'verificado' → discrepaba con la pantalla Carpetas y la
+  // misma carpeta salía 100% para uno y 50% para otro (reu 18-ago).
+  const comp = useMemo(
+    () => calcularCompletitudCarpeta((clave) => docsPorClave.get(clave)?.estado),
     [docsPorClave],
   );
-  const porcentaje = totalReq > 0 ? Math.round((verificadosObligatorios / totalReq) * 100) : 0;
+  const verificadosObligatorios = comp.cyd.listos;
+  const totalReq = comp.cyd.total;
+  const porcentaje = comp.cyd.porcentaje;
 
   // C.1 · El aviso a GH "carpeta lista para validar" (al 100% de CyD) lo dispara
   // ÚNICAMENTE el trigger del servidor onCarpetaCompletaCheck (fuente única, reu
@@ -176,7 +175,7 @@ export function DocumentosTab({ postulacion }: Props) {
                 Formato DGH-F-04 v5
               </p>
               <p className="text-[12px] text-text-muted mt-0.5 tabular-nums">
-                {verificadosObligatorios} de {totalReq} obligatorios verificados
+                {verificadosObligatorios} de {totalReq} obligatorios listos
               </p>
             </div>
           </div>
@@ -255,7 +254,7 @@ export function DocumentosTab({ postulacion }: Props) {
       {secciones.map((seccion) => {
         const itemsSeccion = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => c.seccion === seccion);
         const verifSeccion = itemsSeccion.filter(
-          (c) => c.responsable !== 'gh' && docsPorClave.get(c.clave)?.estado === 'verificado',
+          (c) => c.responsable !== 'gh' && docCarpetaListo(docsPorClave.get(c.clave)?.estado),
         ).length;
         const obligatoriosSeccion = itemsSeccion.filter(
           (c) => !c.opcional && c.responsable !== 'gh',
@@ -433,6 +432,15 @@ function DocumentoRow({
   }
 
   async function marcarNoAplica() {
+    // Marcar un OBLIGATORIO como "no aplica" es deliberado (reu 18-ago: habilitado
+    // para reintegros donde el documento ya está en archivo) → pedir confirmación.
+    if (
+      !catalogo.opcional &&
+      !window.confirm(
+        `"${catalogo.nombre}" es un documento OBLIGATORIO. Márcalo "no aplica" solo si de verdad no aplica para este integrante (p. ej. un reintegro con el documento ya en archivo). ¿Continuar?`,
+      )
+    )
+      return;
     const obs = window.prompt('Razón (opcional):') ?? '';
     if (doc) {
       await actualizar('documentos_candidato', doc.id, {
@@ -665,8 +673,7 @@ function DocumentoRow({
               onChange={subirArchivo}
               accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
             />
-            {catalogo.opcional &&
-              estado === 'pendiente' &&
+            {estado === 'pendiente' &&
               (catalogo.clave === 'certificado_medico' ? (
                 <button
                   onClick={marcarTemporalSinExamenes}
@@ -674,14 +681,14 @@ function DocumentoRow({
                 >
                   Contratación temporal ·<br />no aplica exámenes
                 </button>
-              ) : (
+              ) : catalogo.responsable !== 'gh' ? (
                 <button
                   onClick={marcarNoAplica}
                   className="text-[11px] text-text-muted hover:text-text-strong hover:underline"
                 >
                   No aplica
                 </button>
-              ))}
+              ) : null)}
           </>
         )}
         {estado === 'entregado' && (

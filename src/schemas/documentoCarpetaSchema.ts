@@ -297,6 +297,50 @@ export function totalObligatorios(responsable?: 'cyd' | 'gh'): number {
   }).length;
 }
 
+/**
+ * Un documento del checklist cuenta como "listo" (verde) si está `verificado` o
+ * marcado `no_aplica`. `entregado` (subido, sin verificar) y `pendiente` NO cuentan.
+ *
+ * Reu 18-ago-2026: antes cada pantalla contaba distinto — la pantalla Carpetas
+ * sumaba `no_aplica` (→ 100%) y la pestaña Documentos solo `verificado` (→ 50%),
+ * así que la MISMA carpeta salía 100% para una persona y 50% para otra. Esta es la
+ * ÚNICA fuente de verdad de la completitud; la usan CarpetasPage y DocumentosTab.
+ */
+export function docCarpetaListo(estado: string | null | undefined): boolean {
+  return estado === 'verificado' || estado === 'no_aplica';
+}
+
+export interface CompletitudCarpeta {
+  /** Parte de Cultura y Desarrollo (gobierna la entrega/aprobación). */
+  cyd: { listos: number; total: number; porcentaje: number };
+  /** Parte de Gestión Humana (contrato + afiliaciones; se muestra aparte). */
+  gh: { listos: number; total: number; porcentaje: number };
+  /** Nombres de los obligatorios de GH que aún faltan. */
+  pendientesGH: string[];
+}
+
+/**
+ * Completitud de la carpeta en dos niveles (CyD gobierna, GH aparte) con la regla
+ * única `docCarpetaListo`. `estadoDe(clave)` devuelve el estado del documento de
+ * esa clave (o undefined si no existe todavía).
+ */
+export function calcularCompletitudCarpeta(
+  estadoDe: (clave: string) => string | null | undefined,
+): CompletitudCarpeta {
+  const oblCyD = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional && !esResponsableGH(c));
+  const oblGH = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional && esResponsableGH(c));
+  const pct = (v: number, t: number) => (t > 0 ? Math.round((v / t) * 100) : 100);
+  const contar = (arr: readonly DocumentoCarpetaCatalogo[]) =>
+    arr.filter((c) => docCarpetaListo(estadoDe(c.clave))).length;
+  const lc = contar(oblCyD);
+  const lg = contar(oblGH);
+  return {
+    cyd: { listos: lc, total: oblCyD.length, porcentaje: pct(lc, oblCyD.length) },
+    gh: { listos: lg, total: oblGH.length, porcentaje: pct(lg, oblGH.length) },
+    pendientesGH: oblGH.filter((c) => !docCarpetaListo(estadoDe(c.clave))).map((c) => c.nombre),
+  };
+}
+
 // ─── Documento individual del candidato (un row por ítem del checklist) ───
 
 /** Un archivo dentro de un ítem que admite varios (catalogo.multiple). */

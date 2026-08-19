@@ -64,6 +64,13 @@ export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (re
     const postEnExamenes =
       !!postSnap && String(postSnap.data()?.estado ?? '') === 'en_examenes_medicos';
 
+    // Leer la vacante ANTES de escribir (reads primero en una transacción). Evita
+    // reabrir una vacante ya cerrada por otro contratado si el examen de un
+    // candidato del pool / reintegro se resuelve después del cierre (bug "cerrado
+    // sale activo", reu 18-ago).
+    const vacRef = continua && vacanteId ? db.collection('vacantes').doc(vacanteId) : null;
+    const vacSnap = vacRef && postEnExamenes ? await tx.get(vacRef) : null;
+
     tx.update(exRef, {
       estado: continua ? 'apto' : 'no_apto',
       apto: continua,
@@ -80,8 +87,12 @@ export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (re
         ultima_transicion_estado: ahora,
         [`marcas.${continua ? 'apto_medico_en' : 'descartado_examenes_medicos_en'}`]: ahora,
       });
-      if (continua && vacanteId) {
-        tx.update(db.collection('vacantes').doc(vacanteId), { estado: 'en_contratacion' });
+      if (
+        vacRef &&
+        vacSnap &&
+        !['cerrada', 'desierta', 'cancelada'].includes(String(vacSnap.data()?.estado ?? ''))
+      ) {
+        tx.update(vacRef, { estado: 'en_contratacion' });
       }
     }
   });
