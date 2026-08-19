@@ -5,6 +5,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { emailAnalistaDePostulacion } from '../notificaciones/emailAnalista';
+import { leerConfigExamenes } from '../examenes/configExamenes';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -155,10 +156,16 @@ export const enviarPruebaCandidato = onCall(
     // Las respuestas del candidato deben llegar al analista del proceso, no a Steve (FROM).
     const replyToAnalista = await emailAnalistaDePostulacion(postulacionId);
 
+    // Modo prueba (demos): redirige el correo al buzón de prueba para NO enviarle la
+    // prueba a un candidato real (misma config que exámenes — audit 18-ago).
+    const cfgPrueba = await leerConfigExamenes();
+    const to =
+      cfgPrueba.modo_prueba && cfgPrueba.redirige_candidato ? cfgPrueba.correo_prueba : [email];
+
     try {
       await enviarConGmail({
         from: FROM,
-        to: [email],
+        to,
         subject: `${plural ? 'Pruebas' : 'Prueba'} del proceso de atracción · ${cargo}`,
         html,
         replyTo: replyToAnalista || undefined,

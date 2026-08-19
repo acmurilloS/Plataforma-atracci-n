@@ -155,6 +155,19 @@ export const editarDatosCandidato = onCall({ region: 'us-central1' }, async (req
     }
   }
 
+  // 2c) Refresca el 2º factor (cédula) en los tokens del portal del candidato. Sin
+  // esto, editar la cédula DESPUÉS de enviar el link deja al candidato BLOQUEADO de
+  // su portal: la cédula real ya no calza con el snapshot del token (audit 18-ago).
+  if (docNumCambio) {
+    const toks = await db
+      .collection('portal_candidato_tokens')
+      .where('candidato_id', '==', candidatoId)
+      .get();
+    for (const t of toks.docs) {
+      batch.update(t.ref, { documento_numero: limpio.documento_numero });
+    }
+  }
+
   // 3) Auditoría append-only.
   const evRef = db.collection('eventos').doc();
   batch.set(evRef, {

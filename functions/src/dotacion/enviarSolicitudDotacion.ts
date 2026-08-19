@@ -252,10 +252,18 @@ export async function enviarSolicitudDotacionCore(opts: {
   // Acuse a la analista de que la dotación SÍ se envió (reu 18-ago: "no sabemos si
   // se envía o no"). La notificación da campana in-app + correo automático
   // (onNotificacionCreate). Cubre tanto la vía manual como la automática (por tallas).
-  if (analistaUid) {
+  // Si la vacante no tiene analista, el acuse cae al primer coordinador vía email_a
+  // (onNotificacionCreate resuelve el correo del destinatario explícito) para que NO
+  // se pierda en silencio (audit 18-ago).
+  const acuseDest = analistaUid
+    ? { destinatario_uid: analistaUid }
+    : coordEmails[0]
+      ? { destinatario_uid: '', email_a: coordEmails[0], email_a_nombre: 'Coordinación' }
+      : null;
+  if (acuseDest) {
     try {
       await db.collection('notificaciones').add({
-        destinatario_uid: analistaUid,
+        ...acuseDest,
         tipo: 'dotacion_enviada',
         titulo: 'Dotación solicitada',
         mensaje: `Se envió la solicitud de dotación de ${nombre || 'el integrante'}${
@@ -270,7 +278,7 @@ export async function enviarSolicitudDotacionCore(opts: {
         creado_por: 'system',
       });
     } catch (e) {
-      logger.warn('enviarSolicitudDotacion · no se pudo notificar a la analista', {
+      logger.warn('enviarSolicitudDotacion · no se pudo crear el acuse de dotación', {
         postulacionId,
         msg: e instanceof Error ? e.message : String(e),
       });
