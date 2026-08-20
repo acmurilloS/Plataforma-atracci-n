@@ -63,6 +63,8 @@ export { enviarOrdenExamenCandidato } from './examenes/enviarOrdenExamenCandidat
 export { avisarGestoresTemporalSinExamenes } from './examenes/avisarGestoresTemporalSinExamenes';
 // El gestor SST sube el resultado + novedad + acta (reu Karen 09-jul).
 export { registrarResultadoExamen } from './examenes/registrarResultadoExamen';
+// Reconciliación one-shot: examen -> no_apto para descartados por exámenes (reu 19-ago).
+export { reconciliarExamenesDescartados } from './examenes/reconciliarExamenesDescartados';
 // Don Diego (C&D) decide continúa / no-continúa una novedad (reu Karen 09-jul).
 export { decisionCulturaExamen } from './examenes/decisionCulturaExamen';
 // GH autoriza el envío a gestores de una persona en condición de discapacidad (reu Karen jul-2026).

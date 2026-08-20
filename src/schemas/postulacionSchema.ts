@@ -46,6 +46,10 @@ export const estadoPostulacion = z.enum([
 
   // Entrevista analista (paso 8)
   'entrevistado_analista',
+  // Descarte del analista en la entrevista (reu Karen 19-ago): opción explícita
+  // para cuando el analista descarta al candidato tras entrevistarlo, distinta del
+  // filtro duro documental. Terminal.
+  'descartado_entrevista_analista',
 
   // Referencias (paso 9)
   'referencias_validadas',

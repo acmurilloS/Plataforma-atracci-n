@@ -1,6 +1,8 @@
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { db } from '../utils/admin';
 import {
   enviarAgradecimientoCore,
   mensajeAgradecimientoDefault,
@@ -18,8 +20,40 @@ const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 const ESTADOS_AGRADECIMIENTO_AUTO = [
   'filtrado_no_cumple',
   'descartado_por_lider',
+  'descartado_entrevista_analista',
   'descartado_examenes_medicos',
 ];
+
+/**
+ * Sincroniza el examen médico a 'no_apto' cuando la postulación se marca
+ * `descartado_examenes_medicos` desde el desplegable de estado (reu Karen 19-ago).
+ * El desplegable solo cambia la postulación; la pantalla de Exámenes cuenta por el
+ * estado del EXAMEN, así que sin esto la persona quedaba en "Revisión C&D" en vez
+ * de "No aptos". No pisa un examen ya decidido (apto/no_apto). Best-effort.
+ */
+async function sincronizarExamenNoApto(postulacionId: string, uid: string): Promise<void> {
+  const q = await db
+    .collection('examenes_medicos')
+    .where('postulacion_id', '==', postulacionId)
+    .limit(1)
+    .get();
+  if (q.empty) return;
+  const ref = q.docs[0].ref;
+  const estadoEx = String(q.docs[0].data()?.estado ?? '');
+  if (estadoEx === 'no_apto' || estadoEx === 'apto') return; // ya decidido, no tocar
+  await ref.update({
+    estado: 'no_apto',
+    decision_cd: 'no_continua',
+    sincronizado_desde_descarte: true,
+    decidido_en: FieldValue.serverTimestamp(),
+    actualizado_en: FieldValue.serverTimestamp(),
+    actualizado_por: uid || 'sistema_sync_descarte',
+  });
+  logger.info('[examen-sync] examen -> no_apto por descarte de postulación', {
+    postulacionId,
+    estadoPrevio: estadoEx,
+  });
+}
 
 /**
  * onPostulacionDescartada · al pasar una postulación a un estado de descarte,
@@ -43,6 +77,22 @@ export const onPostulacionDescartada = onDocumentUpdated(
 
     const estado = String(after.estado ?? '');
     if (String(before.estado ?? '') === estado) return; // el estado no cambió
+
+    // #2 (reu Karen 19-ago): si el descarte es por exámenes, sincroniza el doc del
+    // examen a 'no_apto' para que la pantalla de Exámenes lo cuente en "No aptos"
+    // (y no en "Revisión C&D"). Va ANTES del corte del agradecimiento para no
+    // depender de si ya se agradeció. Best-effort.
+    if (estado === 'descartado_examenes_medicos') {
+      try {
+        await sincronizarExamenNoApto(event.params.id, String(after.actualizado_por ?? ''));
+      } catch (e) {
+        logger.error('[examen-sync] falló', {
+          id: event.params.id,
+          msg: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
     if (!ESTADOS_AGRADECIMIENTO_AUTO.includes(estado)) return; // no es un descarte auto
     if (after.agradecimiento_enviado_en) return; // ya se envió (manual o auto previo)
 

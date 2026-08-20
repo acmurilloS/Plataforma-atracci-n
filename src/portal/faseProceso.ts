@@ -104,6 +104,7 @@ const MAPA_ESTADO_FASE: Record<EstadoPostulacion, ClaveFase | 'finalizado'> = {
   en_terna: 'entrevistas',
   seleccionado_por_lider: 'entrevistas',
   descartado_por_lider: 'finalizado',
+  descartado_entrevista_analista: 'finalizado',
   en_examenes_medicos: 'examenes',
   descartado_examenes_medicos: 'finalizado',
   en_contratacion: 'documentos',

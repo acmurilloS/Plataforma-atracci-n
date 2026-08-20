@@ -27,7 +27,7 @@ import type {
 import { estadoPostulacion, fuentePostulacion } from '../../schemas';
 import { actualizarResultadoCandidato } from '../../utils/actualizarResultadoCandidato';
 import { Button, Card, Pill } from '../../components/brand';
-import { FaseCandidato } from '../../components/postulaciones/FaseCandidato';
+import { FaseCandidato, etiquetaEstado } from '../../components/postulaciones/FaseCandidato';
 import { RepostularModal } from '../../components/postulaciones/RepostularModal';
 import { MarcarDiscapacidadModal } from '../../components/postulaciones/MarcarDiscapacidadModal';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
@@ -38,6 +38,7 @@ import { cn } from '../../utils/cn';
 // TernaPage; el contratado lo maneja la callable aprobarCarpeta. Ver B6.
 const RESULTADO_POR_ESTADO_TERMINAL: Partial<Record<EstadoPostulacion, ResultadoUltimaPostulacion>> = {
   filtrado_no_cumple: 'filtrado_no_cumple',
+  descartado_entrevista_analista: 'filtrado_no_cumple',
   pre_entrevistado_no_interesado: 'desistio',
   desistio_candidato: 'desistio',
   descartado_examenes_medicos: 'no_apto_medico',
@@ -722,7 +723,7 @@ export default function PostulacionesPage() {
                         (s !== 'repostulado' || p.estado === 'repostulado'),
                     ).map((s) => (
                       <option key={s} value={s}>
-                        {s.replace(/_/g, ' ')}
+                        {etiquetaEstado(s)}
                       </option>
                     ))}
                   </select>
@@ -883,6 +884,7 @@ function marcaParaEstado(estado: EstadoPostulacion): string | null {
     pruebas_enviadas: 'pruebas_enviadas_en',
     pruebas_completadas: 'pruebas_completadas_en',
     entrevistado_analista: 'entrevistado_analista_en',
+    descartado_entrevista_analista: 'descartado_entrevista_analista_en',
     referencias_validadas: 'referencias_validadas_en',
     en_terna: 'en_terna_en',
     seleccionado_por_lider: 'decidido_en',

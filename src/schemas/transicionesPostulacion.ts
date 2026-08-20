@@ -38,8 +38,18 @@ const T: Record<EstadoPostulacion, readonly EstadoPostulacion[]> = {
   pruebas_enviadas: ['pruebas_completadas', 'filtrado_no_cumple', 'desistio_candidato'],
   pruebas_completadas: ['entrevistado_analista', 'filtrado_no_cumple', 'desistio_candidato'],
 
-  entrevistado_analista: ['referencias_validadas', 'filtrado_no_cumple', 'desistio_candidato'],
-  referencias_validadas: ['en_terna', 'filtrado_no_cumple', 'desistio_candidato'],
+  entrevistado_analista: [
+    'referencias_validadas',
+    'filtrado_no_cumple',
+    'descartado_entrevista_analista',
+    'desistio_candidato',
+  ],
+  referencias_validadas: [
+    'en_terna',
+    'filtrado_no_cumple',
+    'descartado_entrevista_analista',
+    'desistio_candidato',
+  ],
 
   en_terna: ['seleccionado_por_lider', 'en_examenes_medicos', 'descartado_por_lider', 'desistio_candidato'],
   // Loop paso 14: el analista puede reabrir un descartado al pool para considerarlo en
@@ -49,6 +59,9 @@ const T: Record<EstadoPostulacion, readonly EstadoPostulacion[]> = {
   // Al aprobar al líder, la solicitud de exámenes se dispara de inmediato, así que
   // el candidato entra directo a "en exámenes médicos" (visible en el embudo).
   seleccionado_por_lider: ['en_examenes_medicos', 'en_contratacion', 'desistio_candidato'],
+
+  // Descarte del analista en la entrevista — terminal (como filtrado_no_cumple).
+  descartado_entrevista_analista: [],
 
   en_examenes_medicos: ['en_contratacion', 'descartado_examenes_medicos', 'desistio_candidato'],
 

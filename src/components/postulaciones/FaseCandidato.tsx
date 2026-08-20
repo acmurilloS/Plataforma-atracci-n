@@ -25,6 +25,7 @@ const ESTADO_LABEL: Record<EstadoPostulacion, string> = {
   pruebas_enviadas: 'Pruebas enviadas',
   pruebas_completadas: 'Pruebas completadas',
   entrevistado_analista: 'Entrevistado (analista)',
+  descartado_entrevista_analista: 'Descartado en entrevista por Analista',
   referencias_validadas: 'Referencias validadas',
   en_terna: 'En terna',
   seleccionado_por_lider: 'Seleccionado por líder',
@@ -41,6 +42,7 @@ const DESCARTES = new Set<string>([
   'filtrado_no_cumple',
   'pre_entrevistado_no_interesado',
   'descartado_por_lider',
+  'descartado_entrevista_analista',
   'descartado_examenes_medicos',
 ]);
 
