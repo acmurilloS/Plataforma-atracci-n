@@ -22,6 +22,8 @@ export { onVacanteCreate } from './vacantes/onVacanteCreate';
 export { asignarAnalista } from './vacantes/asignarAnalista';
 // Eliminar una vacante completa (solo admin) con cascada + auditoría.
 export { eliminarVacante } from './vacantes/eliminarVacante';
+// Editar la identificación de la vacante (empresa/sede/unidad/tipo) — líder creador o staff.
+export { editarDatosVacante } from './vacantes/editarDatosVacante';
 // Repostular un candidato a otra vacante activa sin re-inscribirlo (reu 26-jun).
 export { repostularCandidato } from './postulaciones/repostularCandidato';
 export { onCandidatoCreate } from './candidatos/onCandidatoCreate';

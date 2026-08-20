@@ -25,6 +25,7 @@ import { puedeVerProceso } from '../utils/accesoRutas';
 import { useVacantes } from '../hooks/useVacantes';
 import { useMutacion } from '../hooks/useMutacion';
 import { SelectorCargo } from '../components/vacantes/SelectorCargo';
+import { EditarIdentificacionModal } from '../components/vacantes/EditarIdentificacionModal';
 import { useFestivosTodos } from '../hooks/useCatalogos';
 import { functions, db } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
@@ -65,7 +66,7 @@ const ESTADO_TONO: Record<string, PillTono> = {
 export default function VacanteDetallePage() {
   const { id } = useParams<{ id: string }>();
   const { suscribirVacante } = useVacantes();
-  const { rol } = useAuth();
+  const { rol, user } = useAuth();
   const festivos = useFestivosTodos();
   const [vac, setVac] = useState<VacanteDoc | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -78,6 +79,19 @@ export default function VacanteDetallePage() {
 
   const esStaffReporte =
     rol === 'analista' || rol === 'coordinador' || rol === 'gh' || rol === 'admin';
+
+  // ── Editar identificación (empresa/sede/unidad/tipo) ────────────────────────
+  // La puede corregir el STAFF o el LÍDER CREADOR de la vacante (reu líder 19-ago).
+  const [editarIdentAbierto, setEditarIdentAbierto] = useState(false);
+  const esCreador = !!vac && !!user && vac.lider_uid === user.uid;
+  // El líder no la edita si el proceso ya avanzó (la callable lo bloquea igual).
+  const bloqueadoLider = vac
+    ? ['terna_enviada', 'seleccionado', 'en_contratacion', 'cerrada', 'desierta', 'cancelada'].includes(
+        vac.estado,
+      )
+    : true;
+  const terminal = vac ? ['cerrada', 'desierta', 'cancelada'].includes(vac.estado) : true;
+  const puedeEditarIdent = !terminal && (esStaffReporte || (esCreador && !bloqueadoLider));
   // Coordinación (Karen / Mari) + admin: únicos que editan condiciones y
   // consecutivo cuando cambian las condiciones (petición Karen, jul-2026).
   const esCoord = rol === 'coordinador' || rol === 'admin';
@@ -338,6 +352,10 @@ export default function VacanteDetallePage() {
         )}
       </div>
 
+      {editarIdentAbierto && vac && (
+        <EditarIdentificacionModal vacante={vac} onClose={() => setEditarIdentAbierto(false)} />
+      )}
+
       {editarCargoAbierto && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
@@ -508,9 +526,19 @@ export default function VacanteDetallePage() {
 
       {/* ─── Empresa y cargo ─────────────────────────────────────── */}
       <section>
-        <SectionEyebrow icon={<Layers size={12} strokeWidth={1.75} />}>
-          Identificación
-        </SectionEyebrow>
+        <div className="flex items-center justify-between gap-3">
+          <SectionEyebrow icon={<Layers size={12} strokeWidth={1.75} />}>
+            Identificación
+          </SectionEyebrow>
+          {puedeEditarIdent && (
+            <button
+              onClick={() => setEditarIdentAbierto(true)}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800"
+            >
+              Editar
+            </button>
+          )}
+        </div>
         <Card padding="lg" className="mt-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
             <Dato label="Empresa" valor={`${vac.empresa_nombre} (${vac.empresa_codigo})`} />
