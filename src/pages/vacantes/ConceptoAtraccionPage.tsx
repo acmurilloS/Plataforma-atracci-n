@@ -67,7 +67,11 @@ export default function ConceptoAtraccionPage() {
   const concepto = conceptos[0] ?? null;
   // El líder llega aquí desde la notificación "Concepto listo": ve la hoja en
   // modo solo-lectura (sin editar/guardar/enviar), solo para revisar e imprimir.
-  const esLider = rol === 'lider';
+  // Diego (C&D, rol gh) también es "líder solicitante" de los cargos que le
+  // reportan; si es el DUEÑO de la vacante entra igual que un líder (reu 26-ago:
+  // "le comparto el concepto y no lo deja ver nada").
+  const esDuenoVacante = !!user && !!vacante && vacante.lider_uid === user.uid;
+  const esLider = rol === 'lider' || (rol === 'gh' && esDuenoVacante);
 
   const [filas, setFilas] = useState<CandidatoConcepto[]>([]);
   const [guardando, setGuardando] = useState(false);
@@ -272,6 +276,19 @@ export default function ConceptoAtraccionPage() {
     return (
       <div className="max-w-5xl mx-auto px-6 py-12 text-text-muted text-sm">
         Cargando vacante…
+      </div>
+    );
+
+  // Un gh (C&D) SOLO puede ver el concepto de las vacantes que él mismo solicitó
+  // (es el líder). Para las demás no navega vacantes (reu Karen 09-jul).
+  if (rol === 'gh' && !esDuenoVacante)
+    return (
+      <div className="max-w-md mx-auto px-6 py-16 text-center space-y-2">
+        <h1 className="text-[18px] font-semibold text-text-strong">Sin acceso a este concepto</h1>
+        <p className="text-[13px] text-text-muted leading-[1.55]">
+          Este concepto pertenece a una vacante que no solicitaste tú. Solo puedes revisar los
+          conceptos de los cargos que reportan a tu área.
+        </p>
       </div>
     );
 

@@ -201,10 +201,12 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* gh (Diego/C&D) entra al concepto de SUS vacantes: la página verifica
+                que sea el líder solicitante (reu 26-ago). */}
             <Route
               path="/vacantes/:id/concepto-atraccion"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={[...ROLES_PROCESO, 'gh']}>
                   <ConceptoAtraccionPage />
                 </ProtectedRoute>
               }

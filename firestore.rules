@@ -67,6 +67,17 @@ service cloud.firestore {
       return interno() && (isLider() || isAnalista() || isCoord() || isAdmin());
     }
 
+    // Un interno que es el LÍDER SOLICITANTE de una vacante puede leer el pipeline
+    // de ESA vacante aunque su rol no esté en leePipeline (reu 26-ago: a Diego, C&D
+    // /gh, le comparten el concepto de los cargos que le reportan y "no lo deja ver
+    // nada"). Scoped por get() a su propia vacante, no abre todo el pipeline a GH.
+    function esLiderDeVacante(vacanteId) {
+      return interno()
+        && vacanteId is string
+        && vacanteId != ''
+        && get(/databases/$(database)/documents/vacantes/$(vacanteId)).data.lider_uid == request.auth.uid;
+    }
+
     // CARPETA del integrante: SAGRILAFT, datos básicos (cuenta bancaria, salud,
     // hijos), carpeta digital. Exactamente los roles de /carpetas. El líder NO
     // entra: decide sobre la terna, no gestiona la vinculación (sus tabs de
@@ -301,7 +312,7 @@ service cloud.firestore {
       allow write: if staff() || isAnalista() || isDocumentacion();
     }
     match /informes/{id} {
-      allow read: if leePipeline();
+      allow read: if leePipeline() || esLiderDeVacante(resource.data.vacante_id);
       allow write: if staff() || isAnalista();
     }
     match /ternas/{id} {
@@ -431,7 +442,7 @@ service cloud.firestore {
     }
 
     match /conceptos_atraccion/{id} {
-      allow read: if leePipeline();
+      allow read: if leePipeline() || esLiderDeVacante(resource.data.vacante_id);
       allow create: if isAnalista() || staff();
       allow update: if isAnalista() || staff();
       allow delete: if false;
