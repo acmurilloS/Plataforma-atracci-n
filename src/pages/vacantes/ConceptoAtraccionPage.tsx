@@ -65,13 +65,13 @@ export default function ConceptoAtraccionPage() {
   const { user, perfil, rol } = useAuth();
 
   const concepto = conceptos[0] ?? null;
-  // El líder llega aquí desde la notificación "Concepto listo": ve la hoja en
-  // modo solo-lectura (sin editar/guardar/enviar), solo para revisar e imprimir.
-  // Diego (C&D, rol gh) también es "líder solicitante" de los cargos que le
-  // reportan; si es el DUEÑO de la vacante entra igual que un líder (reu 26-ago:
-  // "le comparto el concepto y no lo deja ver nada").
+  // El líder "puro" (rol lider) ve la hoja en solo-lectura, solo para revisar/imprimir.
   const esDuenoVacante = !!user && !!vacante && vacante.lider_uid === user.uid;
-  const esLider = rol === 'lider' || (rol === 'gh' && esDuenoVacante);
+  // Diego (C&D, rol gh) es "líder solicitante" de los cargos que le reportan. Al ser
+  // el dueño de la vacante NO solo la ve: PUEDE editar/intervenir el concepto como el
+  // equipo de Atracción (reu 26-ago). No ve "Enviar al líder" (él ES el líder).
+  const esGhDueno = rol === 'gh' && esDuenoVacante;
+  const esLider = rol === 'lider';
 
   const [filas, setFilas] = useState<CandidatoConcepto[]>([]);
   const [guardando, setGuardando] = useState(false);
@@ -306,7 +306,11 @@ export default function ConceptoAtraccionPage() {
         <div className="mt-6 flex items-start justify-between flex-wrap gap-6">
           <div>
             <Pill tono="brand" dot>
-              {esLider ? 'Revisión · Líder' : 'Pasos 11 – 12 · Analista'}
+              {esLider
+                ? 'Revisión · Líder'
+                : esGhDueno
+                  ? 'Revisión · Líder solicitante'
+                  : 'Pasos 11 – 12 · Analista'}
             </Pill>
             <h1
               className="mt-4 text-[44px] font-light leading-[1.05] tracking-[-0.035em] text-text-strong"
@@ -317,7 +321,9 @@ export default function ConceptoAtraccionPage() {
             <p className="mt-3 text-[14px] text-text-muted leading-[1.55] max-w-xl">
               {esLider
                 ? 'Concepto de atracción de los integrantes finalistas, preparado por el equipo de Atracción. Revísalo y, si lo necesitas, expórtalo a PDF.'
-                : 'Formato oficial VIDA-F-03 v0. La tabla se llena sola con lo que escribiste en los Informes (paso 11); ajusta lo que falte, guarda, envíaselo al líder o expórtalo a PDF.'}
+                : esGhDueno
+                  ? 'Concepto de atracción de los finalistas. Revísalo y, si necesitas intervenir, ajusta los campos y guarda tus cambios; también puedes exportarlo a PDF.'
+                  : 'Formato oficial VIDA-F-03 v0. La tabla se llena sola con lo que escribiste en los Informes (paso 11); ajusta lo que falte, guarda, envíaselo al líder o expórtalo a PDF.'}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -351,15 +357,18 @@ export default function ConceptoAtraccionPage() {
                 >
                   {guardando ? 'Guardando…' : 'Guardar'}
                 </Button>
-                <Button
-                  onClick={enviarAlLider}
-                  disabled={enviandoLider || guardando}
-                  loading={enviandoLider}
-                  variant="brand-primary"
-                  icon={<Send size={13} strokeWidth={1.75} />}
-                >
-                  {enviandoLider ? 'Enviando…' : 'Enviar al líder'}
-                </Button>
+                {/* El gh dueño ES el líder → no se envía a sí mismo. */}
+                {!esGhDueno && (
+                  <Button
+                    onClick={enviarAlLider}
+                    disabled={enviandoLider || guardando}
+                    loading={enviandoLider}
+                    variant="brand-primary"
+                    icon={<Send size={13} strokeWidth={1.75} />}
+                  >
+                    {enviandoLider ? 'Enviando…' : 'Enviar al líder'}
+                  </Button>
+                )}
               </>
             )}
             <Button
