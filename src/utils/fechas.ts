@@ -31,6 +31,19 @@ export function esDiaHabil(fecha: Date, festivosIsoSet: Set<string>): boolean {
   return !esFinDeSemana(fecha) && !esFestivo(fecha, festivosIsoSet);
 }
 
+/**
+ * Peso del día para el cálculo de días hábiles de los PROCESOS (reu Karen 19-ago):
+ * lunes–viernes = 1 día, SÁBADO = 0.5 (media jornada, se trabaja hasta las 12 pm),
+ * domingo y festivos colombianos = 0. Así el indicador refleja la jornada real.
+ */
+export function pesoDiaHabil(fecha: Date, festivosIsoSet: Set<string>): number {
+  if (esFestivo(fecha, festivosIsoSet)) return 0;
+  const d = aZonaBogota(fecha).getDay();
+  if (d === 0) return 0; // domingo
+  if (d === 6) return 0.5; // sábado = media jornada
+  return 1; // lunes a viernes
+}
+
 export function sumarDiasHabiles(desde: Date, n: number, festivosIsoSet: Set<string>): Date {
   const r = new Date(desde);
   r.setHours(0, 0, 0, 0);
@@ -43,10 +56,13 @@ export function sumarDiasHabiles(desde: Date, n: number, festivosIsoSet: Set<str
 }
 
 /**
- * Cuenta los días hábiles (lun–vie, excluyendo festivos colombianos) entre dos
- * fechas, en el intervalo (desde, hasta] — empieza a contar el día siguiente a
- * `desde`, simétrico con `sumarDiasHabiles`. Si `hasta <= desde`, devuelve 0.
- * Usado para el ANS de terna y los días transcurridos de una vacante.
+ * Cuenta los días hábiles entre dos fechas, en el intervalo (desde, hasta] —
+ * empieza a contar el día siguiente a `desde`, simétrico con `sumarDiasHabiles`.
+ * Si `hasta <= desde`, devuelve 0. Usado para el ANS de terna y los días
+ * transcurridos de una vacante.
+ *
+ * Ponderación (reu Karen 19-ago): lunes–viernes = 1, SÁBADO = 0.5 (media jornada),
+ * domingo/festivo = 0 → el resultado puede ser múltiplo de 0.5 (ej. 5.5 días).
  */
 export function diasHabilesEntre(desde: Date, hasta: Date, festivosIsoSet: Set<string>): number {
   const cursor = new Date(desde);
@@ -57,9 +73,10 @@ export function diasHabilesEntre(desde: Date, hasta: Date, festivosIsoSet: Set<s
   let count = 0;
   while (cursor < fin) {
     cursor.setDate(cursor.getDate() + 1);
-    if (esDiaHabil(cursor, festivosIsoSet)) count += 1;
+    count += pesoDiaHabil(cursor, festivosIsoSet);
   }
-  return count;
+  // Redondeo a media jornada para evitar ruido de coma flotante (ya son múltiplos de 0.5).
+  return Math.round(count * 2) / 2;
 }
 
 export function fechaInputValue(fecha: Date | null): string {
