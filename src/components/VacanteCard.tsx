@@ -5,6 +5,8 @@ import { es } from 'date-fns/locale';
 import { cn } from '../utils/cn';
 import { Card, Pill, type PillTono } from './brand';
 import { EliminarVacanteAdmin } from './vacantes/EliminarVacanteAdmin';
+import { diasTranscurridos, aperturaVacante } from '../utils/reportesVacantes';
+import { diasHabilesEntre } from '../utils/fechas';
 import type { VacanteDoc } from '../schemas';
 
 /**
@@ -111,25 +113,27 @@ function semaforoDias(dias: number): { tono: PillTono; etiqueta: string } {
 
 interface Props {
   vacante: VacanteDoc;
+  /** Set de festivos (ISO) para contar en DÍAS HÁBILES, igual que el dashboard. */
+  festivos: Set<string>;
 }
 
-export function VacanteCard({ vacante }: Props) {
+export function VacanteCard({ vacante, festivos }: Props) {
   const faseIdx = faseDeEstado(vacante.estado);
   const resp = responsableDeEstado(vacante);
-  const creadoEn = vacante.creado_en?.toDate?.() ?? new Date();
-  const dias = Math.floor((Date.now() - creadoEn.getTime()) / (1000 * 60 * 60 * 24));
+  // Apertura efectiva (fecha_activacion de procesos migrados, si existe).
+  const creadoEn = aperturaVacante(vacante) ?? new Date();
+  // Días HÁBILES desde la apertura (excluye sábados, domingos y festivos), igual
+  // que el dashboard y los Excel — antes contaba días calendario y no cuadraba
+  // (reu Karen 19-ago). Respeta la fecha de cierre si la vacante ya cerró.
+  const dias = diasTranscurridos(vacante, festivos, new Date()) ?? 0;
   const relativo = formatDistanceToNow(creadoEn, { locale: es, addSuffix: true });
   const terminada = ['cerrada', 'desierta', 'cancelada'].includes(vacante.estado);
   const faseActiva = faseIdx >= 0 ? FASES[faseIdx] : FASES[0];
   const sem = semaforoDias(dias);
-  // Duración TOTAL del proceso (apertura → cierre) para las vacantes cerradas.
-  // Días calendario = lo más intuitivo para "cuánto duró". Guarda contra cerrada_en
-  // null (docs viejos o instante entre escritura y confirmación del serverTimestamp).
+  // Duración del proceso (apertura → cierre) para las vacantes cerradas, también
+  // en días hábiles para que cuadre con el semáforo y el dashboard.
   const cerradaEn = vacante.cerrada_en?.toDate?.() ?? null;
-  const diasProceso =
-    terminada && cerradaEn
-      ? Math.max(0, Math.round((cerradaEn.getTime() - creadoEn.getTime()) / (1000 * 60 * 60 * 24)))
-      : null;
+  const diasProceso = terminada && cerradaEn ? diasHabilesEntre(creadoEn, cerradaEn, festivos) : null;
 
   const criticidadTono: PillTono =
     vacante.criticidad === 'Alta'
@@ -254,7 +258,7 @@ export function VacanteCard({ vacante }: Props) {
               <Pill tono="neutral" className="mt-1 !text-[9px] !py-0 !px-1.5">
                 {diasProceso === 0
                   ? 'Cerrada el mismo día'
-                  : `Duró ${diasProceso} ${diasProceso === 1 ? 'día' : 'días'}`}
+                  : `Duró ${diasProceso} ${diasProceso === 1 ? 'día hábil' : 'días hábiles'}`}
               </Pill>
             ) : null}
           </div>

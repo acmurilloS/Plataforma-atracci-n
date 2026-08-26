@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Building2, FolderOpen } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
-import { useUnidadesDeSede } from '../../hooks/useCatalogos';
+import { useUnidadesDeSede, useFestivosTodos } from '../../hooks/useCatalogos';
 import type { VacanteDoc } from '../../schemas';
 import { Card, Pill } from '../../components/brand';
 import { VacanteCard } from '../../components/VacanteCard';
@@ -22,6 +22,7 @@ export default function MisUnidadesPage() {
   // IDs de unidad asignadas (Firestore 'in' admite máx 30; un gerente tiene pocas).
   const unidades = useMemo(() => (perfil?.unidades_gerente ?? []).slice(0, 30), [perfil]);
   const { unidades: catalogo } = useUnidadesDeSede();
+  const festivos = useFestivosTodos();
 
   const nombresUnidades = useMemo(() => {
     const byId = new Map(catalogo.map((u) => [u.id, u.nombre]));
@@ -103,7 +104,7 @@ export default function MisUnidadesPage() {
           </p>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activas.map((v) => (
-              <VacanteCard key={v.id} vacante={v} />
+              <VacanteCard key={v.id} vacante={v} festivos={festivos} />
             ))}
           </div>
         </section>
@@ -116,7 +117,7 @@ export default function MisUnidadesPage() {
           </p>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {cerradas.map((v) => (
-              <VacanteCard key={v.id} vacante={v} />
+              <VacanteCard key={v.id} vacante={v} festivos={festivos} />
             ))}
           </div>
         </section>

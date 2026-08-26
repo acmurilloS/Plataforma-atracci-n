@@ -14,7 +14,7 @@ import {
   User2,
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { FlujogramaTimeline } from '../components/FlujogramaTimeline';
 import { PoliticaCriticidadBanner } from '../components/vacantes/PoliticaCriticidadBanner';
 import { BitacoraReprocesos } from '../components/vacantes/BitacoraReprocesos';
@@ -668,6 +668,7 @@ export default function VacanteDetallePage() {
  */
 function AsignacionAnalista({ vac }: { vac: VacanteDoc }) {
   const { rol } = useAuth();
+  const { actualizar } = useMutacion();
   const esStaff = rol === 'admin' || rol === 'coordinador';
   const [selUid, setSelUid] = useState<string | null>(vac.analista_uid);
   const [asignando, setAsignando] = useState(false);
@@ -675,6 +676,36 @@ function AsignacionAnalista({ vac }: { vac: VacanteDoc }) {
 
   const asignadoEn = vac.analista_asignado_en?.toDate?.() ?? null;
   const cambio = !!selUid && selUid !== vac.analista_uid;
+
+  // Fecha de activación (procesos viejos migrados): la fija Coordinación para que
+  // los días del proceso cuenten desde el inicio REAL, no desde la carga.
+  const actInicial = vac.fecha_activacion?.toDate?.() ?? null;
+  const [fechaAct, setFechaAct] = useState(actInicial ? actInicial.toISOString().slice(0, 10) : '');
+  const [guardandoFecha, setGuardandoFecha] = useState(false);
+  const [msgFecha, setMsgFecha] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
+
+  async function guardarFechaActivacion() {
+    setGuardandoFecha(true);
+    setMsgFecha(null);
+    try {
+      await actualizar('vacantes', vac.id, {
+        fecha_activacion: fechaAct
+          ? Timestamp.fromDate(new Date(`${fechaAct}T12:00:00`))
+          : null,
+      });
+      setMsgFecha({
+        tipo: 'ok',
+        texto: fechaAct ? '✓ Fecha de activación guardada.' : '✓ Fecha de activación quitada.',
+      });
+    } catch (e) {
+      setMsgFecha({
+        tipo: 'error',
+        texto: e instanceof Error ? e.message : 'No pudimos guardar la fecha.',
+      });
+    } finally {
+      setGuardandoFecha(false);
+    }
+  }
 
   async function asignar() {
     if (!selUid) return;
@@ -706,6 +737,43 @@ function AsignacionAnalista({ vac }: { vac: VacanteDoc }) {
         </div>
         {asignadoEn && (
           <p className="text-[11px] text-text-subtle">Analista asignada el {formatearFecha(asignadoEn)}.</p>
+        )}
+        {esStaff && (
+          <div className="border-t border-slate-100 pt-5 space-y-2">
+            <p className="text-[10px] font-bold tracking-[0.08em] uppercase text-text-subtle">
+              Fecha de activación del proceso
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="date"
+                value={fechaAct}
+                onChange={(e) => {
+                  setFechaAct(e.target.value);
+                  setMsgFecha(null);
+                }}
+                className="rounded-brand-input border border-slate-300 px-2.5 py-1.5 text-[12px] text-text-strong focus:outline-none focus:border-brand-500"
+              />
+              <Button
+                variant="neutral-secondary"
+                onClick={guardarFechaActivacion}
+                loading={guardandoFecha}
+                disabled={guardandoFecha}
+              >
+                Guardar
+              </Button>
+              {msgFecha && (
+                <span
+                  className={`text-[11px] ${msgFecha.tipo === 'ok' ? 'text-success-700' : 'text-danger-700'}`}
+                >
+                  {msgFecha.texto}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-text-subtle">
+              Para procesos viejos migrados: fija el inicio REAL del proceso. Los días del proceso se
+              cuentan desde aquí (si la dejas vacía, se usa la fecha de creación en el aplicativo).
+            </p>
+          </div>
         )}
         {esStaff && (
           <div className="border-t border-slate-100 pt-5 space-y-3">

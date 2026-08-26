@@ -32,6 +32,16 @@ function aDate(ts: unknown): Date | null {
   return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
 }
 
+/**
+ * Apertura EFECTIVA del proceso: la `fecha_activacion` que fija Coordinación
+ * (procesos viejos migrados de la base anterior, reu Karen 19-ago) si existe; si
+ * no, la fecha de creación en el aplicativo. Todos los días del proceso se cuentan
+ * desde aquí para que la trazabilidad de los procesos migrados sea correcta.
+ */
+export function aperturaVacante(v: VacanteDoc): Date | null {
+  return aDate(v.fecha_activacion) ?? aDate(v.creado_en);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Conteos por vacante (postulados / en terna / contratado) desde postulaciones
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,7 +89,7 @@ export function diasTranscurridos(
   festivos: Set<string>,
   hoy: Date,
 ): number | null {
-  const apertura = aDate(v.creado_en);
+  const apertura = aperturaVacante(v);
   if (!apertura) return null;
   const cierre = aDate(v.cerrada_en);
   const fin = esVacanteCerrada(v.estado) && cierre ? cierre : hoy;
@@ -88,7 +98,7 @@ export function diasTranscurridos(
 
 /** Días hábiles de la apertura a la terna enviada (el ANS). Null si no hay terna. */
 export function diasHabilesATerna(v: VacanteDoc, festivos: Set<string>): number | null {
-  const apertura = aDate(v.creado_en);
+  const apertura = aperturaVacante(v);
   const terna = aDate(v.terna_enviada_en);
   if (!apertura || !terna) return null;
   return diasHabilesEntre(apertura, terna, festivos);
@@ -181,7 +191,7 @@ export function construirBaseVacantes(
       Criticidad: v.criticidad ?? '',
       Estado: (v.estado ?? '').replace(/_/g, ' '),
       'Tipo de solicitud': TIPO_SOLICITUD_TXT[v.tipo_solicitud] ?? v.tipo_solicitud ?? '',
-      'Fecha de apertura': formatearFecha(aDate(v.creado_en)),
+      'Fecha de apertura': formatearFecha(aperturaVacante(v)),
       'Terna enviada': formatearFecha(aDate(v.terna_enviada_en)),
       'Fecha de cierre': formatearFecha(aDate(v.cerrada_en)),
       'Días hábiles transcurridos': transcurridos ?? '',

@@ -14,6 +14,7 @@ import {
 import { VacanteCard } from '../components/VacanteCard';
 import { useAuth } from '../hooks/useAuth';
 import { useColeccion, type FiltroTupla } from '../hooks/useColeccion';
+import { useFestivosTodos } from '../hooks/useCatalogos';
 import { cn } from '../utils/cn';
 import type { VacanteDoc } from '../schemas';
 import { Button, KpiCard } from '../components/brand';
@@ -53,8 +54,11 @@ type Filtro = 'activas' | 'mias' | 'cerradas' | 'todas';
 
 export default function SeguimientoPage() {
   const { rol, user } = useAuth();
+  const festivos = useFestivosTodos();
   const [filtro, setFiltro] = useState<Filtro>('activas');
   const [empresaFiltro, setEmpresaFiltro] = useState('');
+  const [unidadFiltro, setUnidadFiltro] = useState('');
+  const [cargoFiltro, setCargoFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
   // Drill-down: al hundir una card se abre un pop-up con las vacantes de ese grupo.
   const [drill, setDrill] = useState<{ titulo: string; lista: VacanteDoc[] } | null>(null);
@@ -81,6 +85,8 @@ export default function SeguimientoPage() {
         if (v.lider_uid !== user.uid && v.analista_uid !== user.uid) return false;
       }
       if (empresaFiltro && v.empresa_codigo !== empresaFiltro) return false;
+      if (unidadFiltro && v.unidad_id !== unidadFiltro) return false;
+      if (cargoFiltro && v.cargo_nombre !== cargoFiltro) return false;
       if (busqueda) {
         const q = busqueda.trim().toLowerCase();
         const ok =
@@ -92,10 +98,25 @@ export default function SeguimientoPage() {
       }
       return true;
     });
-  }, [vacantes, filtro, empresaFiltro, busqueda, user]);
+  }, [vacantes, filtro, empresaFiltro, unidadFiltro, cargoFiltro, busqueda, user]);
 
   const empresasUnicas = useMemo(
     () => Array.from(new Set(vacantes.map((v) => v.empresa_codigo).filter(Boolean))).sort(),
+    [vacantes],
+  );
+  // Unidades (id → nombre) y cargos únicos de las vacantes cargadas, para filtrar.
+  const unidadesUnicas = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of vacantes) {
+      if (v.unidad_id) m.set(v.unidad_id, v.unidad_nombre ?? v.unidad_id);
+    }
+    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+  }, [vacantes]);
+  const cargosUnicos = useMemo(
+    () =>
+      Array.from(new Set(vacantes.map((v) => v.cargo_nombre).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, 'es'),
+      ),
     [vacantes],
   );
 
@@ -284,6 +305,30 @@ export default function SeguimientoPage() {
             </option>
           ))}
         </select>
+        <select
+          value={unidadFiltro}
+          onChange={(e) => setUnidadFiltro(e.target.value)}
+          className="rounded-brand-input bg-white border border-slate-200 px-3 py-2.5 text-[13px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+        >
+          <option value="">Todas las unidades</option>
+          {unidadesUnicas.map(([uid, nombre]) => (
+            <option key={uid} value={uid}>
+              {nombre}
+            </option>
+          ))}
+        </select>
+        <select
+          value={cargoFiltro}
+          onChange={(e) => setCargoFiltro(e.target.value)}
+          className="rounded-brand-input bg-white border border-slate-200 px-3 py-2.5 text-[13px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+        >
+          <option value="">Todos los cargos</option>
+          {cargosUnicos.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
       </div>
 
       {cargando && <p className="text-sm text-text-muted">Cargando…</p>}
@@ -319,7 +364,7 @@ export default function SeguimientoPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtradas.map((v) => (
-          <VacanteCard key={v.id} vacante={v} />
+          <VacanteCard key={v.id} vacante={v} festivos={festivos} />
         ))}
       </div>
 

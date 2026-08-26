@@ -18,7 +18,9 @@ function anchoColumnas(filas: FilaExcel[]): { wch: number }[] {
       const v = f[col];
       return Math.max(max, v === undefined || v === null ? 0 : String(v).length);
     }, 0);
-    return { wch: Math.min(40, Math.max(col.length, largoDatos) + 2) };
+    // Ancho legible: mínimo 10, tope 60, con padding generoso para que no se corte
+    // (reu Karen 19-ago: el informe salía con columnas angostas y texto cortado).
+    return { wch: Math.max(12, Math.min(60, Math.max(col.length, largoDatos) + 4)) };
   });
 }
 

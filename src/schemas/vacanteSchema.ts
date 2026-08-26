@@ -138,6 +138,13 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
    */
   analista_asignado_por?: string | null;
   analista_asignado_en?: Timestamp | null;
+  /**
+   * Fecha REAL de activación del proceso (reu Karen 19-ago). Para procesos viejos
+   * migrados de la base anterior, `creado_en` es la fecha de carga, no la de inicio
+   * real. Coordinación la fija en la sección Asignación; cuando existe, el cálculo
+   * de días del proceso la usa como apertura en vez de `creado_en`.
+   */
+  fecha_activacion?: Timestamp | null;
   cerrada_en: Timestamp | null;
   razon_cierre: string | null;
   /**

@@ -74,6 +74,8 @@ export default function VacantesListaPage() {
   const [cargando, setCargando] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroEmpresa, setFiltroEmpresa] = useState('');
+  const [filtroUnidad, setFiltroUnidad] = useState('');
+  const [filtroCargo, setFiltroCargo] = useState('');
   const [busqueda, setBusqueda] = useState('');
 
   useEffect(() => {
@@ -94,11 +96,27 @@ export default function VacantesListaPage() {
     const s = new Set(vacantes.map((v) => v.empresa_codigo).filter(Boolean));
     return Array.from(s).sort();
   }, [vacantes]);
+  const unidadesUnicas = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of vacantes) {
+      if (v.unidad_id) m.set(v.unidad_id, v.unidad_nombre ?? v.unidad_id);
+    }
+    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+  }, [vacantes]);
+  const cargosUnicos = useMemo(
+    () =>
+      Array.from(new Set(vacantes.map((v) => v.cargo_nombre).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, 'es'),
+      ),
+    [vacantes],
+  );
 
   const filtradas = useMemo(() => {
     return vacantes.filter((v) => {
       if (filtroEstado && v.estado !== filtroEstado) return false;
       if (filtroEmpresa && v.empresa_codigo !== filtroEmpresa) return false;
+      if (filtroUnidad && v.unidad_id !== filtroUnidad) return false;
+      if (filtroCargo && v.cargo_nombre !== filtroCargo) return false;
       if (busqueda) {
         const q = busqueda.trim().toLowerCase();
         return (
@@ -109,7 +127,7 @@ export default function VacantesListaPage() {
       }
       return true;
     });
-  }, [vacantes, filtroEstado, filtroEmpresa, busqueda]);
+  }, [vacantes, filtroEstado, filtroEmpresa, filtroUnidad, filtroCargo, busqueda]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
@@ -177,6 +195,30 @@ export default function VacantesListaPage() {
             {empresasUnicas.map((e) => (
               <option key={e} value={e}>
                 {e}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filtroUnidad}
+            onChange={(e) => setFiltroUnidad(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Todas las unidades</option>
+            {unidadesUnicas.map(([uid, nombre]) => (
+              <option key={uid} value={uid}>
+                {nombre}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filtroCargo}
+            onChange={(e) => setFiltroCargo(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Todos los cargos</option>
+            {cargosUnicos.map((c) => (
+              <option key={c} value={c}>
+                {c}
               </option>
             ))}
           </select>
