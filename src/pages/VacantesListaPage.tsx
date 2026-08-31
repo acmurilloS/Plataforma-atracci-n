@@ -74,6 +74,7 @@ export default function VacantesListaPage() {
   const [cargando, setCargando] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroEmpresa, setFiltroEmpresa] = useState('');
+  const [filtroSede, setFiltroSede] = useState('');
   const [filtroUnidad, setFiltroUnidad] = useState('');
   const [filtroCargo, setFiltroCargo] = useState('');
   const [busqueda, setBusqueda] = useState('');
@@ -96,6 +97,13 @@ export default function VacantesListaPage() {
     const s = new Set(vacantes.map((v) => v.empresa_codigo).filter(Boolean));
     return Array.from(s).sort();
   }, [vacantes]);
+  const sedesUnicas = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of vacantes) {
+      if (v.sede_codigo) m.set(v.sede_codigo, v.sede_nombre ?? v.sede_codigo);
+    }
+    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+  }, [vacantes]);
   const unidadesUnicas = useMemo(() => {
     const m = new Map<string, string>();
     for (const v of vacantes) {
@@ -115,6 +123,7 @@ export default function VacantesListaPage() {
     return vacantes.filter((v) => {
       if (filtroEstado && v.estado !== filtroEstado) return false;
       if (filtroEmpresa && v.empresa_codigo !== filtroEmpresa) return false;
+      if (filtroSede && v.sede_codigo !== filtroSede) return false;
       if (filtroUnidad && v.unidad_id !== filtroUnidad) return false;
       if (filtroCargo && v.cargo_nombre !== filtroCargo) return false;
       if (busqueda) {
@@ -127,7 +136,7 @@ export default function VacantesListaPage() {
       }
       return true;
     });
-  }, [vacantes, filtroEstado, filtroEmpresa, filtroUnidad, filtroCargo, busqueda]);
+  }, [vacantes, filtroEstado, filtroEmpresa, filtroSede, filtroUnidad, filtroCargo, busqueda]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
@@ -195,6 +204,18 @@ export default function VacantesListaPage() {
             {empresasUnicas.map((e) => (
               <option key={e} value={e}>
                 {e}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filtroSede}
+            onChange={(e) => setFiltroSede(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Todas las sedes</option>
+            {sedesUnicas.map(([cod, nombre]) => (
+              <option key={cod} value={cod}>
+                {nombre}
               </option>
             ))}
           </select>

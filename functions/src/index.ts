@@ -26,6 +26,10 @@ export { eliminarVacante } from './vacantes/eliminarVacante';
 export { editarDatosVacante } from './vacantes/editarDatosVacante';
 // Repostular un candidato a otra vacante activa sin re-inscribirlo (reu 26-jun).
 export { repostularCandidato } from './postulaciones/repostularCandidato';
+// Registrar fecha de vinculacion -> contratado + cierra la vacante (reu Karen 27-ago).
+export { registrarFechaVinculacion } from './postulaciones/registrarFechaVinculacion';
+// Seed idempotente de sedes nuevas (ciudades faltantes, reu Karen 27-ago).
+export { seedSedesNuevas } from './catalogos/seedSedesNuevas';
 export { onCandidatoCreate } from './candidatos/onCandidatoCreate';
 // Edición de datos del candidato/integrante por staff, con auditoría (reu 26-jun).
 export { editarDatosCandidato } from './candidatos/editarDatosCandidato';

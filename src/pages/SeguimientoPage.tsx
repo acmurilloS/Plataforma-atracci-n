@@ -57,6 +57,7 @@ export default function SeguimientoPage() {
   const festivos = useFestivosTodos();
   const [filtro, setFiltro] = useState<Filtro>('activas');
   const [empresaFiltro, setEmpresaFiltro] = useState('');
+  const [sedeFiltro, setSedeFiltro] = useState('');
   const [unidadFiltro, setUnidadFiltro] = useState('');
   const [cargoFiltro, setCargoFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
@@ -85,6 +86,7 @@ export default function SeguimientoPage() {
         if (v.lider_uid !== user.uid && v.analista_uid !== user.uid) return false;
       }
       if (empresaFiltro && v.empresa_codigo !== empresaFiltro) return false;
+      if (sedeFiltro && v.sede_codigo !== sedeFiltro) return false;
       if (unidadFiltro && v.unidad_id !== unidadFiltro) return false;
       if (cargoFiltro && v.cargo_nombre !== cargoFiltro) return false;
       if (busqueda) {
@@ -98,12 +100,20 @@ export default function SeguimientoPage() {
       }
       return true;
     });
-  }, [vacantes, filtro, empresaFiltro, unidadFiltro, cargoFiltro, busqueda, user]);
+  }, [vacantes, filtro, empresaFiltro, sedeFiltro, unidadFiltro, cargoFiltro, busqueda, user]);
 
   const empresasUnicas = useMemo(
     () => Array.from(new Set(vacantes.map((v) => v.empresa_codigo).filter(Boolean))).sort(),
     [vacantes],
   );
+  // Sedes (código → nombre) únicas de las vacantes cargadas, para filtrar.
+  const sedesUnicas = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of vacantes) {
+      if (v.sede_codigo) m.set(v.sede_codigo, v.sede_nombre ?? v.sede_codigo);
+    }
+    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+  }, [vacantes]);
   // Unidades (id → nombre) y cargos únicos de las vacantes cargadas, para filtrar.
   const unidadesUnicas = useMemo(() => {
     const m = new Map<string, string>();
@@ -302,6 +312,18 @@ export default function SeguimientoPage() {
           {empresasUnicas.map((c) => (
             <option key={c} value={c}>
               {c}
+            </option>
+          ))}
+        </select>
+        <select
+          value={sedeFiltro}
+          onChange={(e) => setSedeFiltro(e.target.value)}
+          className="rounded-brand-input bg-white border border-slate-200 px-3 py-2.5 text-[13px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40"
+        >
+          <option value="">Todas las sedes</option>
+          {sedesUnicas.map(([cod, nombre]) => (
+            <option key={cod} value={cod}>
+              {nombre}
             </option>
           ))}
         </select>

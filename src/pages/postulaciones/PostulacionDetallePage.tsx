@@ -1060,24 +1060,36 @@ interface SubProps {
 // staff/analista/documentación actualizar la postulación sin cambiar el estado.
 // ───────────────────────────────────────────────────────────────
 function FechaVinculacionInline({ postulacion }: SubProps) {
-  const { actualizar } = useMutacion();
-  const { user } = useAuth();
   const actual = postulacion.fecha_vinculacion?.toDate?.();
   const [fecha, setFecha] = useState(actual ? actual.toISOString().slice(0, 10) : '');
   const [guardando, setGuardando] = useState(false);
   const [ok, setOk] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Registrar la fecha CIERRA el proceso: la callable marca contratado + cierra la
+  // vacante (reu Karen 27-ago). Se confirma porque es una acción de cierre.
   async function guardar() {
     if (!fecha) return;
+    setError(null);
+    const yaContratado = postulacion.estado === 'contratado';
+    if (
+      !yaContratado &&
+      !window.confirm(
+        'Al registrar la fecha de vinculación, el candidato quedará CONTRATADO y el proceso se CERRARÁ automáticamente. ¿Continuar?',
+      )
+    )
+      return;
     setGuardando(true);
     setOk(false);
     try {
-      await actualizar('postulaciones', postulacion.id, {
-        fecha_vinculacion: Timestamp.fromDate(new Date(`${fecha}T12:00:00`)),
-        fecha_vinculacion_registrada_por: user?.uid ?? null,
-        fecha_vinculacion_registrada_en: Timestamp.now(),
-      });
+      const fn = httpsCallable<
+        { postulacion_id: string; fecha: string },
+        { ok: true; cerroVacante: boolean; yaContratado: boolean }
+      >(functions, 'registrarFechaVinculacion');
+      await fn({ postulacion_id: postulacion.id, fecha });
       setOk(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo registrar la fecha.');
     } finally {
       setGuardando(false);
     }
@@ -1105,10 +1117,12 @@ function FechaVinculacionInline({ postulacion }: SubProps) {
         >
           {guardando ? 'Guardando…' : 'Guardar'}
         </button>
-        {ok && <span className="text-[11px] text-success-700 font-medium">✓ Guardada</span>}
+        {ok && <span className="text-[11px] text-success-700 font-medium">✓ Guardada · proceso cerrado</span>}
       </div>
+      {error && <p className="text-[11px] text-danger-700 mt-1.5">{error}</p>}
       <p className="text-[10px] text-text-subtle mt-1.5">
-        Fecha real de ingreso del integrante (alimenta el indicador del proceso).
+        Fecha real de ingreso del integrante. Al guardarla, el candidato queda contratado y el
+        proceso se cierra automáticamente.
       </p>
     </div>
   );
