@@ -134,6 +134,8 @@ export const resolverPortalToken = onCall(
   let datosBasicosFirmaUrl = '';
   let debidaDiligenciaFirmaUrl = '';
   let mensajeDescarte = '';
+  // Movimiento interno (reu Karen sep-2026): persona ya empleada → portal simplificado.
+  let movimientoInterno = false;
   let vacanteId = String(t.vacante_id ?? '');
   try {
     if (postulacionId) {
@@ -154,6 +156,7 @@ export const resolverPortalToken = onCall(
         datosBasicosFirmaUrl = String(pd.firma_datos_basicos_url ?? '');
         debidaDiligenciaFirmaUrl = String(pd.firma_debida_diligencia_url ?? '');
         mensajeDescarte = String(pd.mensaje_portal_descarte ?? '').trim();
+        movimientoInterno = !!pd.movimiento_interno;
         if (!vacanteId) vacanteId = String(pd.vacante_id ?? '');
       }
     }
@@ -204,7 +207,9 @@ export const resolverPortalToken = onCall(
       msg: e instanceof Error ? e.message : String(e),
     });
   }
-  const slots = CLAVES_APORTA_CANDIDATO.map((clave) => {
+  // Movimiento interno: GH ya tiene los documentos del empleado → sin slots.
+  const clavesPortal: readonly string[] = movimientoInterno ? [] : CLAVES_APORTA_CANDIDATO;
+  const slots = clavesPortal.map((clave) => {
     const item = ITEM_POR_CLAVE[clave];
     const actual = estadosPorClave[clave];
     return {
@@ -332,6 +337,7 @@ export const resolverPortalToken = onCall(
     fase: faseDeEstado(estado),
     finalizado: esEstadoFinalizado(estado),
     contratado: esContratado(estado),
+    movimiento_interno: movimientoInterno,
     consentimiento_datos_aceptado: datosAceptado,
     consentimiento_imagen_aceptado: imagenAceptado,
     consentimiento_datos_firma_url: datosFirmaUrl,

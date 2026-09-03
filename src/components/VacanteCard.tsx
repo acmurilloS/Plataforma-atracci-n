@@ -157,6 +157,11 @@ export function VacanteCard({ vacante, festivos }: Props) {
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Pill tono={criticidadTono}>{vacante.criticidad}</Pill>
+            {vacante.es_movimiento_interno && (
+              <Pill tono="info">
+                ↔ Mov. interno{vacante.tipo_movimiento ? ` · ${vacante.tipo_movimiento}` : ''}
+              </Pill>
+            )}
             <EliminarVacanteAdmin vacante={vacante} />
           </div>
         </div>

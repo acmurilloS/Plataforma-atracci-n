@@ -288,9 +288,14 @@ export function FlujogramaTimeline({ vacante }: Props) {
           </div>
           <ol className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {grupos[fase].map((paso) => {
-              const ruta = construirRuta(paso);
-              const activo = esPasoActivo(paso);
-              const completado = esPasoCompletado(paso);
+              // Movimiento interno (reu Karen sep-2026): los pasos 3–14
+              // (reclutamiento, selección y decisión) NO aplican — la persona ya
+              // es empleada y salta directo a la fase de Ingreso.
+              const omitido =
+                !!vacante?.es_movimiento_interno && paso.numero >= 3 && paso.numero <= 14;
+              const ruta = omitido ? null : construirRuta(paso);
+              const activo = !omitido && esPasoActivo(paso);
+              const completado = !omitido && esPasoCompletado(paso);
               const contenido = (
                 <div
                   className={cn(
@@ -300,6 +305,7 @@ export function FlujogramaTimeline({ vacante }: Props) {
                       : completado
                         ? 'bg-slate-50/60 border-slate-200'
                         : 'bg-white border-slate-200',
+                    omitido && 'opacity-50 border-dashed',
                     ruta && 'cursor-pointer hover:shadow-brand-card hover:-translate-y-0.5 hover:border-brand-300',
                   )}
                 >
@@ -322,6 +328,7 @@ export function FlujogramaTimeline({ vacante }: Props) {
                     </p>
                     <p className="text-[10px] text-text-subtle mt-1 uppercase tracking-[0.06em] font-semibold">
                       {paso.rol}
+                      {omitido && ' · No aplica · movimiento interno'}
                       {ruta && ' · '}
                       {ruta && (
                         <span className="text-brand-700 normal-case tracking-normal">

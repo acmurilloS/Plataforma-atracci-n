@@ -42,7 +42,15 @@ export const onCarpetaCompletaCheck = onDocumentWritten(
       estadoPorClave.set(String(x.clave ?? ''), String(x.estado ?? 'pendiente'));
     });
 
-    const completa = CLAVES_OBLIGATORIAS.every((clave) => {
+    // Movimiento interno (reu Karen sep-2026): la persona ya es empleada; la
+    // carpeta solo exige el reporte de novedad / solicitud de integrante.
+    const postPreSnap = await db.collection('postulaciones').doc(postulacionId).get();
+    const postPre = (postPreSnap.data() ?? {}) as Record<string, unknown>;
+    const clavesRequeridas: readonly string[] = postPre.movimiento_interno
+      ? ['solicitud_integrantes']
+      : CLAVES_OBLIGATORIAS;
+
+    const completa = clavesRequeridas.every((clave) => {
       const e = estadoPorClave.get(clave);
       return e === 'entregado' || e === 'verificado' || e === 'no_aplica';
     });

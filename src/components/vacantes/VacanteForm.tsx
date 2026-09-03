@@ -200,6 +200,9 @@ export function VacanteForm() {
       cargo_criticidad_al_crear: 'Media',
       criticidad: 'Media',
       tipo_solicitud: 'reemplazo_indefinido',
+      es_movimiento_interno: false,
+      tipo_movimiento: null,
+      fecha_entrevista_propuesta: null,
       reemplaza_a_nombre: '',
       temporalidad_meses: null,
       temporalidad_descripcion: '',
@@ -233,6 +236,7 @@ export function VacanteForm() {
   const avalUrl = watch('aval_url');
   const noRequiereAval = watch('aval_no_requiere');
   const tipoSolicitudActual = watch('tipo_solicitud');
+  const esMovimientoInterno = watch('es_movimiento_interno');
   const liderUidActual = watch('lider_uid');
   // Solo staff (admin/coord/gh) puede reasignar la vacante a otro líder: es quien
   // crea "en nombre de" y quien puede leer la colección `usuarios` (SelectorLider).
@@ -320,9 +324,23 @@ export function VacanteForm() {
       return;
     }
 
+    if (data.es_movimiento_interno && !data.tipo_movimiento) {
+      setEnviando(false);
+      setErrorSubmit('Indica el tipo de movimiento (vertical, horizontal o transversal).');
+      return;
+    }
+    if (!data.es_movimiento_interno && !data.fecha_entrevista_propuesta) {
+      setEnviando(false);
+      setErrorSubmit('Propón una fecha de entrevista con el líder.');
+      return;
+    }
+
     try {
       const payload: VacanteInput = {
         ...data,
+        // Movimiento interno: sin entrevista; si no lo es, sin tipo de movimiento.
+        tipo_movimiento: data.es_movimiento_interno ? data.tipo_movimiento : null,
+        fecha_entrevista_propuesta: data.es_movimiento_interno ? null : data.fecha_entrevista_propuesta,
         // El boolean `rodamiento` se deriva del valor elegido en el desplegable:
         // vacío o "No aplica" = sin rodamiento; cualquier otro valor = sí.
         rodamiento: data.rodamiento_valor.trim() !== '' && data.rodamiento_valor.trim() !== 'No aplica',
@@ -451,6 +469,40 @@ export function VacanteForm() {
                 <option value="necesidad_temporal">Necesidad temporal</option>
               </select>
             </Campo>
+          </div>
+
+          {/* ─── Movimiento interno (reu Karen sep-2026) ─────────── */}
+          <div className="mt-4 rounded-md border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                {...register('es_movimiento_interno')}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
+              />
+              <span>
+                <span className="block text-[13px] font-medium text-text-strong">
+                  Es un movimiento interno
+                </span>
+                <span className="block text-[11px] text-text-muted leading-[1.5]">
+                  La persona ya es empleada y solo cambia de cargo. Se saltan reclutamiento, pruebas
+                  y terna: solo se pedirá el reporte de novedad y la aceptación de condiciones
+                  (exámenes y aval quedan opcionales).
+                </span>
+              </span>
+            </label>
+            {esMovimientoInterno && (
+              <Campo label="Tipo de movimiento" requerido error={errors.tipo_movimiento?.message}>
+                <select
+                  {...register('tipo_movimiento', { setValueAs: (v) => (v === '' ? null : v) })}
+                  className={selectClass}
+                >
+                  <option value="">Selecciona…</option>
+                  <option value="vertical">Vertical (ascenso)</option>
+                  <option value="horizontal">Horizontal (mismo nivel)</option>
+                  <option value="transversal">Transversal (otra área)</option>
+                </select>
+              </Campo>
+            )}
           </div>
 
           {/* ─── Campos condicionales por tipo de solicitud ──────── */}
@@ -724,7 +776,8 @@ export function VacanteForm() {
           )}
         </Seccion>
 
-        {/* ─── Agendamiento ─────────────────────────────────────── */}
+        {/* ─── Agendamiento (no aplica a movimientos internos) ──── */}
+        {!esMovimientoInterno && (
         <Seccion
           eyebrow="Entrevista con líder"
           titulo="Agendamiento"
@@ -754,6 +807,7 @@ export function VacanteForm() {
             />
           </Campo>
         </Seccion>
+        )}
 
         {errorSubmit && (
           <div className="rounded-md border border-danger-500/20 bg-danger-50 px-4 py-3 text-[13px] text-danger-700">

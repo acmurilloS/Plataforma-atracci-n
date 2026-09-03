@@ -30,6 +30,7 @@ import { Button, Card, Pill } from '../../components/brand';
 import { FaseCandidato, etiquetaEstado } from '../../components/postulaciones/FaseCandidato';
 import { RepostularModal } from '../../components/postulaciones/RepostularModal';
 import { MarcarDiscapacidadModal } from '../../components/postulaciones/MarcarDiscapacidadModal';
+import { MovimientoInternoModal } from '../../components/postulaciones/MovimientoInternoModal';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
@@ -97,6 +98,7 @@ export default function PostulacionesPage() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [repostulando, setRepostulando] = useState<PostulacionDoc | null>(null);
   const [marcandoDiscapacidad, setMarcandoDiscapacidad] = useState<PostulacionDoc | null>(null);
+  const [marcandoMovimiento, setMarcandoMovimiento] = useState<PostulacionDoc | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -747,6 +749,26 @@ export default function PostulacionesPage() {
                     >
                       {p.discapacidad ? '♿ Discapacidad' : 'Discapacidad'}
                     </button>
+                    {p.movimiento_interno ? (
+                      <span
+                        className="text-[12px] font-medium text-violet-700"
+                        title={`Movimiento interno · ${p.movimiento_interno.tipo}`}
+                      >
+                        ↔ Mov. interno
+                      </span>
+                    ) : (
+                      p.estado !== 'repostulado' &&
+                      p.estado !== 'contratado' && (
+                        <button
+                          type="button"
+                          onClick={() => setMarcandoMovimiento(p)}
+                          className="text-text-muted hover:text-brand-700 hover:underline text-[12px] font-medium"
+                          title="Marcar como movimiento interno (persona ya empleada, flujo simplificado)"
+                        >
+                          Mov. interno
+                        </button>
+                      )
+                    )}
                     {p.estado !== 'repostulado' && p.estado !== 'contratado' && (
                       <button
                         type="button"
@@ -795,6 +817,19 @@ export default function PostulacionesPage() {
               `${repostulando.candidato_nombre} fue repostulado${
                 consecutivo ? ` a ${consecutivo}` : ''
               }. Quedó activo en esa vacante y repostulado aquí.`,
+            )
+          }
+        />
+      )}
+
+      {marcandoMovimiento && (
+        <MovimientoInternoModal
+          postulacion={marcandoMovimiento}
+          tipoInicial={vacante?.tipo_movimiento ?? null}
+          onClose={() => setMarcandoMovimiento(null)}
+          onDone={(tipo) =>
+            setOkMsg(
+              `${marcandoMovimiento.candidato_nombre} quedó como movimiento interno (${tipo}) y pasó directo a contratación.`,
             )
           }
         />

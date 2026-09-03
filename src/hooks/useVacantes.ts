@@ -96,7 +96,10 @@ export function useVacantes() {
       // aval_pendiente=true (lo setea el form) y GH/coordinación lo gestiona.
       const payload = {
         ...input,
-        fecha_entrevista_propuesta: Timestamp.fromDate(input.fecha_entrevista_propuesta),
+        // Un movimiento interno no tiene entrevista con líder → puede venir null.
+        fecha_entrevista_propuesta: input.fecha_entrevista_propuesta
+          ? Timestamp.fromDate(input.fecha_entrevista_propuesta)
+          : null,
         fecha_entrevista_pactada: null,
         aval_aprobado_por: null,
         aval_aprobado_en: null,

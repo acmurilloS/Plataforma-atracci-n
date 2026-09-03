@@ -77,6 +77,8 @@ interface PortalData {
   firma_debida_diligencia_url?: string;
   documentos: { nombre: string; url: string }[];
   slots: PortalSlot[];
+  /** Movimiento interno: la persona ya es empleada → portal simplificado. */
+  movimiento_interno?: boolean;
   citaciones: { entrevista: CitaEntrevista | null; examen: CitaExamen | null };
   mensaje_descarte: string;
   analista_email: string;
@@ -260,13 +262,19 @@ export default function PortalCandidatoPage() {
     );
   }
 
-  const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  const TABS_BASE: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: 'proceso', label: 'Mi proceso', icon: <ClipboardList size={15} strokeWidth={1.9} /> },
     { key: 'documentos', label: 'Documentos', icon: <FileText size={15} strokeWidth={1.9} /> },
     { key: 'datos_basicos', label: 'Datos Básicos', icon: <IdCard size={15} strokeWidth={1.9} /> },
     { key: 'autorizaciones', label: 'Autorizaciones', icon: <ShieldCheck size={15} strokeWidth={1.9} /> },
     { key: 'ayuda', label: '¿Dudas?', icon: <HelpCircle size={15} strokeWidth={1.9} /> },
   ];
+  const TABS = TABS_BASE.filter((t) =>
+    // Movimiento interno (reu Karen sep-2026): la persona ya es empleada y GH ya
+    // tiene sus documentos y datos básicos → solo proceso, autorizaciones
+    // (aceptación de condiciones) y ayuda.
+    data.movimiento_interno ? t.key !== 'documentos' && t.key !== 'datos_basicos' : true,
+  );
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -373,6 +381,7 @@ export default function PortalCandidatoPage() {
             datosFirmaUrl={data.consentimiento_datos_firma_url}
             imagenFirmaUrl={data.consentimiento_imagen_firma_url}
             debidaDiligenciaEnviada={data.firma_debida_diligencia}
+            movimientoInterno={!!data.movimiento_interno}
             debidaDiligenciaFirmaUrl={data.firma_debida_diligencia_url}
             condiciones={data.condiciones}
             condicionesAceptadas={data.condiciones_aceptadas}
@@ -615,6 +624,7 @@ function AutorizacionesTab({
   imagenFirmaUrl,
   debidaDiligenciaEnviada,
   debidaDiligenciaFirmaUrl,
+  movimientoInterno,
   condiciones,
   condicionesAceptadas,
   aceptar,
@@ -631,6 +641,8 @@ function AutorizacionesTab({
   datosFirmaUrl?: string;
   imagenFirmaUrl?: string;
   debidaDiligenciaEnviada: boolean;
+  /** Movimiento interno: sin debida diligencia (ya está en GH). */
+  movimientoInterno?: boolean;
   debidaDiligenciaFirmaUrl?: string;
   condiciones?: Record<string, string> | null;
   condicionesAceptadas: boolean;
@@ -650,7 +662,8 @@ function AutorizacionesTab({
   const itemsAutorizacion = [
     { hecho: datosAceptado },
     { hecho: imagenAceptado },
-    { hecho: debidaDiligenciaEnviada },
+    // Movimiento interno: la debida diligencia ya está en GH → no cuenta.
+    ...(movimientoInterno ? [] : [{ hecho: debidaDiligenciaEnviada }]),
     ...(condiciones ? [{ hecho: condicionesAceptadas }] : []),
   ];
   const hechas = itemsAutorizacion.filter((i) => i.hecho).length;
@@ -764,6 +777,7 @@ function AutorizacionesTab({
           onAceptar={(url, img) => aceptar('imagen', url, img)}
         />
       </Acordeon>
+      {!movimientoInterno && (
       <Acordeon titulo="Debida diligencia (SAGRILAFT)" hecho={debidaDiligenciaEnviada}>
         <DebidaDiligenciaPortalCard
           token={token}
@@ -778,6 +792,7 @@ function AutorizacionesTab({
           firmaUrl={debidaDiligenciaFirmaUrl}
         />
       </Acordeon>
+      )}
       {condiciones && (
         <Acordeon titulo="Condiciones laborales" hecho={condicionesAceptadas}>
           <CondicionesCard

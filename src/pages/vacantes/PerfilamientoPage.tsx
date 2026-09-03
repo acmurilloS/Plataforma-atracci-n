@@ -627,7 +627,7 @@ export default function PerfilamientoPage() {
               <p className="mt-1.5 text-[11px] text-text-subtle">
                 Propuesta original del líder:{' '}
                 <span className="font-medium text-text-body">
-                  {fechaInputValue(vacante.fecha_entrevista_propuesta?.toDate?.())}
+                  {fechaInputValue(vacante.fecha_entrevista_propuesta?.toDate?.() ?? null)}
                 </span>
               </p>
             </div>

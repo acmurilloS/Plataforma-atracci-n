@@ -191,6 +191,7 @@ export function construirBaseVacantes(
       Criticidad: v.criticidad ?? '',
       Estado: (v.estado ?? '').replace(/_/g, ' '),
       'Tipo de solicitud': TIPO_SOLICITUD_TXT[v.tipo_solicitud] ?? v.tipo_solicitud ?? '',
+      'Movimiento interno': v.es_movimiento_interno ? (v.tipo_movimiento ?? 'Sí') : '',
       'Fecha de apertura': formatearFecha(aperturaVacante(v)),
       'Terna enviada': formatearFecha(aDate(v.terna_enviada_en)),
       'Fecha de cierre': formatearFecha(aDate(v.cerrada_en)),

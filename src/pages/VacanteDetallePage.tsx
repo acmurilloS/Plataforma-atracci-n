@@ -32,7 +32,13 @@ import { formatearFecha } from '../utils/fechas';
 import { formatearCOP, soloDigitos } from '../utils/moneda';
 import { agruparPostulaciones, construirBaseVacantes } from '../utils/reportesVacantes';
 import { exportarVacanteIndividual } from '../utils/exportarExcel';
-import { TIPO_SOLICITUD_LABEL, type CargoDoc, type PostulacionDoc, type VacanteDoc } from '../schemas';
+import {
+  TIPO_MOVIMIENTO_LABEL,
+  TIPO_SOLICITUD_LABEL,
+  type CargoDoc,
+  type PostulacionDoc,
+  type VacanteDoc,
+} from '../schemas';
 
 // Estados en los que aún tiene sentido corregir el cargo: antes de que arranque
 // el reclutamiento en firme. En estados avanzados no se edita para no desalinear
@@ -545,6 +551,12 @@ export default function VacanteDetallePage() {
             <Dato label="Sede" valor={`${vac.sede_nombre} (${vac.sede_codigo})`} />
             <Dato label="Unidad" valor={vac.unidad_nombre} />
             <Dato label="Criticidad" valor={vac.criticidad} mono />
+            {vac.es_movimiento_interno && (
+              <Dato
+                label="Movimiento interno"
+                valor={vac.tipo_movimiento ? TIPO_MOVIMIENTO_LABEL[vac.tipo_movimiento] : 'Sí'}
+              />
+            )}
             <Dato
               label="Tipo de solicitud"
               valor={TIPO_SOLICITUD_LABEL[vac.tipo_solicitud] ?? vac.tipo_solicitud}

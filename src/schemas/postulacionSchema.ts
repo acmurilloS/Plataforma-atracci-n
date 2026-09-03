@@ -223,4 +223,14 @@ export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
   fecha_vinculacion?: Timestamp | null;
   fecha_vinculacion_registrada_por?: string | null;
   fecha_vinculacion_registrada_en?: Timestamp | null;
+  /**
+   * Movimiento interno (reu Karen sep-2026): la persona ya es empleada y solo
+   * cambia de cargo. Al marcarla entra al flujo simplificado (salta selección y
+   * terna → contratación). Lo setea la callable marcarMovimientoInterno.
+   */
+  movimiento_interno?: {
+    tipo: 'vertical' | 'horizontal' | 'transversal';
+    marcado_en: Timestamp;
+    marcado_por: string;
+  } | null;
 }

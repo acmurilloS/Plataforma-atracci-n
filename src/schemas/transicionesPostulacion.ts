@@ -65,7 +65,14 @@ const T: Record<EstadoPostulacion, readonly EstadoPostulacion[]> = {
 
   en_examenes_medicos: ['en_contratacion', 'descartado_examenes_medicos', 'desistio_candidato'],
 
-  en_contratacion: ['contratado', 'descartado_examenes_medicos', 'desistio_candidato'],
+  // 'en_examenes_medicos' desde contratación: exámenes MANUALES de un movimiento
+  // interno (reu Karen sep-2026); al registrar el resultado vuelve a en_contratacion.
+  en_contratacion: [
+    'contratado',
+    'en_examenes_medicos',
+    'descartado_examenes_medicos',
+    'desistio_candidato',
+  ],
   descartado_examenes_medicos: [],
   contratado: [],
 

@@ -282,6 +282,21 @@ export const SECCIONES_LABEL: Record<SeccionDocumento, string> = {
   hoja_vida: 'Documentos Hoja de Vida',
 };
 
+/**
+ * MOVIMIENTO INTERNO (reu Karen sep-2026): la persona ya es empleada y GH ya
+ * tiene su carpeta completa. Solo se exige el reporte de novedad / solicitud de
+ * integrante; el resto del checklist NO aplica ("si no está en la lista, no lo
+ * necesita").
+ */
+export const CLAVES_MOVIMIENTO_INTERNO: readonly string[] = ['solicitud_integrantes'];
+
+/** Catálogo que aplica a una postulación: completo, o el mínimo si es movimiento interno. */
+export function catalogoCarpetaPara(movimientoInterno: boolean): readonly DocumentoCarpetaCatalogo[] {
+  return movimientoInterno
+    ? CATALOGO_DOCUMENTOS_CARPETA.filter((c) => CLAVES_MOVIMIENTO_INTERNO.includes(c.clave))
+    : CATALOGO_DOCUMENTOS_CARPETA;
+}
+
 /** True si el documento lo gestiona Gestión Humana (no bloquea la parte CyD). */
 export function esResponsableGH(d: { responsable?: 'cyd' | 'gh' }): boolean {
   return d.responsable === 'gh';
@@ -329,9 +344,12 @@ export interface CompletitudCarpeta {
  */
 export function calcularCompletitudCarpeta(
   estadoDe: (clave: string) => string | null | undefined,
+  opciones?: { movimientoInterno?: boolean },
 ): CompletitudCarpeta {
-  const oblCyD = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional && !esResponsableGH(c));
-  const oblGH = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => !c.opcional && esResponsableGH(c));
+  // Movimiento interno → solo cuenta el reporte de novedad (catálogo mínimo).
+  const catalogo = catalogoCarpetaPara(!!opciones?.movimientoInterno);
+  const oblCyD = catalogo.filter((c) => !c.opcional && !esResponsableGH(c));
+  const oblGH = catalogo.filter((c) => !c.opcional && esResponsableGH(c));
   const pct = (v: number, t: number) => (t > 0 ? Math.round((v / t) * 100) : 100);
   const contar = (arr: readonly DocumentoCarpetaCatalogo[]) =>
     arr.filter((c) => docCarpetaListo(estadoDe(c.clave))).length;

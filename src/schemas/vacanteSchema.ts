@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Timestamp } from 'firebase/firestore';
-import { codigoEmpresaSede, criticidad, estadoVacante, tipoSolicitud } from './enums';
+import { codigoEmpresaSede, criticidad, estadoVacante, tipoMovimiento, tipoSolicitud } from './enums';
 import type { CamposAuditoria } from './auditoria';
 
 export const vacanteInputSchema = z.object({
@@ -87,10 +87,20 @@ export const vacanteInputSchema = z.object({
    */
   aval_no_requiere: z.boolean().default(false),
 
-  fecha_entrevista_propuesta: z.date({
-    required_error: 'Propón una fecha de entrevista',
-    invalid_type_error: 'Fecha inválida',
-  }),
+  /**
+   * Movimiento interno (reu Karen sep-2026): la persona ya es empleada y solo se
+   * formaliza el cambio de cargo. Salta reclutamiento/selección/decisión y no
+   * agenda entrevista con líder. Marca aparte del tipo de solicitud.
+   */
+  es_movimiento_interno: z.boolean().default(false),
+  tipo_movimiento: tipoMovimiento.nullable().default(null),
+
+  // Nullable: un movimiento interno no tiene entrevista. Cuando NO es movimiento,
+  // el form la exige (validación manual en VacanteForm, como la temporalidad).
+  fecha_entrevista_propuesta: z
+    .date({ invalid_type_error: 'Fecha inválida' })
+    .nullable()
+    .default(null),
 
   lider_uid: z.string().min(1),
   lider_nombre: z.string().min(1),
@@ -111,7 +121,7 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
    * reactivarla. null cuando no está suspendida.
    */
   estado_previo_pausa?: z.infer<typeof estadoVacante> | null;
-  fecha_entrevista_propuesta: Timestamp;
+  fecha_entrevista_propuesta: Timestamp | null;
   fecha_entrevista_pactada: Timestamp | null;
   aval_aprobado_por: string | null;
   aval_aprobado_en: Timestamp | null;

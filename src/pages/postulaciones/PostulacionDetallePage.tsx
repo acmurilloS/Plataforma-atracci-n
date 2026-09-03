@@ -36,6 +36,7 @@ import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCrit
 import { FaseCandidato, etiquetaEstado } from '../../components/postulaciones/FaseCandidato';
 import { EditarDatosModal } from '../../components/postulaciones/EditarDatosModal';
 import { CartaBienvenidaModal } from '../../components/postulaciones/CartaBienvenidaModal';
+import { TIPO_MOVIMIENTO_LABEL } from '../../schemas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { esSoloCarpeta } from '../../utils/accesoRutas';
 import { cn } from '../../utils/cn';
@@ -85,6 +86,13 @@ const TABS_LIDER: readonly Tab[] = [
   'documentos',
   'informe',
 ];
+
+/**
+ * Tabs de un MOVIMIENTO INTERNO (reu Karen sep-2026): la persona ya es empleada,
+ * así que no hay pruebas/entrevistas/referencias/informe. Solo la carpeta
+ * simplificada (reporte de novedad / solicitud de integrante).
+ */
+const TABS_MOVIMIENTO: readonly Tab[] = ['documentos'];
 
 function tabEsOpcional(tab: Tab, criticidad: Criticidad | null): boolean {
   if (!criticidad) return false;
@@ -164,16 +172,33 @@ export default function PostulacionDetallePage() {
   const puedeEditarDatos = ['analista', 'coordinador', 'gh', 'admin'].includes(rol ?? '');
   const [editarDatosAbierto, setEditarDatosAbierto] = useState(false);
   const [cartaBienvenidaAbierta, setCartaBienvenidaAbierta] = useState(false);
+  // Movimiento interno: exámenes MANUALES (reu Karen sep-2026). Pasar a
+  // en_examenes_medicos dispara onPostulacionEnExamenes (crea la orden); al
+  // registrar el resultado vuelve a en_contratacion.
+  const { actualizar: actualizarMov } = useMutacion();
+  async function solicitarExamenesMovimiento() {
+    if (!post) return;
+    if (!window.confirm('¿Solicitar exámenes médicos para este movimiento interno? Se creará la orden para los gestores SST.')) return;
+    const ahora = Timestamp.now();
+    await actualizarMov('postulaciones', post.id, {
+      estado: 'en_examenes_medicos',
+      ultima_transicion_estado: ahora,
+      'marcas.en_examenes_medicos_en': ahora,
+    });
+  }
   const [tab, setTab] = useState<Tab>('pruebas');
   // GH / Documentación solo ven los tabs de carpeta. Como el `rol` llega async,
   // corregimos en render: si el tab actual no les corresponde, cae al primero
   // permitido (documentos) — sin efectos ni parpadeo.
   const soloCarpeta = esSoloCarpeta(rol);
-  const tabsVisibles: readonly Tab[] = soloCarpeta
-    ? TABS_CARPETA
-    : rol === 'lider'
-      ? TABS_LIDER
-      : TABS;
+  // Movimiento interno: solo la carpeta simplificada, sin pipeline de selección.
+  const tabsVisibles: readonly Tab[] = post?.movimiento_interno
+    ? TABS_MOVIMIENTO
+    : soloCarpeta
+      ? TABS_CARPETA
+      : rol === 'lider'
+        ? TABS_LIDER
+        : TABS;
   const tabActivo: Tab = tabsVisibles.includes(tab) ? tab : tabsVisibles[0];
   const [enviandoPortal, setEnviandoPortal] = useState(false);
   const [copiadoEnlace, setCopiadoEnlace] = useState(false);
@@ -535,6 +560,11 @@ export default function PostulacionDetallePage() {
               {etiquetaEstado(post.estado)}
             </Pill>
             {post.fuente === 'base_interna' && <Pill tono="info">🏢 Interno</Pill>}
+            {post.movimiento_interno && (
+              <Pill tono="info">
+                ↔ Movimiento interno · {TIPO_MOVIMIENTO_LABEL[post.movimiento_interno.tipo]}
+              </Pill>
+            )}
           </div>
           <div className="mt-4">
             <FaseCandidato estado={post.estado} variante="full" />
@@ -643,6 +673,16 @@ export default function PostulacionDetallePage() {
               {post.condiciones_enviadas_en
                 ? 'Reenviar condiciones laborales'
                 : 'Enviar condiciones laborales'}
+            </button>
+          )}
+          {post.movimiento_interno && post.estado === 'en_contratacion' && (
+            <button
+              onClick={solicitarExamenesMovimiento}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"
+              title="Solo si aplica para este movimiento (opcional)"
+            >
+              <HeartPulse size={12} strokeWidth={1.75} />
+              Solicitar exámenes médicos
             </button>
           )}
           {(post.estado === 'en_contratacion' || post.estado === 'contratado') && (

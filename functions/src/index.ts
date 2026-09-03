@@ -28,6 +28,8 @@ export { editarDatosVacante } from './vacantes/editarDatosVacante';
 export { repostularCandidato } from './postulaciones/repostularCandidato';
 // Registrar fecha de vinculacion -> contratado + cierra la vacante (reu Karen 27-ago).
 export { registrarFechaVinculacion } from './postulaciones/registrarFechaVinculacion';
+// Movimiento interno: persona ya empleada, salta directo a contratacion (reu Karen sep-2026).
+export { marcarMovimientoInterno } from './postulaciones/marcarMovimientoInterno';
 // Seed idempotente de sedes nuevas (ciudades faltantes, reu Karen 27-ago).
 export { seedSedesNuevas } from './catalogos/seedSedesNuevas';
 export { onCandidatoCreate } from './candidatos/onCandidatoCreate';

@@ -9,9 +9,9 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
 import {
-  CATALOGO_DOCUMENTOS_CARPETA,
   SECCIONES_LABEL,
   calcularCompletitudCarpeta,
+  catalogoCarpetaPara,
   docCarpetaListo,
   type ArchivoCarpeta,
   type DocumentoCandidatoDoc,
@@ -80,7 +80,7 @@ export function DocumentosTab({ postulacion }: Props) {
   // por correo (los candidatos no tienen acceso a la plataforma).
   const docsParaCandidato = useMemo(
     () =>
-      CATALOGO_DOCUMENTOS_CARPETA.filter((c) => c.aporta_candidato)
+      catalogoCarpetaPara(!!postulacion.movimiento_interno).filter((c) => c.aporta_candidato)
         .filter((c) => (docsPorClave.get(c.clave)?.estado ?? 'pendiente') === 'pendiente')
         .map((c) => c.nombre + (c.opcional ? ' (si aplica)' : '')),
     [docsPorClave],
@@ -112,7 +112,10 @@ export function DocumentosTab({ postulacion }: Props) {
   // Antes contaba solo 'verificado' → discrepaba con la pantalla Carpetas y la
   // misma carpeta salía 100% para uno y 50% para otro (reu 18-ago).
   const comp = useMemo(
-    () => calcularCompletitudCarpeta((clave) => docsPorClave.get(clave)?.estado),
+    () =>
+      calcularCompletitudCarpeta((clave) => docsPorClave.get(clave)?.estado, {
+        movimientoInterno: !!postulacion.movimiento_interno,
+      }),
     [docsPorClave],
   );
   const verificadosObligatorios = comp.cyd.listos;
@@ -252,7 +255,9 @@ export function DocumentosTab({ postulacion }: Props) {
 
       {/* Secciones */}
       {secciones.map((seccion) => {
-        const itemsSeccion = CATALOGO_DOCUMENTOS_CARPETA.filter((c) => c.seccion === seccion);
+        const itemsSeccion = catalogoCarpetaPara(!!postulacion.movimiento_interno).filter(
+          (c) => c.seccion === seccion,
+        );
         const verifSeccion = itemsSeccion.filter(
           (c) => c.responsable !== 'gh' && docCarpetaListo(docsPorClave.get(c.clave)?.estado),
         ).length;

@@ -93,6 +93,20 @@ export const TIPO_SOLICITUD_LABEL: Record<TipoSolicitud, string> = {
   aumento: 'Aumento de planta',
 };
 
+/**
+ * Tipo de MOVIMIENTO INTERNO (reu Karen sep-2026): la persona ya es empleada y
+ * solo cambia de cargo. Vertical = ascenso, horizontal = mismo nivel, transversal
+ * = a otra área. Marca aparte del tipo de solicitud (un movimiento puede ser a la
+ * vez un reemplazo o un aumento de planta).
+ */
+export const tipoMovimiento = z.enum(['vertical', 'horizontal', 'transversal']);
+export type TipoMovimiento = z.infer<typeof tipoMovimiento>;
+export const TIPO_MOVIMIENTO_LABEL: Record<TipoMovimiento, string> = {
+  vertical: 'Vertical (ascenso)',
+  horizontal: 'Horizontal (mismo nivel)',
+  transversal: 'Transversal (otra área)',
+};
+
 export const estadoVacante = z.enum([
   'borrador',
   'aprobada',

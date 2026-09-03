@@ -32,6 +32,7 @@ import {
   CATALOGO_DOCUMENTOS_CARPETA,
   SECCIONES_LABEL,
   calcularCompletitudCarpeta,
+  catalogoCarpetaPara,
   type DocumentoCandidatoDoc,
   type EstadoDocumento,
   type PostulacionDoc,
@@ -213,8 +214,13 @@ export default function CarpetasPage() {
     // Completitud en DOS niveles (CyD gobierna, GH aparte) con la regla ÚNICA
     // compartida (verificado | no_aplica = listo) — la MISMA que usa DocumentosTab,
     // para que la carpeta no salga 100% en una pantalla y 50% en otra (reu 18-ago).
-    const comp = calcularCompletitudCarpeta((clave) => docsPorClave.get(clave)?.estado);
+    // Movimiento interno (reu Karen sep-2026): solo cuenta el reporte de novedad.
+    const movimientoInterno = !!postPorId.get(postulacionId)?.movimiento_interno;
+    const comp = calcularCompletitudCarpeta((clave) => docsPorClave.get(clave)?.estado, {
+      movimientoInterno,
+    });
     return {
+      movimientoInterno,
       // Compat con el resto de la pantalla: verificados/total/porcentaje = CyD.
       verificados: comp.cyd.listos,
       total: comp.cyd.total,
@@ -578,7 +584,9 @@ export default function CarpetasPage() {
               {abierta && (
                 <div className="space-y-5 mt-4">
                   {SECCIONES.map((sec) => {
-                    const items = CATALOGO_DOCUMENTOS_CARPETA.filter((d) => d.seccion === sec);
+                    const items = catalogoCarpetaPara(completitud.movimientoInterno).filter(
+                      (d) => d.seccion === sec,
+                    );
                     return (
                       <div key={sec}>
                         <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted mb-2">
