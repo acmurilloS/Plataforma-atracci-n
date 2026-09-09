@@ -29,3 +29,11 @@ functions/.jdk21.zip
 *.tsbuildinfo
 vite.config.d.ts
 vite.config.js
+
+# Respaldos y volcados de PRODUCCION (traen datos personales de candidatos:
+# nombres, cedulas, telefonos, correos). El repo es PUBLICO: nunca versionarlos.
+scratchpad/
+
+# Fuente en Word de la carta de bienvenida (lleva la firma escaneada del CEO).
+# La app usa el PDF de public/formatos/; el .docx se guarda fuera del repo.
+CARTA DE BIENVENIDA .docx
