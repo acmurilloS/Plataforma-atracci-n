@@ -7,6 +7,43 @@ import { verificarCedula } from './verificarCedula';
 import { urlPortalDocValida } from './urlPortalDocValida';
 import { CLAVES_APORTA_CANDIDATO, ITEM_POR_CLAVE } from '../documentos/catalogoCarpeta';
 
+/** Un archivo dentro de un ítem que admite varios (espeja ArchivoCarpeta del front). */
+export interface ArchivoPortal {
+  url: string;
+  nombre: string;
+  tamano_bytes: number | null;
+  subido_en: Timestamp | null;
+}
+
+/**
+ * Lista de archivos de un documento: usa `archivos` si existe; si no, la deriva
+ * del archivo único (compatibilidad con documentos viejos). Compartida por el
+ * registro y el borrado del portal.
+ */
+export function archivosDe(doc: Record<string, unknown>): ArchivoPortal[] {
+  const arr = doc.archivos;
+  if (Array.isArray(arr) && arr.length) {
+    return (arr as Record<string, unknown>[])
+      .map((a) => ({
+        url: String(a?.url ?? ''),
+        nombre: String(a?.nombre ?? 'archivo'),
+        tamano_bytes: typeof a?.tamano_bytes === 'number' ? (a.tamano_bytes as number) : null,
+        subido_en: (a?.subido_en as Timestamp | undefined) ?? null,
+      }))
+      .filter((a) => a.url);
+  }
+  const unico = String(doc.archivo_url ?? '');
+  if (!unico) return [];
+  return [
+    {
+      url: unico,
+      nombre: String(doc.nombre_archivo ?? 'archivo'),
+      tamano_bytes: typeof doc.tamano_bytes === 'number' ? (doc.tamano_bytes as number) : null,
+      subido_en: (doc.fecha_entrega as Timestamp | undefined) ?? null,
+    },
+  ];
+}
+
 /**
  * registrarDocumentoCarpetaPortal · F4.
  *
@@ -92,6 +129,21 @@ export const registrarDocumentoCarpetaPortal = onCall({ region: 'us-central1' },
     .limit(1)
     .get();
 
+  // Ítems que admiten VARIOS archivos (certificados laborales / de estudio…):
+  // se AGREGA a la lista. Antes cada subida pisaba `archivo_url` y el candidato
+  // perdía el archivo anterior (reporte Karen 09-sep). Misma forma que escribe la
+  // pestaña Documentos de GH: `archivos[]` + los punteros al PRIMER archivo.
+  const esMultiple = !!item?.multiple;
+  const MAX_ARCHIVOS = 10;
+  const nuevo: ArchivoPortal = {
+    url,
+    nombre: nombreArchivo,
+    tamano_bytes: tamanoBytes,
+    subido_en: ahora,
+  };
+
+  let lista: ArchivoPortal[];
+
   if (!existentes.empty) {
     const docRef = existentes.docs[0].ref;
     const actual = existentes.docs[0].data() as Record<string, unknown>;
@@ -102,10 +154,21 @@ export const registrarDocumentoCarpetaPortal = onCall({ region: 'us-central1' },
         'Este documento ya fue verificado. Si necesitas cambiarlo, contacta al equipo de Atracción.',
       );
     }
+    // Previos: `archivos` si ya existe; si no, se deriva del archivo único
+    // (documentos viejos o subidos antes de que el portal soportara varios).
+    const previos = archivosDe(actual);
+    lista = esMultiple ? [...previos.filter((a) => a.url !== url), nuevo] : [nuevo];
+    if (lista.length > MAX_ARCHIVOS) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Este documento admite máximo ${MAX_ARCHIVOS} archivos. Quita alguno antes de subir otro.`,
+      );
+    }
     await docRef.update({
-      archivo_url: url,
-      nombre_archivo: nombreArchivo,
-      tamano_bytes: tamanoBytes,
+      archivos: lista,
+      archivo_url: lista[0].url,
+      nombre_archivo: lista[0].nombre,
+      tamano_bytes: lista[0].tamano_bytes ?? null,
       estado: 'entregado',
       fecha_entrega: ahora,
       verificado_en: null,
@@ -115,6 +178,7 @@ export const registrarDocumentoCarpetaPortal = onCall({ region: 'us-central1' },
       actualizado_por: 'candidato_portal',
     });
   } else {
+    lista = [nuevo];
     await db.collection('documentos_candidato').add({
       postulacion_id: postulacionId,
       candidato_id: candidatoId,
@@ -123,6 +187,7 @@ export const registrarDocumentoCarpetaPortal = onCall({ region: 'us-central1' },
       seccion: item?.seccion ?? 'hoja_vida',
       nombre: item?.nombre ?? clave,
       estado: 'entregado',
+      archivos: lista,
       archivo_url: url,
       nombre_archivo: nombreArchivo,
       tamano_bytes: tamanoBytes,
@@ -147,6 +212,14 @@ export const registrarDocumentoCarpetaPortal = onCall({ region: 'us-central1' },
     creado_por: 'candidato_portal',
   });
 
-  logger.info('[portal] documento de carpeta subido', { postulacionId, clave });
-  return { ok: true as const };
+  logger.info('[portal] documento de carpeta subido', {
+    postulacionId,
+    clave,
+    total_archivos: lista.length,
+  });
+  // Devuelve la lista para que el portal la pinte sin recargar.
+  return {
+    ok: true as const,
+    archivos: lista.map((a) => ({ url: a.url, nombre: a.nombre })),
+  };
 });

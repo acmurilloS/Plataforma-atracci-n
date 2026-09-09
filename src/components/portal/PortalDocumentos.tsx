@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
-import { Check, Loader2, Upload } from 'lucide-react';
+import { Check, FileText, Loader2, Plus, Upload, X } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
 
 /**
@@ -11,7 +11,16 @@ import { auth, functions, storage } from '../../lib/firebase';
  * (`aporta_candidato:true`). La subida va a Storage `portal_docs/{token}/…` y se
  * registra en `documentos_candidato` (la carpeta que ve GH) vía callable, con la
  * cédula como 2º factor. Un doc ya `verificado` por GH no se puede re-subir.
+ *
+ * Ítems MÚLTIPLES (certificados laborales / de estudio): admiten varios archivos.
+ * Se listan todos y hay "Agregar otro archivo" + quitar. Antes cada subida
+ * reemplazaba a la anterior y el candidato perdía la primera (reporte 09-sep).
  */
+
+export interface ArchivoSlot {
+  url: string;
+  nombre: string;
+}
 
 export interface PortalSlot {
   clave: string;
@@ -21,6 +30,10 @@ export interface PortalSlot {
   estado: string; // pendiente | entregado | verificado | no_aplica
   nombre_archivo: string;
   observaciones: string;
+  /** True si el ítem admite varios archivos. */
+  multiple?: boolean;
+  /** Archivos ya subidos (en ítems múltiples se listan todos). */
+  archivos?: ArchivoSlot[];
 }
 
 export function PortalDocumentos({
@@ -56,13 +69,7 @@ export function PortalDocumentos({
             slot={s}
             token={token}
             cedula={cedula}
-            onSubido={(nombreArchivo) =>
-              actualizarSlot(s.clave, {
-                estado: 'entregado',
-                nombre_archivo: nombreArchivo,
-                observaciones: '',
-              })
-            }
+            onCambio={(patch) => actualizarSlot(s.clave, patch)}
           />
         ))}
       </div>
@@ -74,62 +81,120 @@ function SlotRow({
   slot,
   token,
   cedula,
-  onSubido,
+  onCambio,
 }: {
   slot: PortalSlot;
   token: string;
   cedula: string;
-  onSubido: (nombreArchivo: string) => void;
+  onCambio: (patch: Partial<PortalSlot>) => void;
 }) {
   const [subiendo, setSubiendo] = useState(false);
+  const [quitando, setQuitando] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const bloqueado = slot.estado === 'verificado' || slot.estado === 'no_aplica';
+  const esMultiple = !!slot.multiple;
+  // Lista a mostrar: `archivos` si viene; si no, deriva del archivo único.
+  const archivos: ArchivoSlot[] =
+    slot.archivos && slot.archivos.length
+      ? slot.archivos
+      : slot.nombre_archivo
+        ? [{ url: '', nombre: slot.nombre_archivo }]
+        : [];
+
+  async function subirUno(file: File): Promise<ArchivoSlot[] | null> {
+    if (file.size > 10 * 1024 * 1024) {
+      setErr(`"${file.name}" supera 10 MB. Comprímelo o súbelo aparte.`);
+      return null;
+    }
+    const ts = Date.now();
+    const safe = file.name.replace(/[^\w.\-]+/g, '_');
+    const r = storageRef(storage, `portal_docs/${token}/${slot.clave}_${ts}_${safe}`);
+    await uploadBytes(r, file, {
+      customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+    });
+    const url = await getDownloadURL(r);
+    const fn = httpsCallable<
+      {
+        token: string;
+        cedula: string;
+        clave: string;
+        url: string;
+        nombre_archivo: string;
+        tamano_bytes: number;
+      },
+      { ok: true; archivos: ArchivoSlot[] }
+    >(functions, 'registrarDocumentoCarpetaPortal');
+    const res = await fn({
+      token,
+      cedula,
+      clave: slot.clave,
+      url,
+      nombre_archivo: file.name,
+      tamano_bytes: file.size,
+    });
+    return res.data.archivos ?? [];
+  }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file || !token) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setErr('El archivo supera 10 MB. Comprímelo o súbelo en partes.');
-      return;
-    }
+    if (!files.length || !token) return;
     setSubiendo(true);
     setErr(null);
     try {
-      const ts = Date.now();
-      const safe = file.name.replace(/[^\w.\-]+/g, '_');
-      const r = storageRef(storage, `portal_docs/${token}/${slot.clave}_${ts}_${safe}`);
-      await uploadBytes(r, file, {
-        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
-      });
-      const url = await getDownloadURL(r);
-      const fn = httpsCallable<
-        {
-          token: string;
-          cedula: string;
-          clave: string;
-          url: string;
-          nombre_archivo: string;
-          tamano_bytes: number;
-        },
-        { ok: true }
-      >(functions, 'registrarDocumentoCarpetaPortal');
-      await fn({
-        token,
-        cedula,
-        clave: slot.clave,
-        url,
-        nombre_archivo: file.name,
-        tamano_bytes: file.size,
-      });
-      onSubido(file.name);
+      let ultima: ArchivoSlot[] | null = null;
+      // Uno por uno: cada llamada AGREGA a la lista del servidor.
+      for (const file of esMultiple ? files : files.slice(0, 1)) {
+        const lista = await subirUno(file);
+        if (lista) ultima = lista;
+      }
+      if (ultima) {
+        onCambio({
+          estado: 'entregado',
+          archivos: ultima,
+          nombre_archivo: ultima[0]?.nombre ?? '',
+          observaciones: '',
+        });
+      }
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : 'No se pudo subir el archivo. Reintenta.');
     } finally {
       setSubiendo(false);
     }
   }
+
+  async function quitar(a: ArchivoSlot) {
+    if (!a.url) return;
+    setQuitando(a.url);
+    setErr(null);
+    try {
+      const fn = httpsCallable<
+        { token: string; cedula: string; clave: string; url: string },
+        { ok: true; archivos: ArchivoSlot[]; estado: string }
+      >(functions, 'quitarArchivoCarpetaPortal');
+      const res = await fn({ token, cedula, clave: slot.clave, url: a.url });
+      onCambio({
+        archivos: res.data.archivos,
+        estado: res.data.estado,
+        nombre_archivo: res.data.archivos[0]?.nombre ?? '',
+      });
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'No se pudo quitar el archivo.');
+    } finally {
+      setQuitando(null);
+    }
+  }
+
+  const etiquetaBoton = subiendo
+    ? 'Subiendo…'
+    : esMultiple
+      ? archivos.length > 0
+        ? 'Agregar otro archivo'
+        : 'Subir documento'
+      : slot.estado === 'entregado'
+        ? 'Cambiar archivo'
+        : 'Subir documento';
 
   return (
     <div className="px-5 sm:px-7 py-3.5">
@@ -140,12 +205,10 @@ function SlotRow({
             {slot.opcional && (
               <span className="text-[11px] text-text-subtle font-normal"> · si aplica</span>
             )}
+            {esMultiple && (
+              <span className="text-[11px] text-info-700 font-normal"> · varios archivos</span>
+            )}
           </p>
-          {slot.estado === 'entregado' && (
-            <p className="text-[12px] text-info-700 mt-0.5">
-              Recibido{slot.nombre_archivo ? ` · ${slot.nombre_archivo}` : ''}
-            </p>
-          )}
           {slot.estado === 'pendiente' && slot.observaciones && (
             <p className="text-[12px] text-warning-700 mt-0.5">
               El equipo pidió corregir: {slot.observaciones}
@@ -154,6 +217,47 @@ function SlotRow({
         </div>
         <EstadoSlot estado={slot.estado} />
       </div>
+
+      {/* Archivos ya subidos */}
+      {archivos.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {archivos.map((a, i) => (
+            <li
+              key={a.url || i}
+              className="flex items-center gap-2 text-[12px] text-text-body bg-slate-50 rounded-md px-2.5 py-1.5"
+            >
+              <FileText size={13} strokeWidth={1.75} className="text-text-subtle shrink-0" />
+              {a.url ? (
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="truncate hover:underline text-info-700"
+                >
+                  {a.nombre}
+                </a>
+              ) : (
+                <span className="truncate">{a.nombre}</span>
+              )}
+              {!bloqueado && a.url && (
+                <button
+                  type="button"
+                  onClick={() => quitar(a)}
+                  disabled={quitando === a.url || subiendo}
+                  title="Quitar este archivo"
+                  className="ml-auto shrink-0 text-text-subtle hover:text-danger-700 disabled:opacity-50"
+                >
+                  {quitando === a.url ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <X size={13} strokeWidth={2} />
+                  )}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {!bloqueado && (
         <div className="mt-2">
@@ -164,22 +268,26 @@ function SlotRow({
           >
             {subiendo ? (
               <Loader2 size={14} className="animate-spin" />
+            ) : esMultiple && archivos.length > 0 ? (
+              <Plus size={14} strokeWidth={2} />
             ) : (
               <Upload size={14} strokeWidth={1.75} />
             )}
-            {subiendo
-              ? 'Subiendo…'
-              : slot.estado === 'entregado'
-                ? 'Cambiar archivo'
-                : 'Subir documento'}
+            {etiquetaBoton}
             <input
               type="file"
               accept="application/pdf,image/*,.doc,.docx"
+              multiple={esMultiple}
               onChange={onFile}
               className="hidden"
               disabled={subiendo}
             />
           </label>
+          {esMultiple && (
+            <p className="text-[11px] text-text-subtle mt-1">
+              Puedes seleccionar varios a la vez; se suman a los que ya subiste.
+            </p>
+          )}
           {err && <p className="text-[12px] text-danger-700 mt-1.5">{err}</p>}
         </div>
       )}

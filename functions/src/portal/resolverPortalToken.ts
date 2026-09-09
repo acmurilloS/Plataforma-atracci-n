@@ -8,6 +8,7 @@ import { ipBloqueada, registrarFalloIp } from './rateLimitIp';
 import { validarTurnstile } from '../security/validarTurnstile';
 import { esContratado, esEstadoFinalizado, faseDeEstado } from './faseProceso';
 import { CLAVES_APORTA_CANDIDATO, ITEM_POR_CLAVE } from '../documentos/catalogoCarpeta';
+import { archivosDe } from './registrarDocumentoCarpetaPortal';
 
 // CAPTCHA (Cloudflare Turnstile). En el emulador no se setea y validarTurnstile
 // usa la test secret oficial; en prod hay que sembrarlo en Secret Manager.
@@ -212,14 +213,22 @@ export const resolverPortalToken = onCall(
   const slots = clavesPortal.map((clave) => {
     const item = ITEM_POR_CLAVE[clave];
     const actual = estadosPorClave[clave];
+    // Ítems que admiten varios archivos: el portal necesita la LISTA para poder
+    // mostrarlos todos y dejar agregar/quitar (antes solo llegaba un nombre y por
+    // eso parecía que la subida nueva borraba la anterior — reporte 09-sep).
+    const archivos = actual
+      ? archivosDe(actual).map((a) => ({ url: a.url, nombre: a.nombre }))
+      : [];
     return {
       clave,
       nombre: item?.nombre ?? clave,
       seccion: item?.seccion ?? 'hoja_vida',
       opcional: !!item?.opcional,
+      multiple: !!item?.multiple,
       estado: actual ? String(actual.estado ?? 'pendiente') : 'pendiente',
       nombre_archivo: actual ? String(actual.nombre_archivo ?? '') : '',
       observaciones: actual ? String(actual.observaciones ?? '') : '',
+      archivos,
     };
   });
 

@@ -111,6 +111,8 @@ export { registrarConsentimientoPortal } from './portal/registrarConsentimientoP
 export { registrarDocumentoPortal } from './portal/registrarDocumentoPortal';
 // Subida del candidato a un slot de su carpeta real documentos_candidato (Portal F4, 2026-06-17).
 export { registrarDocumentoCarpetaPortal } from './portal/registrarDocumentoCarpetaPortal';
+// Quitar uno de los archivos de un item multiple desde el portal (reporte 09-sep).
+export { quitarArchivoCarpetaPortal } from './portal/quitarArchivoCarpetaPortal';
 // Aviso al candidato (correo con link al portal) cuando su proceso avanza (D.1, 2026-06-16).
 export { onPostulacionAvance } from './portal/onPostulacionAvance';
 // Revocar el portal del candidato (cierra el bearer-token, 2026-06-16).

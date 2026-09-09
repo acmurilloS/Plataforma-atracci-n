@@ -17,13 +17,20 @@ export interface ItemCatalogoCarpeta {
   aporta_candidato: boolean;
   /** Responsable: 'gh' (contrato, afiliaciones) NO bloquea la parte de CyD. */
   responsable?: 'cyd' | 'gh';
+  /**
+   * True si el ítem admite VARIOS archivos (certificados laborales, de estudio…).
+   * DEBE quedar en sync con `multiple` del catálogo del front
+   * (src/schemas/documentoCarpetaSchema.ts): el portal lo usa para AGREGAR a la
+   * lista en vez de reemplazar (antes cada archivo nuevo borraba el anterior).
+   */
+  multiple?: boolean;
 }
 
 export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'verificacion_documentos', seccion: 'generales', nombre: 'Verificación de documentos', opcional: true, aporta_candidato: false, responsable: 'cyd' },
   { clave: 'datos_basicos_integrante', seccion: 'generales', nombre: 'Datos Básicos del Integrante (DGH-F-05)', opcional: false, aporta_candidato: false },
   { clave: 'contrato_trabajo', seccion: 'generales', nombre: 'Contrato de Trabajo', opcional: false, aporta_candidato: false, responsable: 'gh' },
-  { clave: 'solicitud_integrantes', seccion: 'generales', nombre: 'Solicitud de Integrantes / Reporte de Novedad', opcional: false, aporta_candidato: false },
+  { clave: 'solicitud_integrantes', seccion: 'generales', nombre: 'Solicitud de Integrantes / Reporte de Novedad', opcional: false, aporta_candidato: false, multiple: true },
   { clave: 'certificado_discapacidad', seccion: 'generales', nombre: 'Certificado de discapacidad (Secretaría de Salud)', opcional: true, aporta_candidato: false },
   { clave: 'afiliacion_arl', seccion: 'seguridad_social', nombre: 'Afiliación ARL', opcional: false, aporta_candidato: false, responsable: 'gh' },
   { clave: 'afiliacion_eps', seccion: 'seguridad_social', nombre: 'Afiliación EPS', opcional: false, aporta_candidato: false, responsable: 'gh' },
@@ -32,10 +39,10 @@ export const CATALOGO_CARPETA: ItemCatalogoCarpeta[] = [
   { clave: 'certificacion_afp', seccion: 'seguridad_social', nombre: 'Certificación de AFP', opcional: true, aporta_candidato: true },
   { clave: 'carta_cesantias', seccion: 'seguridad_social', nombre: 'Carta de Cesantías', opcional: true, aporta_candidato: true },
   { clave: 'fotocopia_cedula', seccion: 'hoja_vida', nombre: 'Fotocopias de la Cédula de Ciudadanía (4)', opcional: false, aporta_candidato: true },
-  { clave: 'certificado_judicial', seccion: 'hoja_vida', nombre: 'Certificado Judicial Vigente y antecedentes', opcional: false, aporta_candidato: false },
-  { clave: 'certificados_laborales', seccion: 'hoja_vida', nombre: 'Certificados Laborales (2)', opcional: false, aporta_candidato: true },
-  { clave: 'certificados_estudio', seccion: 'hoja_vida', nombre: 'Fotocopias de los Certificados de Estudio', opcional: false, aporta_candidato: true },
-  { clave: 'certificado_medico', seccion: 'hoja_vida', nombre: 'Certificado médico de aptitud laboral', opcional: true, aporta_candidato: false },
+  { clave: 'certificado_judicial', seccion: 'hoja_vida', nombre: 'Certificado Judicial Vigente y antecedentes', opcional: false, aporta_candidato: false, multiple: true },
+  { clave: 'certificados_laborales', seccion: 'hoja_vida', nombre: 'Certificados Laborales (2)', opcional: false, aporta_candidato: true, multiple: true },
+  { clave: 'certificados_estudio', seccion: 'hoja_vida', nombre: 'Fotocopias de los Certificados de Estudio', opcional: false, aporta_candidato: true, multiple: true },
+  { clave: 'certificado_medico', seccion: 'hoja_vida', nombre: 'Certificado médico de aptitud laboral', opcional: true, aporta_candidato: false, multiple: true },
   { clave: 'hoja_vida', seccion: 'hoja_vida', nombre: 'Hoja de Vida', opcional: false, aporta_candidato: true },
   { clave: 'autorizacion_datos', seccion: 'hoja_vida', nombre: 'Autorización para recolección y tratamiento de datos personales', opcional: false, aporta_candidato: false },
   { clave: 'debida_diligencia', seccion: 'hoja_vida', nombre: 'Debida Diligencia / SAGRILAFT (F-CAR-01)', opcional: false, aporta_candidato: false },
