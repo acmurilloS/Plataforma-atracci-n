@@ -62,19 +62,10 @@ const NO_POSTULADO = new Set(['sourceado_por_ia']);
  * (pedido Karen 09-sep para la base del dashboard). Se agrupan por vacante.
  */
 export interface FechasProcesoVacante {
-  /** Envío del INFORME del candidato al líder (paso 12, colección `informes`). */
-  informeLider: Date | null;
   /** Entrevista del LÍDER con el candidato (entrevistas con `tipo: 'lider'`). */
   entrevistaLider: Date | null;
   /** Envío de la orden de exámenes médicos al candidato. */
   examenEnviado: Date | null;
-}
-
-/** Informe del candidato, en lo mínimo que necesita el reporte. */
-export interface InformeMin {
-  vacante_id?: string;
-  postulacion_id?: string;
-  enviado_al_lider_en?: unknown;
 }
 
 /** Entrevista, en lo mínimo que necesita el reporte. */
@@ -101,7 +92,6 @@ export function agruparFechasProceso(
   postulaciones: PostulacionDoc[],
   entrevistas: EntrevistaMin[],
   examenes: ExamenMin[],
-  informes: InformeMin[] = [],
 ): Map<string, FechasProcesoVacante> {
   const vacantePorPostulacion = new Map<string, string>();
   for (const p of postulaciones) vacantePorPostulacion.set(p.id, p.vacante_id);
@@ -110,25 +100,13 @@ export function agruparFechasProceso(
   const filaDe = (vacanteId: string): FechasProcesoVacante => {
     let f = mapa.get(vacanteId);
     if (!f) {
-      f = { informeLider: null, entrevistaLider: null, examenEnviado: null };
+      f = { entrevistaLider: null, examenEnviado: null };
       mapa.set(vacanteId, f);
     }
     return f;
   };
   const masAntigua = (actual: Date | null, nueva: Date) =>
     !actual || nueva.getTime() < actual.getTime() ? nueva : actual;
-
-  for (const inf of informes) {
-    const vacanteId =
-      String(inf.vacante_id ?? '') ||
-      vacantePorPostulacion.get(String(inf.postulacion_id ?? '')) ||
-      '';
-    if (!vacanteId) continue;
-    const f = aDate(inf.enviado_al_lider_en);
-    if (!f) continue;
-    const fila = filaDe(vacanteId);
-    fila.informeLider = masAntigua(fila.informeLider, f);
-  }
 
   for (const e of entrevistas) {
     if (e.tipo !== 'lider') continue;
@@ -294,12 +272,9 @@ export function construirBaseVacantes(
       'Fecha de apertura': formatearFecha(aperturaVacante(v)),
       'Terna enviada': formatearFecha(aDate(v.terna_enviada_en)),
       // Pedido Karen 09-sep: trazabilidad de las 3 fechas del tramo de decisión/ingreso.
-      // "Informe al líder": el informe del candidato (paso 12); si esa vacante no
-      // lo tiene, cae al Concepto de Atracción, que es el otro documento que la
-      // analista le manda al líder para revisar a los finalistas.
-      'Informe enviado al líder': formatearFecha(
-        fp?.informeLider ?? aDate(v.concepto_enviado_lider_en),
-      ),
+      // El "informe al líder" es el CONCEPTO DE ATRACCIÓN (VIDA-F-03) y su botón
+      // "Enviar al líder" — confirmado por Karen 09-sep: es el único que se envía.
+      'Informe enviado al líder': formatearFecha(aDate(v.concepto_enviado_lider_en)),
       'Entrevista del líder': formatearFecha(fp?.entrevistaLider ?? null),
       'Exámenes enviados': formatearFecha(fp?.examenEnviado ?? null),
       'Fecha de cierre': formatearFecha(aDate(v.cerrada_en)),

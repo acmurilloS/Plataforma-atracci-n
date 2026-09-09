@@ -12,7 +12,6 @@ import {
   esVacanteCerrada,
   type EntrevistaMin,
   type ExamenMin,
-  type InformeMin,
 } from '../../utils/reportesVacantes';
 import { exportarBaseVacantes, exportarReporteMensual } from '../../utils/exportarExcel';
 import { estadoVacante } from '../../schemas';
@@ -60,9 +59,6 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
     limit: 5000,
   });
   const { docs: examenes } = useColeccion<ExamenMin & { id: string }>('examenes_medicos', {
-    limit: 5000,
-  });
-  const { docs: informes } = useColeccion<InformeMin & { id: string }>('informes', {
     limit: 5000,
   });
 
@@ -133,12 +129,7 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
     setGenerando('base');
     try {
       const conteos = agruparPostulaciones(postulacionesFiltradas);
-      const fechas = agruparFechasProceso(
-        postulacionesFiltradas,
-        entrevistas,
-        examenes,
-        informes,
-      );
+      const fechas = agruparFechasProceso(postulacionesFiltradas, entrevistas, examenes);
       await exportarBaseVacantes(
         construirBaseVacantes(filtradas, conteos, festivos, new Date(), fechas),
       );
