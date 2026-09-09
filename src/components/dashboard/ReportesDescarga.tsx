@@ -5,10 +5,14 @@ import { cn } from '../../utils/cn';
 import { useColeccion } from '../../hooks/useColeccion';
 import { formatearFecha } from '../../utils/fechas';
 import {
+  agruparFechasProceso,
   agruparPostulaciones,
   construirBaseVacantes,
   construirResumenMensual,
   esVacanteCerrada,
+  type EntrevistaMin,
+  type ExamenMin,
+  type InformeMin,
 } from '../../utils/reportesVacantes';
 import { exportarBaseVacantes, exportarReporteMensual } from '../../utils/exportarExcel';
 import { estadoVacante } from '../../schemas';
@@ -49,6 +53,18 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
   // vacantes cargadas) → los dropdowns muestran TODAS las opciones reales.
   const { docs: empresasCat } = useColeccion<EmpresaDoc>('empresas', { limit: 200 });
   const { docs: sedesCat } = useColeccion<SedeDoc>('sedes', { limit: 500 });
+  // Fechas que NO viven en la vacante y Karen necesita en la base (09-sep):
+  // la entrevista del LÍDER (entrevistas tipo 'lider') y el envío de exámenes.
+  // Tope explícito: useColeccion trae 100 por defecto y truncaría el reporte.
+  const { docs: entrevistas } = useColeccion<EntrevistaMin & { id: string }>('entrevistas', {
+    limit: 5000,
+  });
+  const { docs: examenes } = useColeccion<ExamenMin & { id: string }>('examenes_medicos', {
+    limit: 5000,
+  });
+  const { docs: informes } = useColeccion<InformeMin & { id: string }>('informes', {
+    limit: 5000,
+  });
 
   const opciones = useMemo(() => {
     // Empresas: del catálogo (activas) + las presentes en vacantes (datos huérfanos).
@@ -117,7 +133,15 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
     setGenerando('base');
     try {
       const conteos = agruparPostulaciones(postulacionesFiltradas);
-      await exportarBaseVacantes(construirBaseVacantes(filtradas, conteos, festivos, new Date()));
+      const fechas = agruparFechasProceso(
+        postulacionesFiltradas,
+        entrevistas,
+        examenes,
+        informes,
+      );
+      await exportarBaseVacantes(
+        construirBaseVacantes(filtradas, conteos, festivos, new Date(), fechas),
+      );
     } catch {
       setError('No se pudo generar el archivo. Intenta de nuevo.');
     } finally {

@@ -166,6 +166,12 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
    */
   terna_enviada_en: Timestamp | null;
   terna_respondida_en: Timestamp | null;
+  /**
+   * Fecha en que la analista envió el CONCEPTO DE ATRACCIÓN (el "informe") al
+   * líder para que revise a los finalistas. Lo setea ConceptoAtraccionPage al
+   * usar "Enviar al líder"; sale como columna del Excel (pedido Karen 09-sep).
+   */
+  concepto_enviado_lider_en?: Timestamp | null;
   recordatorio_48h_enviado_en: Timestamp | null;
   recordatorio_24h_enviado_en: Timestamp | null;
   recordatorio_expirado_en: Timestamp | null;
