@@ -151,6 +151,151 @@ export function agruparPostulaciones(postulaciones: PostulacionDoc[]): Map<strin
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Fase REAL de la vacante (reu Karen 09-sep)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fases del pipeline activo como las lee Coordinación. El estado de la VACANTE se
+ * queda atrás cuando la analista avanza candidatos desde la lista (alguien ya en
+ * contratación con la vacante aún "publicada", o un repostulado que sigue su
+ * proceso en otra vacante): el dashboard contaba solo 3 en contratación cuando
+ * había más. La fase real es la más avanzada entre el estado de la vacante y la
+ * de sus candidatos en curso.
+ */
+export type FasePipeline =
+  | 'reclutamiento'
+  | 'entrevista_analista'
+  | 'entrevista_lider'
+  | 'examenes'
+  | 'contratacion'
+  | 'suspendida';
+
+type FaseAvance = Exclude<FasePipeline, 'suspendida'>;
+
+/** En orden del proceso; `suspendida` va aparte (no es un avance). */
+export const FASES_PIPELINE: ReadonlyArray<{ clave: FasePipeline; etiqueta: string }> = [
+  { clave: 'reclutamiento', etiqueta: 'Reclutamiento' },
+  { clave: 'entrevista_analista', etiqueta: 'Entrevista analista' },
+  { clave: 'entrevista_lider', etiqueta: 'Entrevista líder' },
+  { clave: 'examenes', etiqueta: 'Exámenes médicos' },
+  { clave: 'contratacion', etiqueta: 'Contratación' },
+  { clave: 'suspendida', etiqueta: 'Suspendida' },
+];
+
+const RANGO_FASE: Record<FaseAvance, number> = {
+  reclutamiento: 0,
+  entrevista_analista: 1,
+  entrevista_lider: 2,
+  examenes: 3,
+  contratacion: 4,
+};
+
+/**
+ * Fase de un candidato EN CURSO, o null si su postulación ya terminó en esta
+ * vacante (descartes, desistió, repostulado a otra). 'contratado' cuenta como
+ * contratación mientras la vacante no se cierre.
+ */
+export function faseDeCandidato(estado: string): FaseAvance | null {
+  switch (estado) {
+    case 'sourceado_por_ia':
+    case 'postulado':
+    case 'pre_entrevistado_pendiente':
+    case 'pre_entrevistado_ok':
+    case 'pruebas_enviadas':
+    case 'pruebas_completadas':
+      return 'reclutamiento';
+    case 'entrevistado_analista':
+    case 'referencias_validadas':
+      return 'entrevista_analista';
+    case 'en_terna':
+    case 'seleccionado_por_lider':
+      return 'entrevista_lider';
+    case 'en_examenes_medicos':
+      return 'examenes';
+    case 'en_contratacion':
+    case 'contratado':
+      return 'contratacion';
+    default:
+      return null;
+  }
+}
+
+/** Fase que ya indica el estado de la vacante por sí solo. */
+function faseBaseVacante(estado: string): FaseAvance {
+  if (estado === 'terna_enviada' || estado === 'seleccionado') return 'entrevista_lider';
+  if (estado === 'en_contratacion') return 'contratacion';
+  return 'reclutamiento';
+}
+
+export interface PipelineReal {
+  /** Fase real de cada vacante ACTIVA (id → fase). Las cerradas no aparecen. */
+  porVacante: Map<string, FasePipeline>;
+  /** Vacantes activas por fase real (suman el total de activas). */
+  vacantes: Record<FasePipeline, number>;
+  /**
+   * Personas en curso por la fase de SU postulación (solo vacantes activas; las
+   * de una vacante suspendida cuentan como suspendidas).
+   */
+  personas: Record<FasePipeline, number>;
+  /** Postulaciones en curso de cada vacante activa, agrupadas por su fase. */
+  personasPorVacante: Map<string, Map<FasePipeline, PostulacionDoc[]>>;
+}
+
+export function pipelineReal(vacantes: VacanteDoc[], postulaciones: PostulacionDoc[]): PipelineReal {
+  const enCurso = new Map<string, Array<{ p: PostulacionDoc; fase: FaseAvance }>>();
+  for (const p of postulaciones) {
+    const fase = faseDeCandidato(p.estado);
+    if (!fase || !p.vacante_id) continue;
+    const lista = enCurso.get(p.vacante_id) ?? [];
+    lista.push({ p, fase });
+    enCurso.set(p.vacante_id, lista);
+  }
+
+  const cero = (): Record<FasePipeline, number> => ({
+    reclutamiento: 0,
+    entrevista_analista: 0,
+    entrevista_lider: 0,
+    examenes: 0,
+    contratacion: 0,
+    suspendida: 0,
+  });
+  const res: PipelineReal = {
+    porVacante: new Map(),
+    vacantes: cero(),
+    personas: cero(),
+    personasPorVacante: new Map(),
+  };
+
+  for (const v of vacantes) {
+    if (esVacanteCerrada(v.estado)) continue;
+    const suspendida = v.estado === 'pausada';
+    const cands = enCurso.get(v.id) ?? [];
+    let fase: FasePipeline = faseBaseVacante(v.estado);
+    for (const { fase: fc } of cands) {
+      if (RANGO_FASE[fc] > RANGO_FASE[fase as FaseAvance]) fase = fc;
+    }
+    if (suspendida) fase = 'suspendida';
+    res.porVacante.set(v.id, fase);
+    res.vacantes[fase] += 1;
+
+    const grupos = new Map<FasePipeline, PostulacionDoc[]>();
+    for (const { p, fase: fc } of cands) {
+      // Los perfiles sin contacto humano no son "personas en proceso" todavía.
+      if (NO_POSTULADO.has(p.estado)) continue;
+      const clave: FasePipeline = suspendida ? 'suspendida' : fc;
+      res.personas[clave] += 1;
+      grupos.set(clave, [...(grupos.get(clave) ?? []), p]);
+    }
+    res.personasPorVacante.set(v.id, grupos);
+  }
+  return res;
+}
+
+export function etiquetaFasePipeline(fase: FasePipeline): string {
+  return FASES_PIPELINE.find((f) => f.clave === fase)?.etiqueta ?? fase;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Cálculos de tiempo / ANS por vacante
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -253,10 +398,13 @@ export function construirBaseVacantes(
   hoy: Date,
   /** Fechas de otras colecciones (entrevista del líder, envío de exámenes). */
   fechasProceso?: Map<string, FechasProcesoVacante>,
+  /** Fase real (candidato más avanzado) de las vacantes activas; ver `pipelineReal`. */
+  fasesReales?: Map<string, FasePipeline>,
 ): FilaExcel[] {
   return vacantes.map((v) => {
     const c = conteos.get(v.id) ?? { postulados: 0, enTerna: 0, contratado: false, fechaVinculacion: '' };
     const fp = fechasProceso?.get(v.id);
+    const faseReal = fasesReales?.get(v.id);
     const transcurridos = diasTranscurridos(v, festivos, hoy);
     const aTerna = diasHabilesATerna(v, festivos);
     return {
@@ -267,6 +415,8 @@ export function construirBaseVacantes(
       Unidad: v.unidad_nombre ?? '',
       Criticidad: v.criticidad ?? '',
       Estado: (v.estado ?? '').replace(/_/g, ' '),
+      // Misma fase que el dashboard (el estado de la vacante se queda atrás). Vacía en las cerradas.
+      'Fase real': faseReal ? etiquetaFasePipeline(faseReal) : '',
       'Tipo de solicitud': TIPO_SOLICITUD_TXT[v.tipo_solicitud] ?? v.tipo_solicitud ?? '',
       'Movimiento interno': v.es_movimiento_interno ? (v.tipo_movimiento ?? 'Sí') : '',
       'Fecha de apertura': formatearFecha(aperturaVacante(v)),

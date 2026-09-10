@@ -10,6 +10,7 @@ import {
   construirBaseVacantes,
   construirResumenMensual,
   esVacanteCerrada,
+  pipelineReal,
   type EntrevistaMin,
   type ExamenMin,
 } from '../../utils/reportesVacantes';
@@ -130,8 +131,9 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
     try {
       const conteos = agruparPostulaciones(postulacionesFiltradas);
       const fechas = agruparFechasProceso(postulacionesFiltradas, entrevistas, examenes);
+      const fases = pipelineReal(filtradas, postulacionesFiltradas).porVacante;
       await exportarBaseVacantes(
-        construirBaseVacantes(filtradas, conteos, festivos, new Date(), fechas),
+        construirBaseVacantes(filtradas, conteos, festivos, new Date(), fechas, fases),
       );
     } catch {
       setError('No se pudo generar el archivo. Intenta de nuevo.');

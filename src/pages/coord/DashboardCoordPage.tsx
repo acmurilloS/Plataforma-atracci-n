@@ -16,7 +16,15 @@ import { Card, KpiCard, Pill, type PillTono } from '../../components/brand';
 import { ReportesDescarga } from '../../components/dashboard/ReportesDescarga';
 import { SemaforoANS } from '../../components/ui/SemaforoANS';
 import { cn } from '../../utils/cn';
-import { diasTranscurridos, esVacanteCerrada, tiemposPorEtapa } from '../../utils/reportesVacantes';
+import {
+  diasTranscurridos,
+  esVacanteCerrada,
+  FASES_PIPELINE,
+  pipelineReal,
+  tiemposPorEtapa,
+  type FasePipeline,
+  type PipelineReal,
+} from '../../utils/reportesVacantes';
 import type { PostulacionDoc, VacanteDoc } from '../../schemas';
 import { SaludoInicio } from '../../components/SaludoInicio';
 import { DrillDownVacantes, type DrillItem } from '../../components/dashboard/DrillDownVacantes';
@@ -29,6 +37,9 @@ import { CargandoPagina } from '../../components/ui/CargandoPagina';
  * (número gigante + sub-celdas por fase), 3 KPIs premium (ANS de terna vencidas /
  * en riesgo / contratadas del mes), donut de distribución por fase + criticidad/
  * empresa, y la lista de vacantes con ANS crítico. Solo la paleta de marca.
+ *
+ * Las fases son la fase REAL de cada vacante (reu Karen 09-sep): la más avanzada
+ * entre su estado y el de sus candidatos en curso — ver `pipelineReal`.
  */
 
 const ESTADO_TONO: Record<string, PillTono> = {
@@ -52,17 +63,20 @@ const CRITICIDAD_TONO: Record<string, PillTono> = {
   Baja: 'success',
 };
 
-// Fases del pipeline activo (agrupan los estados en curso del flujograma).
-const FASE_RECLUTAMIENTO = ['borrador', 'aprobada', 'lista_para_publicar', 'publicada', 'en_proceso', 'pausada'];
-const FASE_TERNA = ['terna_enviada', 'seleccionado'];
-const FASE_CONTRATACION = ['en_contratacion'];
+// Color de cada fase real (mismo en la card oscura, el donut y la leyenda).
+const FASE_COLOR: Record<FasePipeline, { bg: string; text: string }> = {
+  reclutamiento: { bg: 'bg-info-500', text: 'text-info-500' },
+  entrevista_analista: { bg: 'bg-warning-500', text: 'text-warning-500' },
+  entrevista_lider: { bg: 'bg-brand-300', text: 'text-brand-300' },
+  examenes: { bg: 'bg-brand-600', text: 'text-brand-600' },
+  contratacion: { bg: 'bg-success-500', text: 'text-success-500' },
+  suspendida: { bg: 'bg-slate-400', text: 'text-slate-400' },
+};
 
 type DrillMode =
   | 'vencidas'
   | 'en_riesgo'
-  | 'reclutamiento'
-  | 'terna'
-  | 'contratacion'
+  | `fase:${FasePipeline}`
   | 'contratadas'
   | `crit:${string}`
   | `emp:${string}`;
@@ -110,27 +124,16 @@ export default function DashboardCoordPage() {
   const stats = useMemo(() => {
     const porCriticidad: Record<string, number> = {};
     const porEmpresa: Record<string, number> = {};
-    const porEstado: Record<string, number> = {};
     for (const v of vacantes) {
-      porEstado[v.estado] = (porEstado[v.estado] ?? 0) + 1;
       porCriticidad[v.criticidad] = (porCriticidad[v.criticidad] ?? 0) + 1;
       porEmpresa[v.empresa_codigo] = (porEmpresa[v.empresa_codigo] ?? 0) + 1;
     }
-    const activas = vacantes.filter(
-      (v) => !['cerrada', 'desierta', 'cancelada'].includes(v.estado),
-    ).length;
-    return { porEstado, porCriticidad, porEmpresa, total: vacantes.length, activas };
+    const activas = vacantes.filter((v) => !esVacanteCerrada(v.estado)).length;
+    return { porCriticidad, porEmpresa, total: vacantes.length, activas };
   }, [vacantes]);
 
-  const buckets = useMemo(() => {
-    const e = stats.porEstado;
-    const g = (keys: string[]) => keys.reduce((s, k) => s + (e[k] ?? 0), 0);
-    return {
-      reclutamiento: g(FASE_RECLUTAMIENTO),
-      terna: g(FASE_TERNA),
-      contratacion: g(FASE_CONTRATACION),
-    };
-  }, [stats.porEstado]);
+  // Fase real de cada vacante activa + personas en curso por fase.
+  const pipe = useMemo(() => pipelineReal(vacantes, postulaciones), [vacantes, postulaciones]);
 
   const contratadasMes = useMemo(() => {
     const now = new Date();
@@ -174,25 +177,35 @@ export default function DashboardCoordPage() {
       };
     }
 
-    if (drill === 'reclutamiento' || drill === 'terna' || drill === 'contratacion') {
-      const grupo =
-        drill === 'reclutamiento' ? FASE_RECLUTAMIENTO : drill === 'terna' ? FASE_TERNA : FASE_CONTRATACION;
-      const label =
-        drill === 'reclutamiento' ? 'Reclutamiento' : drill === 'terna' ? 'Terna / decisión' : 'Contratación';
-      const arr = vacantes.filter((v) => grupo.includes(v.estado));
+    if (drill.startsWith('fase:')) {
+      const fase = drill.slice(5) as FasePipeline;
+      const label = FASES_PIPELINE.find((f) => f.clave === fase)?.etiqueta ?? fase;
+      const arr = vacantes.filter((v) => pipe.porVacante.get(v.id) === fase);
       return {
         titulo: `Fase · ${label}`,
-        descripcion: 'vacantes activas en esta fase',
+        descripcion: 'según el candidato más avanzado',
         tono: 'info' as const,
         icono: <Layers size={20} strokeWidth={1.75} />,
-        items: arr.map((v) => ({
-          ...base(v),
-          right: (
-            <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
-              {v.estado.replace(/_/g, ' ')}
-            </Pill>
-          ),
-        })),
+        items: arr.map((v) => {
+          const it = base(v);
+          // Quiénes están en esta fase: así se ve, p. ej., al repostulado que ya
+          // va en contratación aunque la vacante siga "publicada".
+          const personas = pipe.personasPorVacante.get(v.id)?.get(fase) ?? [];
+          const nombres = personas.map((p) => p.candidato_nombre).filter(Boolean);
+          const quienes =
+            nombres.length > 2 ? `${nombres.slice(0, 2).join(', ')} +${nombres.length - 2}` : nombres.join(', ');
+          return {
+            ...it,
+            sub: quienes ? `${it.sub} · ${quienes}` : it.sub,
+            right: (
+              <Pill tono={personas.length ? 'info' : 'neutral'} dot>
+                {personas.length
+                  ? `${personas.length} ${personas.length === 1 ? 'persona' : 'personas'}`
+                  : 'Sin candidatos'}
+              </Pill>
+            ),
+          };
+        }),
       };
     }
 
@@ -245,7 +258,7 @@ export default function DashboardCoordPage() {
         sub: String((p as { cargo_nombre?: string }).cargo_nombre ?? ''),
       })),
     };
-  }, [drill, activasFull, vacantes, postulaciones]);
+  }, [drill, activasFull, vacantes, postulaciones, pipe]);
 
   // Primera carga (caché fría): esqueleto en vez de números en 0.
   if (cargando && vacantes.length === 0) return <CargandoPagina />;
@@ -256,7 +269,12 @@ export default function DashboardCoordPage() {
 
       {/* ── ROW 1 · Pipeline (oscuro) + 3 KPIs ─────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-6">
-        <PipelineHeroCard activas={stats.activas} total={stats.total} buckets={buckets} onFase={setDrill} />
+        <PipelineHeroCard
+          activas={stats.activas}
+          total={stats.total}
+          pipe={pipe}
+          onFase={(f) => setDrill(`fase:${f}`)}
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <KpiCard
@@ -297,14 +315,21 @@ export default function DashboardCoordPage() {
             dotClass="bg-info-500"
             eyebrow="Distribución"
             titulo="Pipeline por fase"
-            sub="Vacantes activas por fase del flujograma"
+            sub="Vacantes activas por fase real · la marca el candidato más avanzado"
           />
           <div className="flex items-center justify-center gap-6 mt-6">
-            <DonutFase buckets={buckets} />
-            <div className="space-y-3.5 flex-1 min-w-0">
-              <DonutLegend colorClass="bg-info-500" label="Reclutamiento" value={buckets.reclutamiento} total={stats.activas} />
-              <DonutLegend colorClass="bg-warning-500" label="Terna / decisión" value={buckets.terna} total={stats.activas} />
-              <DonutLegend colorClass="bg-brand-600" label="Contratación" value={buckets.contratacion} total={stats.activas} />
+            <DonutFase pipe={pipe} />
+            <div className="space-y-0.5 flex-1 min-w-0">
+              {FASES_PIPELINE.map((f) => (
+                <DonutLegend
+                  key={f.clave}
+                  colorClass={FASE_COLOR[f.clave].bg}
+                  label={f.etiqueta}
+                  value={pipe.vacantes[f.clave]}
+                  total={stats.activas}
+                  onClick={pipe.vacantes[f.clave] ? () => setDrill(`fase:${f.clave}`) : undefined}
+                />
+              ))}
             </div>
           </div>
         </Card>
@@ -476,17 +501,17 @@ function SectionHeader({
   );
 }
 
-/** Card oscura del pipeline activo — número gigante + sub-celdas por fase. */
+/** Card oscura del pipeline activo — número gigante + sub-celdas por fase real. */
 function PipelineHeroCard({
   activas,
   total,
-  buckets,
+  pipe,
   onFase,
 }: {
   activas: number;
   total: number;
-  buckets: { reclutamiento: number; terna: number; contratacion: number };
-  onFase?: (m: 'reclutamiento' | 'terna' | 'contratacion') => void;
+  pipe: PipelineReal;
+  onFase?: (f: FasePipeline) => void;
 }) {
   return (
     <div className="relative overflow-hidden rounded-md bg-slate-900 p-8 text-white shadow-brand-card">
@@ -519,25 +544,17 @@ function PipelineHeroCard({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2.5">
-          <PipeCell
-            label="Reclutamiento"
-            value={buckets.reclutamiento}
-            dotClass="bg-info-500"
-            onClick={onFase ? () => onFase('reclutamiento') : undefined}
-          />
-          <PipeCell
-            label="Terna"
-            value={buckets.terna}
-            dotClass="bg-warning-500"
-            onClick={onFase ? () => onFase('terna') : undefined}
-          />
-          <PipeCell
-            label="Contratación"
-            value={buckets.contratacion}
-            dotClass="bg-brand-500"
-            onClick={onFase ? () => onFase('contratacion') : undefined}
-          />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          {FASES_PIPELINE.map((f) => (
+            <PipeCell
+              key={f.clave}
+              label={f.etiqueta}
+              value={pipe.vacantes[f.clave]}
+              personas={pipe.personas[f.clave]}
+              dotClass={FASE_COLOR[f.clave].bg}
+              onClick={onFase ? () => onFase(f.clave) : undefined}
+            />
+          ))}
         </div>
       </div>
     </div>
@@ -547,11 +564,13 @@ function PipelineHeroCard({
 function PipeCell({
   label,
   value,
+  personas,
   dotClass,
   onClick,
 }: {
   label: string;
   value: number;
+  personas: number;
   dotClass: string;
   onClick?: () => void;
 }) {
@@ -578,14 +597,18 @@ function PipeCell({
       )}
       style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)' }}
     >
-      <div className="flex items-center gap-1.5 mb-2">
-        <span className={cn('h-1 w-1 rounded-full', dotClass)} />
-        <p className="text-[9.5px] font-bold uppercase tracking-[0.10em] text-white/50 leading-none">
+      {/* Alto fijo de 2 líneas: las etiquetas largas no desalinean los números. */}
+      <div className="flex items-start gap-1.5 mb-2 min-h-[23px]">
+        <span className={cn('mt-[3px] h-1 w-1 shrink-0 rounded-full', dotClass)} />
+        <p className="text-[9.5px] font-bold uppercase tracking-[0.10em] text-white/50 leading-[1.2]">
           {label}
         </p>
       </div>
       <p className="text-[30px] font-light leading-none tabular-nums tracking-[-0.03em] text-white">
         {value}
+      </p>
+      <p className="mt-1.5 text-[10.5px] font-medium text-white/40 tabular-nums">
+        {personas} {personas === 1 ? 'persona' : 'personas'}
       </p>
     </div>
   );
@@ -593,18 +616,10 @@ function PipeCell({
 
 const DONUT_C = 238.76; // 2π·38
 
-function DonutFase({
-  buckets,
-}: {
-  buckets: { reclutamiento: number; terna: number; contratacion: number };
-}) {
-  const totalPipe = buckets.reclutamiento + buckets.terna + buckets.contratacion;
+function DonutFase({ pipe }: { pipe: PipelineReal }) {
+  const totalPipe = FASES_PIPELINE.reduce((s, f) => s + pipe.vacantes[f.clave], 0);
   const total = Math.max(1, totalPipe);
-  const segs = [
-    { val: buckets.reclutamiento, cls: 'text-info-500' },
-    { val: buckets.terna, cls: 'text-warning-500' },
-    { val: buckets.contratacion, cls: 'text-brand-600' },
-  ];
+  const segs = FASES_PIPELINE.map((f) => ({ val: pipe.vacantes[f.clave], cls: FASE_COLOR[f.clave].text }));
   let offset = 0;
   return (
     <div className="relative shrink-0">
@@ -624,7 +639,6 @@ function DonutFase({
               strokeDasharray={`${len} ${DONUT_C}`}
               strokeDashoffset={-offset}
               transform="rotate(-90 50 50)"
-              strokeLinecap={len > 0.5 ? 'round' : 'butt'}
               className={cn('transition-all duration-700 ease-cult', s.cls)}
             />
           );
@@ -647,15 +661,25 @@ function DonutLegend({
   label,
   value,
   total,
+  onClick,
 }: {
   colorClass: string;
   label: string;
   value: number;
   total: number;
+  onClick?: () => void;
 }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <div className="flex items-center justify-between -mx-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={cn(
+        'w-full flex items-center justify-between -mx-2 px-2 py-1.5 rounded-lg text-left transition-colors',
+        onClick ? 'hover:bg-slate-50 cursor-pointer' : 'cursor-default',
+      )}
+    >
       <div className="flex items-center gap-2.5 min-w-0">
         <span className={cn('h-2.5 w-2.5 rounded-[3px] inline-block shrink-0', colorClass)} />
         <span className="text-[13px] text-text-body font-medium truncate">{label}</span>
@@ -664,7 +688,7 @@ function DonutLegend({
         <span className="text-[11px] font-medium text-text-subtle tabular-nums">{pct}%</span>
         <span className="text-[15px] font-semibold text-text-strong tabular-nums w-6 text-right">{value}</span>
       </div>
-    </div>
+    </button>
   );
 }
 
