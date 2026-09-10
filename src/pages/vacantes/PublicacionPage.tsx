@@ -19,6 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
 import { BuscarCandidatosIAModal } from '../../components/vacantes/BuscarCandidatosIAModal';
 import { ActivarReferidosModal } from '../../components/vacantes/ActivarReferidosModal';
+import { ReplicarPublicacion } from '../../components/vacantes/ReplicarPublicacion';
 import { Button, Card, Pill } from '../../components/brand';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import type { VacanteDoc } from '../../schemas';
@@ -516,6 +517,9 @@ export default function PublicacionPage() {
           </table>
         </Card>
       </div>
+
+      {/* ─── Replicar en vacantes iguales (reu Karen 09-sep) ─────── */}
+      <ReplicarPublicacion vacante={vacante} publicaciones={publicaciones} />
 
       {/* ─── CTAs siguiente paso ──────────────────────────────── */}
       <div className="flex justify-end gap-3 flex-wrap pt-2">
