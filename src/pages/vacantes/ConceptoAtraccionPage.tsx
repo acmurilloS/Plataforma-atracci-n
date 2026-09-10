@@ -146,7 +146,7 @@ export default function ConceptoAtraccionPage() {
     if (
       hayContenido &&
       !window.confirm(
-        'Esto vuelve a llenar la tabla con los datos de los Informes y el candidato. ' +
+        'Esto vuelve a llenar la tabla con los finalistas y los datos del candidato. ' +
           'Se reemplaza lo que esté escrito. ¿Continuar?',
       )
     ) {
@@ -323,7 +323,7 @@ export default function ConceptoAtraccionPage() {
                 ? 'Concepto de atracción de los integrantes finalistas, preparado por el equipo de Atracción. Revísalo y, si lo necesitas, expórtalo a PDF.'
                 : esGhDueno
                   ? 'Concepto de atracción de los finalistas. Revísalo y, si necesitas intervenir, ajusta los campos y guarda tus cambios; también puedes exportarlo a PDF.'
-                  : 'Formato oficial VIDA-F-03 v0. La tabla se llena sola con lo que escribiste en los Informes (paso 11); ajusta lo que falte, guarda, envíaselo al líder o expórtalo a PDF.'}
+                  : 'Formato oficial VIDA-F-03 v0. La tabla se llena sola con los finalistas y sus datos; completa lo que falte, guarda, envíaselo al líder o expórtalo a PDF.'}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -346,7 +346,7 @@ export default function ConceptoAtraccionPage() {
                   variant="neutral-secondary"
                   icon={<FileDown size={13} strokeWidth={1.75} />}
                 >
-                  Traer de los informes
+                  Volver a llenar
                 </Button>
                 <Button
                   onClick={guardar}

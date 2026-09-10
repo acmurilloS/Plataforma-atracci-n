@@ -56,11 +56,16 @@ const TABS = [
   'entrevistas',
   'referencias',
   'documentos',
-  'informe',
   'diligencia',
   'datos básicos',
 ] as const;
-type Tab = (typeof TABS)[number];
+/**
+ * 'informe' (Informe por candidato, pasos 11-12) queda OCULTO (reu Karen 09-sep):
+ * al líder solo se le envía el Concepto de Atracción de la vacante, y el Informe
+ * por candidato se usó una sola vez en producción. Sigue en el tipo para poder
+ * reactivarlo agregándolo de nuevo a TABS / TABS_LIDER.
+ */
+type Tab = (typeof TABS)[number] | 'informe';
 
 /**
  * Tabs de CARPETA. GH (Diego/Paola) y Documentación (Carla) entran a esta página
@@ -84,7 +89,6 @@ const TABS_LIDER: readonly Tab[] = [
   'entrevistas',
   'referencias',
   'documentos',
-  'informe',
 ];
 
 /**

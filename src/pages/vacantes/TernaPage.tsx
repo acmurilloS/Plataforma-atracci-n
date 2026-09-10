@@ -466,8 +466,8 @@ export default function TernaPage() {
           <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
             <p className="text-[14px] font-medium text-text-strong">Aún no hay integrantes en terna</p>
             <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
-              En la pestaña "Informe" de cada postulación, presionar "Enviar al líder · paso 12"
-              mueve al integrante aquí.
+              En la lista de postulaciones, pasa al integrante al estado "En terna" para que
+              aparezca aquí.
             </p>
           </div>
         ) : (
@@ -490,7 +490,7 @@ export default function TernaPage() {
                       className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline underline-offset-2"
                     >
                       <FileText size={11} strokeWidth={1.5} />
-                      Ver informe completo →
+                      Ver candidato →
                     </Link>
                   </div>
                   {esLider && (

@@ -111,8 +111,10 @@ const PASOS: PasoDef[] = [
     titulo: 'Realización del informe',
     fase: 'C',
     rol: 'analista',
-    descripcion: 'Abre el candidato → tab Informe → escribe resumen y recomendación.',
-    rutaRelativa: ':id/postulaciones',
+    // El único informe que se hace y se envía es el Concepto de Atracción de la
+    // vacante; el Informe por candidato quedó oculto (reu Karen 09-sep).
+    descripcion: 'Postulaciones → Concepto de Atracción → completa la tabla de finalistas y guarda.',
+    rutaRelativa: ':id/concepto-atraccion',
     estadosCubiertos: ['en_proceso'],
   },
   {
@@ -120,8 +122,8 @@ const PASOS: PasoDef[] = [
     titulo: 'Envío del informe al líder',
     fase: 'C',
     rol: 'analista',
-    descripcion: 'Desde el tab Informe → botón "Enviar al líder". Pasa a terna automáticamente.',
-    rutaRelativa: ':id/postulaciones',
+    descripcion: 'Desde el Concepto de Atracción → botón "Enviar al líder" (le llega por campana y correo).',
+    rutaRelativa: ':id/concepto-atraccion',
     estadosCubiertos: ['en_proceso', 'terna_enviada'],
   },
   {
