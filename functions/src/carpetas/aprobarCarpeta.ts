@@ -18,6 +18,11 @@ import { db } from '../utils/admin';
  *    incluso saltándose la UI.
  *  - Marca contratado + cierra la vacante + aprueba la carpeta de forma atómica.
  *  - Es idempotente: si la postulación ya está contratada, solo reconcilia.
+ *  - Rechaza (reu Karen 10-sep) una carpeta 'anulada' —p. ej. la del proceso de
+ *    origen de un repostulado— y la de una postulación que no esté en
+ *    'en_contratacion' (o 'contratado', para reconciliar): aprobarla contrataría a
+ *    alguien que ya salió de ese proceso y cerraría la vacante equivocada. Ambos
+ *    chequeos van ANTES de la idempotencia y de cualquier escritura.
  *
  * Los tickets de conexión (paso 20) NO se crean aquí: ya se crean en el paso 14
  * (terna) con `crearTicketsConexion`, con el esquema CANÓNICO (tipo, criticidad,
@@ -28,6 +33,9 @@ import { db } from '../utils/admin';
  */
 
 const ROLES_AUTORIZADOS = ['analista', 'coordinador', 'gh', 'documentacion', 'admin'];
+// Estados de la postulación desde los que se aprueba la carpeta. 'contratado' se
+// admite solo para la reconciliación idempotente (no vuelve a contratar).
+const ESTADOS_POSTULACION_APROBABLE = ['en_contratacion', 'contratado'];
 
 export const aprobarCarpeta = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
@@ -47,6 +55,16 @@ export const aprobarCarpeta = onCall({ region: 'us-central1' }, async (req) => {
     if (!carpetaSnap.exists) throw new HttpsError('not-found', 'La carpeta no existe.');
     const carpeta = carpetaSnap.data() as Record<string, unknown>;
 
+    // Carpeta anulada (p. ej. proceso de origen de un repostulado): nunca se
+    // aprueba, ni siquiera por la reconciliación idempotente de abajo.
+    if (carpeta.estado === 'anulada') {
+      const motivo = String(carpeta.anulada_motivo ?? '').trim();
+      throw new HttpsError(
+        'failed-precondition',
+        `Esta carpeta fue anulada${motivo ? ` (${motivo})` : ''}; no se puede aprobar.`,
+      );
+    }
+
     const postId = String(carpeta.postulacion_id ?? '');
     const vacanteId = String(carpeta.vacante_id ?? '');
     if (!postId || !vacanteId) {
@@ -58,6 +76,17 @@ export const aprobarCarpeta = onCall({ region: 'us-central1' }, async (req) => {
     const postSnap = await tx.get(postRef);
     if (!postSnap.exists) throw new HttpsError('not-found', 'La postulación no existe.');
     const post = postSnap.data() as Record<string, unknown>;
+
+    // Solo se aprueba un proceso en contratación: un repostulado, descartado o que
+    // aún no llegó a contratación no puede quedar contratado ni cerrar la vacante
+    // por esta vía.
+    if (!ESTADOS_POSTULACION_APROBABLE.includes(String(post.estado ?? ''))) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Este candidato no está en contratación en este proceso; no se puede aprobar su carpeta.',
+      );
+    }
+
     const vacSnap = await tx.get(vacRef);
     const vac = vacSnap.exists ? (vacSnap.data() as Record<string, unknown>) : null;
 

@@ -52,10 +52,14 @@ const DATOS = {
   // Vacantes con unidad_id para el scoping del rol 'gerente'.
   'vacantes/vGer': { unidad_id: 'u_energia', lider_uid: 'lider9', estado: 'en_proceso' },
   'vacantes/vOtra': { unidad_id: 'u_ajena', lider_uid: 'lider9', estado: 'en_proceso' },
+  // Carpetas con id determinístico: una viva y una anulada (repostulado, reu 10-sep).
+  'carpetas_digitales/carpeta_p1': { postulacion_id: 'p1', estado: 'armando' },
+  'carpetas_digitales/carpeta_p9': { postulacion_id: 'p9', estado: 'anulada' },
+  'vacantes_resumen/v1': { vacante_id: 'v1', por_estado: { en_examenes_medicos: 1 }, total_en_curso: 1 },
 };
 
 const casos = [];
-const caso = (grupo, nombre, { token, path, method = 'get', esperado, data }) => {
+const caso = (grupo, nombre, { token, path, method = 'get', esperado, data, payload }) => {
   casos.push({
     grupo, nombre, esperado,
     tc: {
@@ -65,6 +69,9 @@ const caso = (grupo, nombre, { token, path, method = 'get', esperado, data }) =>
         path: D(path),
         method,
         time: new Date('2026-07-15T12:00:00Z').toISOString(),
+        // Payload de escritura (`request.resource.data`) para create/update. Este
+        // SÍ va anidado en `request`; el doc existente va en `resource`, abajo.
+        ...(payload ? { resource: { data: payload } } : {}),
       },
       // OJO: en las reglas, `resource` (el doc que YA existe) es una variable
       // hermana de `request`, no `request.resource` (que es el payload de
@@ -175,6 +182,36 @@ caso(G7, 'gerente NO lee carpetas', { token: gerenteE, path: 'carpetas_digitales
 // Regresión: los demás roles NO se vieron afectados por el nuevo scoping.
 caso(G7, 'analista sigue listando vacantes (todas)', { token: analista, path: 'vacantes/vOtra', method: 'list', esperado: 'ALLOW' });
 caso(G7, 'coord sigue listando vacantes (todas)', { token: coord, path: 'vacantes/vOtra', method: 'list', esperado: 'ALLOW' });
+
+const G8 = '8. CARPETA HUÉRFANA (reu 10-sep · id determinístico, anulada congelada)';
+const carpetaNueva = { postulacion_id: 'p1', candidato_id: 'c1', vacante_id: 'v1', estado: 'armando' };
+caso(G8, 'analista NO crea carpeta con id aleatorio (duplicaría la del trigger)', { token: analista, path: 'carpetas_digitales/aB3xK9Rq7ZtLm2', method: 'create', esperado: 'DENY', payload: carpetaNueva });
+caso(G8, 'analista crea carpeta con id carpeta_{postulacion_id}', { token: analista, path: 'carpetas_digitales/carpeta_p1', method: 'create', esperado: 'ALLOW', payload: carpetaNueva });
+caso(G8, 'Carla crea carpeta con id determinístico', { token: carla, path: 'carpetas_digitales/carpeta_p1', method: 'create', esperado: 'ALLOW', payload: carpetaNueva });
+caso(G8, 'id de OTRA postulación NO sirve', { token: analista, path: 'carpetas_digitales/carpeta_p2', method: 'create', esperado: 'DENY', payload: carpetaNueva });
+caso(G8, 'líder NO crea carpetas aunque el id cuadre', { token: lider, path: 'carpetas_digitales/carpeta_p1', method: 'create', esperado: 'DENY', payload: carpetaNueva });
+// Control del DENY de abajo: la misma escritura sobre una carpeta VIVA sí pasa
+// (si no, el DENY de la anulada podría ser un error de la regla y no la guarda).
+caso(G8, 'GH actualiza una carpeta viva (control)', { token: gh, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'ALLOW', payload: { postulacion_id: 'p1', estado: 'entregada_gh' } });
+caso(G8, 'analista NO actualiza una carpeta anulada', { token: analista, path: 'carpetas_digitales/carpeta_p9', method: 'update', esperado: 'DENY', payload: { postulacion_id: 'p9', estado: 'lista' } });
+caso(G8, 'analista NO cambia la carpeta de postulación', { token: analista, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'DENY', payload: { postulacion_id: 'p2', estado: 'armando' } });
+caso(G8, 'cliente NO anula carpetas (server-only)', { token: coord, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'DENY', payload: { postulacion_id: 'p1', estado: 'anulada' } });
+caso(G8, 'GH NO borra carpetas', { token: gh, path: 'carpetas_digitales/carpeta_p1', method: 'delete', esperado: 'DENY' });
+
+const G9 = '9. RESUMEN POR VACANTE (vacantes_resumen · fase real en Seguimiento)';
+caso(G9, 'analista abre el resumen por id', { token: analista, path: 'vacantes_resumen/v1', esperado: 'ALLOW' });
+caso(G9, 'gerente abre el resumen por id (Mis unidades)', { token: gerenteE, path: 'vacantes_resumen/v1', esperado: 'ALLOW' });
+caso(G9, 'talentos abre el resumen por id', { token: talentos, path: 'vacantes_resumen/v1', esperado: 'ALLOW' });
+caso(G9, 'apoyo/IT abre el resumen por id', { token: apoyoIt, path: 'vacantes_resumen/v1', esperado: 'ALLOW' });
+caso(G9, 'líder abre el resumen por id', { token: lider, path: 'vacantes_resumen/v1', esperado: 'ALLOW' });
+caso(G9, 'anónimo NO abre el resumen', { token: ANON, path: 'vacantes_resumen/v1', esperado: 'DENY' });
+caso(G9, 'sin rol NO abre el resumen', { token: SINROL, path: 'vacantes_resumen/v1', esperado: 'DENY' });
+caso(G9, 'líder NO lista resúmenes (vería vacantes ajenas)', { token: lider, path: 'vacantes_resumen/v1', method: 'list', esperado: 'DENY' });
+caso(G9, 'gerente NO lista resúmenes', { token: gerenteE, path: 'vacantes_resumen/v1', method: 'list', esperado: 'DENY' });
+caso(G9, 'analista lista resúmenes (Seguimiento)', { token: analista, path: 'vacantes_resumen/v1', method: 'list', esperado: 'ALLOW' });
+caso(G9, 'coord lista resúmenes', { token: coord, path: 'vacantes_resumen/v1', method: 'list', esperado: 'ALLOW' });
+caso(G9, 'analista NO escribe el resumen (solo Admin SDK)', { token: analista, path: 'vacantes_resumen/v1', method: 'create', esperado: 'DENY', payload: { vacante_id: 'v1', por_estado: {}, total_en_curso: 0 } });
+caso(G9, 'coord NO actualiza el resumen', { token: coord, path: 'vacantes_resumen/v1', method: 'update', esperado: 'DENY', payload: { vacante_id: 'v1', por_estado: {}, total_en_curso: 0 } });
 
 // ── Ejecutar ────────────────────────────────────────────────────────────
 const res = await fetch(`https://firebaserules.googleapis.com/v1/projects/${PROJECT}:test`, {

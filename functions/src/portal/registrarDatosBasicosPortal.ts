@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { asegurarPortalEscribible } from './portalEscribible';
 import { verificarCedula } from './verificarCedula';
 import { urlPortalDocValida } from './urlPortalDocValida';
 import { upsertFormatoEnCarpeta } from './upsertFormatoEnCarpeta';
@@ -98,8 +99,8 @@ export const registrarDatosBasicosPortal = onCall({ region: 'us-central1' }, asy
     throw new HttpsError('permission-denied', 'Cédula incorrecta o bloqueada. Verifica e intenta de nuevo.');
   }
 
-  const postulacionId = String(t.postulacion_id ?? '');
-  if (!postulacionId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
+  // Un proceso ya finalizado no recibe formularios (reu Karen 10-sep).
+  const { postulacionId } = await asegurarPortalEscribible(t);
 
   const entrada = (req.data?.datos ?? {}) as Record<string, unknown>;
   const limpio: Record<string, unknown> = {};

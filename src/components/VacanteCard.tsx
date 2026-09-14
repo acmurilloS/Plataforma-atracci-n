@@ -5,9 +5,15 @@ import { es } from 'date-fns/locale';
 import { cn } from '../utils/cn';
 import { Card, Pill, type PillTono } from './brand';
 import { EliminarVacanteAdmin } from './vacantes/EliminarVacanteAdmin';
-import { diasTranscurridos, aperturaVacante } from '../utils/reportesVacantes';
+import {
+  aperturaVacante,
+  diasTranscurridos,
+  FASES_TARJETA,
+  faseTarjeta,
+  type LetraFase,
+} from '../utils/reportesVacantes';
 import { diasHabilesEntre } from '../utils/fechas';
-import type { VacanteDoc } from '../schemas';
+import type { ResumenVacanteDoc, VacanteDoc } from '../schemas';
 
 /**
  * VacanteCard · sistema brand.
@@ -21,49 +27,32 @@ import type { VacanteDoc } from '../schemas';
  *   2. Eyebrow con consecutivo + h3 cargo.
  *   3. Barra 6-fase con etiqueta hairline.
  *   4. Status label legible al final + responsable + tiempo abierta.
+ *
+ * La fase, el texto y el responsable salen de `faseTarjeta`: la fase REAL, la
+ * más avanzada entre el estado de la vacante y sus candidatos en curso
+ * (`resumen`, de `vacantes_resumen`). El estado se queda atrás cuando la
+ * analista avanza candidatos desde la lista (BUG B, 10-sep): entonces el texto
+ * habla de los candidatos y el estado de la vacante va debajo, en pequeño.
  */
 
-interface FaseDef {
-  clave: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
-  label: string;
-  estados: string[];
-  tono: PillTono;
-  barra: string; // bg-* para segmento activo / completado
-}
-
-const FASES: FaseDef[] = [
-  { clave: 'A', label: 'Inicio', estados: ['borrador', 'aprobada'], tono: 'brand', barra: 'bg-brand-200' },
-  { clave: 'B', label: 'Reclutamiento', estados: ['lista_para_publicar', 'publicada'], tono: 'warning', barra: 'bg-warning-500' },
-  { clave: 'C', label: 'Selección', estados: ['en_proceso'], tono: 'info', barra: 'bg-info-500' },
-  { clave: 'D', label: 'Decisión', estados: ['terna_enviada', 'seleccionado'], tono: 'danger', barra: 'bg-danger-500' },
-  { clave: 'E', label: 'Ingreso', estados: ['en_contratacion'], tono: 'success', barra: 'bg-success-500' },
-  { clave: 'F', label: 'Vinculación', estados: ['cerrada'], tono: 'neutral', barra: 'bg-slate-700' },
-];
-
-const ESTADO_LABEL: Record<string, string> = {
-  borrador: 'Esperando validación de GH',
-  aprobada: 'Aval aprobado · lista para perfilar',
-  lista_para_publicar: 'Perfilamiento listo · lista para publicar',
-  publicada: 'Publicada · recibiendo HV',
-  en_proceso: 'Evaluando integrantes',
-  terna_enviada: 'Terna enviada · esperando decisión del líder',
-  seleccionado: 'Integrante elegido · solicitando exámenes',
-  en_contratacion: 'Exámenes y documentación en curso',
-  cerrada: 'Cerrada · ingreso en curso',
-  desierta: 'Desierta',
-  cancelada: 'Cancelada',
-  pausada: 'Pausada',
+// Color de cada fase (su nombre y su cálculo viven en `faseTarjeta`).
+const COLOR_FASE: Record<LetraFase, { tono: PillTono; barra: string }> = {
+  A: { tono: 'brand', barra: 'bg-brand-200' },
+  B: { tono: 'warning', barra: 'bg-warning-500' },
+  C: { tono: 'info', barra: 'bg-info-500' },
+  D: { tono: 'danger', barra: 'bg-danger-500' },
+  E: { tono: 'success', barra: 'bg-success-500' },
+  F: { tono: 'neutral', barra: 'bg-slate-700' },
 };
 
-interface Responsable {
-  rol: string;
-  nombre: string;
-  iniciales: string;
-}
-
-function faseDeEstado(estado: string): number {
-  return FASES.findIndex((f) => f.estados.includes(estado));
-}
+const PUNTO_TONO: Record<PillTono, string> = {
+  brand: 'bg-brand-500',
+  warning: 'bg-warning-500',
+  info: 'bg-info-500',
+  danger: 'bg-danger-500',
+  success: 'bg-success-500',
+  neutral: 'bg-slate-500',
+};
 
 function iniciales(nombre: string): string {
   return nombre
@@ -72,36 +61,6 @@ function iniciales(nombre: string): string {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? '')
     .join('');
-}
-
-function responsableDeEstado(v: VacanteDoc): Responsable {
-  const make = (rol: string, nombre: string): Responsable => ({
-    rol,
-    nombre,
-    iniciales: iniciales(nombre) || '?',
-  });
-  switch (v.estado) {
-    case 'borrador':
-      return make('GH', 'Maribel González');
-    case 'aprobada':
-    case 'lista_para_publicar':
-    case 'publicada':
-    case 'en_proceso':
-      return make('Analista', v.analista_nombre ?? 'Sin asignar');
-    case 'terna_enviada':
-      return make('Líder', v.lider_nombre ?? '—');
-    case 'seleccionado':
-    case 'en_contratacion':
-      return make('GH', 'Maribel González');
-    case 'cerrada':
-      return make('Apoyo', 'IT · compras · talentos');
-    case 'desierta':
-    case 'cancelada':
-    case 'pausada':
-      return make('Coordinación', 'Karen Bonilla');
-    default:
-      return make('Coordinación', 'Karen Bonilla');
-  }
 }
 
 // Semáforo de días abierta con tonos brand semánticos.
@@ -115,11 +74,17 @@ interface Props {
   vacante: VacanteDoc;
   /** Set de festivos (ISO) para contar en DÍAS HÁBILES, igual que el dashboard. */
   festivos: Set<string>;
+  /**
+   * Candidatos en curso de la vacante (`useResumenesVacantes`). Sin él la fase
+   * sale solo del estado de la vacante, como antes.
+   */
+  resumen?: ResumenVacanteDoc | null;
 }
 
-export function VacanteCard({ vacante, festivos }: Props) {
-  const faseIdx = faseDeEstado(vacante.estado);
-  const resp = responsableDeEstado(vacante);
+export function VacanteCard({ vacante, festivos, resumen }: Props) {
+  const fase = faseTarjeta(vacante, resumen);
+  const faseIdx = fase.letra ? FASES_TARJETA.findIndex((f) => f.letra === fase.letra) : -1;
+  const resp = fase.responsable;
   // Apertura efectiva (fecha_activacion de procesos migrados, si existe).
   const creadoEn = aperturaVacante(vacante) ?? new Date();
   // Días HÁBILES desde la apertura (excluye sábados, domingos y festivos), igual
@@ -127,8 +92,10 @@ export function VacanteCard({ vacante, festivos }: Props) {
   // (reu Karen 19-ago). Respeta la fecha de cierre si la vacante ya cerró.
   const dias = diasTranscurridos(vacante, festivos, new Date()) ?? 0;
   const relativo = formatDistanceToNow(creadoEn, { locale: es, addSuffix: true });
-  const terminada = ['cerrada', 'desierta', 'cancelada'].includes(vacante.estado);
-  const faseActiva = faseIdx >= 0 ? FASES[faseIdx] : FASES[0];
+  const terminada = fase.terminada;
+  // Suspendidas y terminadas sin fase van en gris: no avanzan.
+  const tonoFase: PillTono =
+    fase.letra && !fase.suspendida ? COLOR_FASE[fase.letra].tono : 'neutral';
   const sem = semaforoDias(dias);
   // Duración del proceso (apertura → cierre) para las vacantes cerradas, también
   // en días hábiles para que cuadre con el semáforo y el dashboard.
@@ -177,27 +144,27 @@ export function VacanteCard({ vacante, festivos }: Props) {
         {/* Progress 6-fase */}
         <div className="mt-5">
           <div className="flex items-center gap-1">
-            {FASES.map((f, i) => {
+            {FASES_TARJETA.map((f, i) => {
               const done = !terminada && faseIdx > i;
               const active = faseIdx === i;
               return (
                 <div
-                  key={f.clave}
+                  key={f.letra}
                   className={cn(
                     'h-1.5 flex-1 rounded-full transition-all',
-                    done || active ? f.barra : 'bg-slate-100',
+                    done || active ? COLOR_FASE[f.letra].barra : 'bg-slate-100',
                   )}
                 />
               );
             })}
           </div>
           <div className="flex justify-between mt-2 text-[9px] font-bold uppercase tracking-[0.08em]">
-            {FASES.map((f, i) => {
+            {FASES_TARJETA.map((f, i) => {
               const active = faseIdx === i;
               const done = !terminada && faseIdx > i;
               return (
                 <span
-                  key={f.clave}
+                  key={f.letra}
                   className={cn(
                     'flex-1 text-center',
                     active
@@ -207,7 +174,7 @@ export function VacanteCard({ vacante, festivos }: Props) {
                         : 'text-slate-300',
                   )}
                 >
-                  {f.clave}
+                  {f.letra}
                 </span>
               );
             })}
@@ -217,31 +184,23 @@ export function VacanteCard({ vacante, festivos }: Props) {
         {/* Estado actual (texto legible) */}
         <div className="mt-5 pt-4 border-t border-slate-100">
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span
-              className={cn(
-                'w-1.5 h-1.5 rounded-full',
-                faseActiva.tono === 'brand' && 'bg-brand-500',
-                faseActiva.tono === 'warning' && 'bg-warning-500',
-                faseActiva.tono === 'info' && 'bg-info-500',
-                faseActiva.tono === 'danger' && 'bg-danger-500',
-                faseActiva.tono === 'success' && 'bg-success-500',
-                faseActiva.tono === 'neutral' && 'bg-slate-500',
-              )}
-            />
+            <span className={cn('w-1.5 h-1.5 rounded-full', PUNTO_TONO[tonoFase])} />
             <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-              Fase {faseActiva.clave} · {faseActiva.label}
+              {fase.letra ? `Fase ${fase.letra} · ${fase.etiquetaFase}` : fase.etiquetaFase}
             </p>
           </div>
-          <p className="text-[13px] font-medium text-text-strong leading-snug">
-            {ESTADO_LABEL[vacante.estado] ?? vacante.estado}
-          </p>
+          <p className="text-[13px] font-medium text-text-strong leading-snug">{fase.texto}</p>
+          {/* Estado de la vacante cuando los candidatos van por delante. */}
+          {fase.secundario && (
+            <p className="mt-0.5 text-[11px] text-text-muted leading-snug">{fase.secundario}</p>
+          )}
         </div>
 
         {/* Footer: responsable + semáforo días */}
         <div className="mt-auto pt-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center text-[11px] font-semibold text-text-strong">
-              {resp.iniciales}
+              {iniciales(resp.nombre) || '?'}
             </div>
             <div className="min-w-0">
               <p className="text-[9px] uppercase tracking-[0.10em] text-text-subtle font-bold">

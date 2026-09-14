@@ -7,7 +7,8 @@ import { db } from '../utils/admin';
 /**
  * eliminarVacante · SOLO admin. Borra una vacante y TODO lo que cuelga de ella
  * (postulaciones, procesos, carpetas, documentos, entrevistas, exámenes,
- * informes, decisiones, solicitudes, novedades, notificaciones, tickets). NO
+ * informes, decisiones, solicitudes, novedades, notificaciones, tickets y el
+ * resumen de Seguimiento en `vacantes_resumen`). NO
  * borra los `candidatos` (son el pool cross-vacante) — sólo sus postulaciones a
  * ESTA vacante; el candidato queda disponible para reubicarse.
  *
@@ -19,7 +20,8 @@ import { db } from '../utils/admin';
  * (Admin SDK) es la ÚNICA vía de borrado, incluso para un admin.
  */
 
-// Colecciones que denormalizan `vacante_id`.
+// Colecciones que denormalizan `vacante_id`. `vacantes_resumen` NO va aquí
+// (aunque trae vacante_id): se borra DESPUÉS de la vacante, ver abajo.
 const COLS_POR_VACANTE = [
   'postulaciones',
   'procesos',
@@ -104,6 +106,20 @@ export const eliminarVacante = onCall({ region: 'us-central1' }, async (req) => 
   }
   // La vacante al final (así, si algo falla antes, la vacante sigue existiendo).
   await vacRef.delete();
+
+  // Resumen de postulaciones en curso (onPostulacionResumen). Va DESPUÉS de la
+  // vacante: borrar las postulaciones dispara ese trigger, que lo re-crearía
+  // mientras la vacante aún existiera; con la vacante ya borrada, el trigger
+  // solo lo elimina. Best-effort: la vacante ya no existe, así que un fallo aquí
+  // no debe tumbar la auditoría — la reconciliación diaria limpia el huérfano.
+  try {
+    await db.collection('vacantes_resumen').doc(vacanteId).delete();
+  } catch (e) {
+    logger.warn('eliminarVacante · no se pudo borrar vacantes_resumen', {
+      vacanteId,
+      msg: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   // Auditoría append-only.
   await db.collection('eventos').add({

@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { aZonaBogota, diasHabilesEntre, formatearFecha, TZ_BOGOTA } from './fechas';
-import type { PostulacionDoc, VacanteDoc } from '../schemas';
+import type { PostulacionDoc, ResumenVacanteDoc, VacanteDoc } from '../schemas';
 
 /**
  * Lógica de reportes de vacantes (base detallada + resumen mensual) con tiempos
@@ -293,6 +293,220 @@ export function pipelineReal(vacantes: VacanteDoc[], postulaciones: PostulacionD
 
 export function etiquetaFasePipeline(fase: FasePipeline): string {
   return FASES_PIPELINE.find((f) => f.clave === fase)?.etiqueta ?? fase;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fase de la TARJETA de Seguimiento (letras A–F del flujograma)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type LetraFase = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+
+/** Las 6 fases del flujograma que pinta la tarjeta, en orden. */
+export const FASES_TARJETA: ReadonlyArray<{ letra: LetraFase; etiqueta: string }> = [
+  { letra: 'A', etiqueta: 'Inicio' },
+  { letra: 'B', etiqueta: 'Reclutamiento' },
+  { letra: 'C', etiqueta: 'Selección' },
+  { letra: 'D', etiqueta: 'Decisión' },
+  { letra: 'E', etiqueta: 'Ingreso' },
+  { letra: 'F', etiqueta: 'Vinculación' },
+];
+
+/** Texto legible del estado de la VACANTE (lo que antes pintaba la tarjeta sola). */
+export const ESTADO_VACANTE_LABEL: Record<string, string> = {
+  borrador: 'Esperando validación de GH',
+  aprobada: 'Aval aprobado · lista para perfilar',
+  lista_para_publicar: 'Perfilamiento listo · lista para publicar',
+  publicada: 'Publicada · recibiendo HV',
+  en_proceso: 'Evaluando integrantes',
+  terna_enviada: 'Terna enviada · esperando decisión del líder',
+  seleccionado: 'Integrante elegido · solicitando exámenes',
+  en_contratacion: 'Exámenes y documentación en curso',
+  cerrada: 'Cerrada · ingreso en curso',
+  desierta: 'Desierta',
+  cancelada: 'Cancelada',
+  pausada: 'Pausada',
+};
+
+const LETRA_POR_ESTADO_VACANTE: Record<string, LetraFase> = {
+  borrador: 'A',
+  aprobada: 'A',
+  lista_para_publicar: 'B',
+  publicada: 'B',
+  en_proceso: 'C',
+  terna_enviada: 'D',
+  seleccionado: 'D',
+  en_contratacion: 'E',
+  cerrada: 'F',
+};
+
+const LETRA_POR_FASE_CANDIDATO: Record<FaseAvance, LetraFase> = {
+  reclutamiento: 'B',
+  entrevista_analista: 'C',
+  entrevista_lider: 'D',
+  examenes: 'E',
+  contratacion: 'E',
+};
+
+export interface FaseTarjeta {
+  /** null = sin fase (desierta, cancelada o estado desconocido). */
+  letra: LetraFase | null;
+  etiquetaFase: string;
+  /** Texto principal: los candidatos si van por delante; si no, el estado. */
+  texto: string;
+  /** Estado de la vacante cuando el texto habla de los candidatos. */
+  secundario: string | null;
+  responsable: { rol: string; nombre: string };
+  suspendida: boolean;
+  terminada: boolean;
+}
+
+const ordenLetra = (l: LetraFase) => FASES_TARJETA.findIndex((f) => f.letra === l);
+
+/** Candidatos en curso por fase del pipeline, a partir del resumen del servidor. */
+function personasPorFase(resumen?: ResumenVacanteDoc | null): Map<FaseAvance, number> {
+  const m = new Map<FaseAvance, number>();
+  for (const [estado, n] of Object.entries(resumen?.por_estado ?? {})) {
+    if (!n || NO_POSTULADO.has(estado)) continue;
+    const f = faseDeCandidato(estado);
+    if (f) m.set(f, (m.get(f) ?? 0) + n);
+  }
+  return m;
+}
+
+function textoPersonas(fase: FaseAvance, n: number): string {
+  const personas = n === 1 ? '1 persona' : `${n} personas`;
+  switch (fase) {
+    case 'examenes':
+      return `${personas} en exámenes médicos`;
+    case 'contratacion':
+      return `${personas} en contratación`;
+    case 'entrevista_lider':
+      return `${personas} en entrevista con el líder`;
+    case 'entrevista_analista':
+      return `${personas} en entrevista con analista`;
+    default:
+      return `${personas} en reclutamiento`;
+  }
+}
+
+const GH = { rol: 'GH', nombre: 'Maribel González' };
+const COORDINACION = { rol: 'Coordinación', nombre: 'Karen Bonilla' };
+
+function responsablePorEstado(v: VacanteDoc): { rol: string; nombre: string } {
+  switch (v.estado) {
+    case 'borrador':
+      return GH;
+    case 'aprobada':
+    case 'lista_para_publicar':
+    case 'publicada':
+    case 'en_proceso':
+      return { rol: 'Analista', nombre: v.analista_nombre ?? 'Sin asignar' };
+    case 'terna_enviada':
+      return { rol: 'Líder', nombre: v.lider_nombre ?? '—' };
+    case 'seleccionado':
+    case 'en_contratacion':
+      return GH;
+    case 'cerrada':
+      return { rol: 'Apoyo', nombre: 'IT · compras · talentos' };
+    default:
+      return COORDINACION;
+  }
+}
+
+/**
+ * Fase REAL de la tarjeta de Seguimiento (reu Karen 10-sep: ET-MOS-1018 salía
+ * "Fase B · Reclutamiento" con una persona en exámenes). La letra es la mayor
+ * entre la del estado de la vacante y la del candidato más avanzado según
+ * `vacantes_resumen` (lo mantiene el servidor; ver useResumenesVacantes). Sin
+ * resumen se comporta como antes, solo por el estado.
+ *
+ * Cerrada → F sin mirar candidatos (igual que pipelineReal). Desierta/cancelada →
+ * terminada sin letra. Pausada → suspendida; la barra usa el estado previo a la
+ * pausa (si no quedó guardado: D cuando la pausó el reloj de la terna).
+ */
+export function faseTarjeta(v: VacanteDoc, resumen?: ResumenVacanteDoc | null): FaseTarjeta {
+  const labelEstado = ESTADO_VACANTE_LABEL[v.estado] ?? v.estado.replace(/_/g, ' ');
+
+  if (v.estado === 'desierta' || v.estado === 'cancelada') {
+    return {
+      letra: null,
+      etiquetaFase: 'Terminada',
+      texto: labelEstado,
+      secundario: null,
+      responsable: COORDINACION,
+      suspendida: false,
+      terminada: true,
+    };
+  }
+  if (v.estado === 'cerrada') {
+    return {
+      letra: 'F',
+      etiquetaFase: 'Vinculación',
+      texto: labelEstado,
+      secundario: null,
+      responsable: responsablePorEstado(v),
+      suspendida: false,
+      terminada: true,
+    };
+  }
+
+  // Candidato más avanzado en curso.
+  const personas = personasPorFase(resumen);
+  let faseCand: FaseAvance | null = null;
+  for (const f of personas.keys()) {
+    if (!faseCand || RANGO_FASE[f] > RANGO_FASE[faseCand]) faseCand = f;
+  }
+  const letraCand = faseCand ? LETRA_POR_FASE_CANDIDATO[faseCand] : null;
+
+  const suspendida = v.estado === 'pausada';
+  const estadoBase = suspendida ? (v.estado_previo_pausa ?? null) : v.estado;
+  let letraBase: LetraFase | null = estadoBase ? (LETRA_POR_ESTADO_VACANTE[estadoBase] ?? null) : null;
+  if (suspendida && !letraBase && v.recordatorio_expirado_en) letraBase = 'D';
+
+  const candidatosAdelante =
+    !!letraCand && (!letraBase || ordenLetra(letraCand) > ordenLetra(letraBase));
+  const letra = candidatosAdelante ? letraCand : letraBase;
+  const textoCand = faseCand ? textoPersonas(faseCand, personas.get(faseCand) ?? 0) : null;
+
+  if (suspendida) {
+    return {
+      letra,
+      etiquetaFase: 'Suspendida',
+      texto: 'Proceso suspendido · pendiente de reactivar',
+      secundario: textoCand,
+      responsable: COORDINACION,
+      suspendida: true,
+      terminada: false,
+    };
+  }
+
+  if (candidatosAdelante && faseCand && textoCand) {
+    const responsable =
+      faseCand === 'examenes' || faseCand === 'contratacion'
+        ? GH
+        : faseCand === 'entrevista_lider'
+          ? { rol: 'Líder', nombre: v.lider_nombre ?? '—' }
+          : { rol: 'Analista', nombre: v.analista_nombre ?? 'Sin asignar' };
+    return {
+      letra,
+      etiquetaFase: FASES_TARJETA.find((f) => f.letra === letra)?.etiqueta ?? '',
+      texto: textoCand,
+      secundario: `Vacante: ${labelEstado}`,
+      responsable,
+      suspendida: false,
+      terminada: false,
+    };
+  }
+
+  return {
+    letra,
+    etiquetaFase: letra ? (FASES_TARJETA.find((f) => f.letra === letra)?.etiqueta ?? '') : 'Sin fase',
+    texto: labelEstado,
+    secundario: null,
+    responsable: responsablePorEstado(v),
+    suspendida: false,
+    terminada: false,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

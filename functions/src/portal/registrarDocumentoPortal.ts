@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { asegurarPortalEscribible } from './portalEscribible';
 import { verificarCedula } from './verificarCedula';
 import { urlPortalDocValida } from './urlPortalDocValida';
 
@@ -52,8 +53,8 @@ export const registrarDocumentoPortal = onCall({ region: 'us-central1' }, async 
     throw new HttpsError('permission-denied', 'Verifica tu número de cédula para continuar.');
   }
 
-  const postulacionId = String(t.postulacion_id ?? '');
-  if (!postulacionId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
+  // Un proceso ya finalizado no recibe documentos (reu Karen 10-sep).
+  const { postulacionId } = await asegurarPortalEscribible(t);
 
   await db.collection('documentos_portal').add({
     postulacion_id: postulacionId,

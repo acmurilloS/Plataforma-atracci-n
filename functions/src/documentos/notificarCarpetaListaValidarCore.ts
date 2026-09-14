@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { db } from '../utils/admin';
+import { esPostulacionTerminal } from '../postulaciones/estadosTerminales';
 
 /**
  * notificarCarpetaListaValidarCore · C.1 / F5.
@@ -12,27 +13,54 @@ import { db } from '../utils/admin';
  *
  * La comparte la callable `notificarCarpetaListaValidar` (disparada desde el tab
  * Documentos) y el trigger `onCarpetaCompletaCheck` (auto-armado de carpeta).
+ *
+ * Postulación terminal (repostulado, descartado, desistió…): NO notifica y
+ * devuelve `omitido: 'postulacion_terminal'`. El guard vive AQUÍ para cubrir la
+ * callable y el trigger a la vez (reu Karen 10-sep: carpeta huérfana de un
+ * repostulado). No marca el flag: si un descarte se reabre, el aviso aún sale.
  */
 export async function notificarCarpetaListaValidarCore(
   postulacionId: string,
   creadoPor: string,
-): Promise<{ ok: true; notificados: number; yaNotificado: boolean }> {
+): Promise<{
+  ok: true;
+  notificados: number;
+  yaNotificado: boolean;
+  omitido?: 'postulacion_terminal';
+}> {
   const postRef = db.collection('postulaciones').doc(postulacionId);
 
   // Idempotencia bajo concurrencia: ganar la carrera del flag dentro de una
   // transacción. Solo el ganador notifica (el trigger F5 puede dispararse en
-  // paralelo por varias subidas casi simultáneas).
-  const post = await db.runTransaction(async (tx) => {
+  // paralelo por varias subidas casi simultáneas). El estado terminal se evalúa
+  // en la misma lectura que el flag.
+  const turno = await db.runTransaction(async (tx) => {
     const snap = await tx.get(postRef);
-    if (!snap.exists) return null;
+    if (!snap.exists) return { tipo: 'ya' as const };
     const data = snap.data() as Record<string, unknown>;
-    if (data.carpeta_lista_validar_notificada_en) return null;
+    if (esPostulacionTerminal(data.estado)) {
+      return {
+        tipo: 'terminal' as const,
+        yaNotificado: Boolean(data.carpeta_lista_validar_notificada_en),
+      };
+    }
+    if (data.carpeta_lista_validar_notificada_en) return { tipo: 'ya' as const };
     tx.update(postRef, { carpeta_lista_validar_notificada_en: FieldValue.serverTimestamp() });
-    return data;
+    return { tipo: 'gano' as const, data };
   });
-  if (!post) {
+  if (turno.tipo === 'terminal') {
+    logger.info('[carpeta] aviso a GH omitido · postulación terminal', { postulacionId });
+    return {
+      ok: true,
+      notificados: 0,
+      yaNotificado: turno.yaNotificado,
+      omitido: 'postulacion_terminal',
+    };
+  }
+  if (turno.tipo === 'ya') {
     return { ok: true, notificados: 0, yaNotificado: true };
   }
+  const post = turno.data;
 
   const nombre = String(post.candidato_nombre ?? 'el candidato').trim();
   const cargo = String(post.cargo_nombre ?? '').trim();

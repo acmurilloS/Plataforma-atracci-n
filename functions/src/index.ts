@@ -24,6 +24,13 @@ export { asignarAnalista } from './vacantes/asignarAnalista';
 export { eliminarVacante } from './vacantes/eliminarVacante';
 // Editar la identificación de la vacante (empresa/sede/unidad/tipo) — líder creador o staff.
 export { editarDatosVacante } from './vacantes/editarDatosVacante';
+// Resumen de postulaciones EN CURSO por vacante -> fase real en Seguimiento (reu Karen 10-sep).
+export { onPostulacionResumen } from './vacantes/onPostulacionResumen';
+// Reconciliación del resumen: callable admin (dry_run por defecto) + programada diaria 03:00.
+export {
+  recalcularResumenesVacantes,
+  recalcularResumenesVacantesDiario,
+} from './vacantes/recalcularResumenesVacantes';
 // Repostular un candidato a otra vacante activa sin re-inscribirlo (reu 26-jun).
 export { repostularCandidato } from './postulaciones/repostularCandidato';
 // Registrar fecha de vinculacion -> contratado + cierra la vacante (reu Karen 27-ago).

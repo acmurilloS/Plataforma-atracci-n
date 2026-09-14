@@ -103,3 +103,27 @@ export function validarTransicion(
 export function esEstadoTerminal(estado: EstadoPostulacion): boolean {
   return T[estado].length === 0;
 }
+
+/**
+ * Estados en los que el proceso de ESA postulación terminó SIN contratación
+ * (reu Karen 10-sep: carpeta huérfana de un repostulado de CU-BOG-1240 que GH
+ * veía al 92% y no podía aprobar). Una postulación así no debe mostrar carpeta
+ * viva en /carpetas.
+ *
+ * ESPEJO de `functions/src/postulaciones/estadosTerminales.ts`
+ * (ESTADOS_TERMINALES_POSTULACION): si cambia uno, cambia el otro.
+ *
+ * NO es lo mismo que `esEstadoTerminal` de arriba: aquí NO entra 'contratado'
+ * (GH sigue cargando documentos tardíos de la carpeta) ni 'en_examenes_medicos',
+ * y SÍ entra 'descartado_por_lider' — puede reabrirse al pool, pero como se
+ * evalúa el estado actual, al reabrirse sale de la lista sola.
+ */
+export const ESTADOS_TERMINALES_SIN_CONTRATO: readonly EstadoPostulacion[] = [
+  'repostulado',
+  'desistio_candidato',
+  'descartado_examenes_medicos',
+  'descartado_por_lider',
+  'descartado_entrevista_analista',
+  'filtrado_no_cumple',
+  'pre_entrevistado_no_interesado',
+];

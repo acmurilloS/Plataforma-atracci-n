@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { asegurarPortalEscribible } from './portalEscribible';
 import { upsertFormatoEnCarpeta } from './upsertFormatoEnCarpeta';
 import { urlPortalDocValida } from './urlPortalDocValida';
 import { verificarCedula } from './verificarCedula';
@@ -56,8 +57,8 @@ export const registrarConsentimientoPortal = onCall({ region: 'us-central1' }, a
   if (!ced.ok) {
     throw new HttpsError('permission-denied', 'Cédula incorrecta o bloqueada. Verifica e intenta de nuevo.');
   }
-  const postulacionId = String(t.postulacion_id ?? '');
-  if (!postulacionId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
+  // Un proceso ya finalizado no recibe consentimientos (reu Karen 10-sep).
+  const { postulacionId } = await asegurarPortalEscribible(t);
 
   const raw = req.rawRequest as unknown as {
     ip?: string;

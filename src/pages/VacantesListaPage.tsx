@@ -15,7 +15,9 @@ import type { VacanteDoc } from '../schemas';
 import { Button, Card, Pill, type PillTono } from '../components/brand';
 import { EncabezadoPagina } from '../components/ui/EncabezadoPagina';
 import { useAuth } from '../hooks/useAuth';
+import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { puedeCrearVacante } from '../utils/accesoRutas';
+import { faseTarjeta } from '../utils/reportesVacantes';
 import { cn } from '../utils/cn';
 
 /**
@@ -118,6 +120,11 @@ export default function VacantesListaPage() {
       ),
     [vacantes],
   );
+
+  // Fase real (candidatos en curso) junto al estado: el estado de la vacante se queda
+  // atrás cuando la analista avanza candidatos desde la lista (reu Karen 10-sep).
+  const idsVacantes = useMemo(() => vacantes.map((v) => v.id), [vacantes]);
+  const { porVacante: resumenes } = useResumenesVacantes(idsVacantes);
 
   const filtradas = useMemo(() => {
     return vacantes.filter((v) => {
@@ -339,6 +346,16 @@ export default function VacantesListaPage() {
                     <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
                       {v.estado.replace(/_/g, ' ')}
                     </Pill>
+                    {/* Fase real cuando los candidatos van por delante del estado. */}
+                    {(() => {
+                      const f = faseTarjeta(v, resumenes.get(v.id));
+                      return f.secundario ? (
+                        <p className="mt-1 text-[11px] text-text-muted">
+                          {f.letra ? `Fase ${f.letra} · ` : ''}
+                          {f.texto}
+                        </p>
+                      ) : null;
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-text-muted">{v.lider_nombre}</td>
                   <td className="px-4 py-3 text-text-muted tabular-nums">

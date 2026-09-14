@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from '../portal/tokenVigente';
+import { asegurarPortalEscribible } from '../portal/portalEscribible';
 import { verificarCedula } from '../portal/verificarCedula';
 
 /**
@@ -32,13 +33,10 @@ export const aceptarCondicionesLaborales = onCall({ region: 'us-central1' }, asy
   if (!ced.ok) {
     throw new HttpsError('permission-denied', 'Cédula incorrecta o bloqueada. Verifica e intenta de nuevo.');
   }
-  const postId = String(t.postulacion_id ?? '');
-  if (!postId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
-
+  // Un proceso ya finalizado no acepta condiciones (reu Karen 10-sep): evita
+  // avisarle al analista la aceptación de un candidato que ya salió del proceso.
+  const { postulacionId: postId, postulacion: pd } = await asegurarPortalEscribible(t);
   const postRef = db.collection('postulaciones').doc(postId);
-  const postSnap = await postRef.get();
-  if (!postSnap.exists) throw new HttpsError('not-found', 'Postulación no existe.');
-  const pd = postSnap.data() as Record<string, unknown>;
   if (!pd.condiciones_enviadas_en) {
     throw new HttpsError('failed-precondition', 'Aún no te han enviado las condiciones.');
   }

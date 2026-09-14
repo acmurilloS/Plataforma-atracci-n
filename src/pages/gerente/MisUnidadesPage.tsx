@@ -3,6 +3,7 @@ import { Building2, FolderOpen } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useUnidadesDeSede, useFestivosTodos } from '../../hooks/useCatalogos';
+import { useResumenesVacantes } from '../../hooks/useResumenesVacantes';
 import type { VacanteDoc } from '../../schemas';
 import { Card, Pill } from '../../components/brand';
 import { VacanteCard } from '../../components/VacanteCard';
@@ -16,6 +17,9 @@ import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
  * El filtro va por `unidad_id in [...]` (id estable) — nunca por el nombre, que
  * no está normalizado. La frontera real la ponen las reglas de Firestore (el
  * mismo conjunto viaja en el claim `unidades_gerente`).
+ *
+ * La fase de cada tarjeta es la REAL (candidatos en curso): el gerente no lee
+ * postulaciones, así que la toma del resumen que mantiene el servidor.
  */
 export default function MisUnidadesPage() {
   const { perfil } = useAuth();
@@ -42,6 +46,8 @@ export default function MisUnidadesPage() {
       ),
     [vacantes],
   );
+  const ids = useMemo(() => ordenadas.map((v) => v.id), [ordenadas]);
+  const { porVacante: resumenes } = useResumenesVacantes(ids);
 
   const activas = ordenadas.filter(
     (v) => !['cerrada', 'desierta', 'cancelada'].includes(v.estado),
@@ -104,7 +110,12 @@ export default function MisUnidadesPage() {
           </p>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activas.map((v) => (
-              <VacanteCard key={v.id} vacante={v} festivos={festivos} />
+              <VacanteCard
+                key={v.id}
+                vacante={v}
+                festivos={festivos}
+                resumen={resumenes.get(v.id) ?? null}
+              />
             ))}
           </div>
         </section>

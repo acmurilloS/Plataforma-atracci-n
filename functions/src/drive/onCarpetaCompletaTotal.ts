@@ -3,6 +3,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { db } from '../utils/admin';
+import { esPostulacionTerminal } from '../postulaciones/estadosTerminales';
 import {
   asegurarCarpetaRef,
   carpetaListaParaDrive,
@@ -28,6 +29,10 @@ const GDRIVE_SERVICE_ACCOUNT_JSON = defineSecret('GDRIVE_SERVICE_ACCOUNT_JSON');
  *  - la sync reutiliza subcarpeta/archivos por nombre → reintento sin duplicar.
  *  - si falla, deja `drive_error` y NO marca sincronizada → reintento (manual).
  *  - el fallo de Drive NO rompe el flujo de la plataforma (trigger aislado).
+ *  - postulación terminal (repostulado, descartado, desistió…) o carpeta
+ *    'anulada' → no deposita (reu Karen 10-sep): la subcarpeta es por candidato
+ *    ("Nombre - cédula"), así que el proceso viejo de un repostulado escribiría
+ *    en la misma que el nuevo.
  */
 export const onCarpetaCompletaTotal = onDocumentWritten(
   {
@@ -44,6 +49,12 @@ export const onCarpetaCompletaTotal = onDocumentWritten(
     if (!data) return;
     const postulacionId = String(data.postulacion_id ?? '');
     if (!postulacionId) return;
+
+    // Proceso terminado sin contratación → su carpeta no va a Drive. Se corta antes
+    // de las queries; asegurarCarpetaRef y el lock de ejecutarDepositoDrive lo
+    // vuelven a validar (cubren al reintento manual y a la carrera con el estado).
+    const postSnap = await db.collection('postulaciones').doc(postulacionId).get();
+    if (esPostulacionTerminal(postSnap.data()?.estado)) return;
 
     // Umbral 85% de C&D (reu 21-jul): deposita sin esperar los 4 docs de GH.
     if (!(await carpetaListaParaDrive(postulacionId))) return;
@@ -84,7 +95,7 @@ export const onCarpetaCompletaTotal = onDocumentWritten(
     } else if (r.estado === 'error') {
       logger.error('[drive] sync automática falló', { postulacionId, error: r.error });
     }
-    // 'ocupado' / 'ya_sincronizada' / 'sin_carpeta' → no-op
+    // 'ocupado' / 'ya_sincronizada' / 'sin_carpeta' / 'anulada' / 'postulacion_terminal' → no-op
   },
 );
 

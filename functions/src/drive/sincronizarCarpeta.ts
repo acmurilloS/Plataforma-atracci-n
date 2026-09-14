@@ -7,6 +7,7 @@ import {
   CLAVES_OBLIGATORIAS_GH,
   ITEM_POR_CLAVE,
 } from '../documentos/catalogoCarpeta';
+import { esPostulacionTerminal } from '../postulaciones/estadosTerminales';
 import { leerConfigDrive } from './configDrive';
 import { asegurarFolder, listarNombresEnFolder, subirBufferAFolder } from './cliente';
 
@@ -208,10 +209,17 @@ export async function sincronizarCarpetaADrive(postulacionId: string): Promise<R
  * Asegura el doc de carpeta para la postulación. Si no existe (caso raro: el 100%
  * total se alcanza en el mismo evento que dispara la creación), la crea con id
  * determinístico `carpeta_{id}` (idempotente, igual que onCarpetaCompletaCheck).
+ *
+ * Devuelve null si la postulación es terminal (repostulado, descartado, desistió…):
+ * ese proceso ya no tiene carpeta viva que crear ni depositar (reu Karen 10-sep).
+ * La postulación se lee PRIMERO para cortar también cuando la carpeta ya existe.
  */
 export async function asegurarCarpetaRef(
   postulacionId: string,
 ): Promise<FirebaseFirestore.DocumentReference | null> {
+  const post = (await db.collection('postulaciones').doc(postulacionId).get()).data() ?? {};
+  if (esPostulacionTerminal(post.estado)) return null;
+
   const existente = await db
     .collection('carpetas_digitales')
     .where('postulacion_id', '==', postulacionId)
@@ -220,7 +228,6 @@ export async function asegurarCarpetaRef(
   if (!existente.empty) return existente.docs[0].ref;
 
   const ref = db.collection('carpetas_digitales').doc(`carpeta_${postulacionId}`);
-  const post = (await db.collection('postulaciones').doc(postulacionId).get()).data() ?? {};
   await db.runTransaction(async (tx) => {
     const s = await tx.get(ref);
     if (s.exists) return;
@@ -245,13 +252,25 @@ export async function asegurarCarpetaRef(
   return ref;
 }
 
-export type EstadoDeposito = 'ok' | 'ocupado' | 'ya_sincronizada' | 'sin_carpeta' | 'error';
+export type EstadoDeposito =
+  | 'ok'
+  | 'ocupado'
+  | 'ya_sincronizada'
+  | 'sin_carpeta'
+  | 'anulada'
+  | 'postulacion_terminal'
+  | 'error';
 
 /**
  * Depósito CON LOCK — único punto que escribe los flags drive_*. Toma
  * `drive_sync_intentando_en` en transacción (serializa trigger automático +
  * reintento manual → no se duplican carpetas/archivos en la unidad real) y
  * SIEMPRE libera el lock (éxito o error → reintento inmediato posible).
+ *
+ * Nunca deposita una carpeta 'anulada' ni la de una postulación terminal (reu
+ * Karen 10-sep): la subcarpeta de Drive es por candidato, así que el proceso
+ * viejo de un repostulado escribiría en la del nuevo. Se valida DENTRO de la
+ * transacción del lock, para cubrir la carrera con la anulación.
  */
 export async function ejecutarDepositoDrive(
   carpetaRef: FirebaseFirestore.DocumentReference,
@@ -266,6 +285,9 @@ export async function ejecutarDepositoDrive(
     const snap = await tx.get(carpetaRef);
     if (!snap.exists) return 'sin_carpeta';
     const d = snap.data() ?? {};
+    if (d.estado === 'anulada') return 'anulada';
+    const postSnap = await tx.get(db.collection('postulaciones').doc(postulacionId));
+    if (esPostulacionTerminal(postSnap.data()?.estado)) return 'postulacion_terminal';
     if (d.drive_sincronizada_en && !permitirResync) return 'ya';
     const intMs =
       (d.drive_sync_intentando_en as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
@@ -274,6 +296,8 @@ export async function ejecutarDepositoDrive(
     return 'gano';
   });
   if (turno === 'sin_carpeta') return { estado: 'sin_carpeta' };
+  if (turno === 'anulada') return { estado: 'anulada' };
+  if (turno === 'postulacion_terminal') return { estado: 'postulacion_terminal' };
   if (turno === 'ya') return { estado: 'ya_sincronizada' };
   if (turno === 'ocupado') return { estado: 'ocupado' };
 

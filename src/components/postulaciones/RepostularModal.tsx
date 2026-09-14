@@ -18,7 +18,8 @@ interface Props {
  * RepostularModal · mueve un candidato a otra vacante ACTIVA sin re-inscribirlo
  * (reu 26-jun). Lista las vacantes abiertas (menos la actual) y llama la callable
  * `repostularCandidato`, que crea la postulación en el destino y deja la de
- * origen como repostulada con traza.
+ * origen como repostulada con traza. Del proceso anterior NO traslada nada: anula
+ * su carpeta y desactiva su portal (reu Karen 10-sep) — el modal lo advierte.
  */
 export function RepostularModal({ postulacion, onClose, onDone }: Props) {
   const { docs: vacantes, cargando } = useColeccion<VacanteDoc>('vacantes', {
@@ -73,6 +74,14 @@ export function RepostularModal({ postulacion, onClose, onDone }: Props) {
               Se mueve a otra vacante activa sin volver a registrarlo: queda activo en el destino y
               repostulado en {postulacion.vacante_consecutivo}.
             </p>
+          </div>
+
+          {/* Reu Karen 10-sep (carpeta huérfana de un repostulado): nada del proceso
+              anterior viaja al destino. Quien repostula lo sabe antes de confirmar. */}
+          <div className="rounded-md border border-warning-500/30 bg-warning-50 px-3.5 py-2.5 text-[12px] text-warning-700">
+            Los documentos, las firmas y el portal <strong>no</strong> se trasladan a la nueva
+            vacante. La carpeta de {postulacion.vacante_consecutivo} se anula y su portal se
+            desactiva.
           </div>
 
           <div>

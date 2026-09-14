@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { asegurarPortalEscribible } from './portalEscribible';
 import { urlPortalDocValida } from './urlPortalDocValida';
 
 /**
@@ -45,8 +46,9 @@ export const registrarFirmaDocumento = onCall({ region: 'us-central1' }, async (
       'El enlace expiró o fue revocado. Pídele al equipo de Atracción que te reenvíe tu portal.',
     );
   }
-  const postulacionId = String(t.postulacion_id ?? '');
-  if (!postulacionId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
+  // Un proceso ya finalizado no recibe firmas (reu Karen 10-sep). Esta callable no
+  // pide cédula, así que el guard va justo después de la vigencia del token.
+  const { postulacionId } = await asegurarPortalEscribible(t);
 
   const titulo =
     tipo === 'datos_basicos'

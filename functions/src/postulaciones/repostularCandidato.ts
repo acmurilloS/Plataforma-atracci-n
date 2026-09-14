@@ -14,12 +14,24 @@ import { db } from '../utils/admin';
  *  - REPOSTULADO en el origen → estado 'repostulado' + traza de a qué vacante se
  *    movió (repostulado_a_vacante_id/_consecutivo).
  *
+ * El proceso de origen se CIERRA del todo (reu Karen 10-sep: la carpeta vieja de
+ * un repostulado de CU-BOG-1240 le quedó a GH en Carpetas al 92% sin poderse
+ * aprobar, y su portal seguía abierto):
+ *  - sus carpetas_digitales no aprobadas pasan a 'anulada' (con anulada_motivo y
+ *    reemplazada_por_postulacion_id) → GH no las aprueba ni van a Drive;
+ *  - si tenía portal, el token queda REVOCADO (revocado_motivo 'repostulado') →
+ *    el candidato ya no sube documentos al proceso viejo.
+ * Los documentos NO se copian: la postulación destino arma su propia carpeta
+ * (y recibe su propio portal) cuando llegue a esa etapa.
+ *
  * Permisos: analista / coordinador / admin (el líder y GH no repostulan).
  *
  * Integridad: el chequeo de doble repostulación, la validación del estado de
- * origen y las tres escrituras corren dentro de UNA transacción → ni se duplica
- * el candidato en el destino por concurrencia, ni se puede repostular (y así
- * destruir) un proceso ya 'contratado' o 'repostulado'.
+ * origen y TODAS las escrituras (destino, origen, candidato, carpetas y token)
+ * corren dentro de UNA transacción, con todas las lecturas antes de la primera
+ * escritura → ni se duplica el candidato en el destino por concurrencia, ni se
+ * puede repostular (y así destruir) un proceso ya 'contratado' o 'repostulado',
+ * ni queda viva la carpeta o el portal de un proceso que ya se movió.
  */
 
 const ROLES = ['analista', 'coordinador', 'admin'];
@@ -56,7 +68,7 @@ export const repostularCandidato = onCall({ region: 'us-central1' }, async (req)
   }
   const consecutivoDestino = String(destino.consecutivo ?? '');
 
-  const nuevaPostulacionId = await db.runTransaction(async (tx) => {
+  const resultado = await db.runTransaction(async (tx) => {
     const origenSnap = await tx.get(origenRef);
     if (!origenSnap.exists) throw new HttpsError('not-found', 'La postulación de origen no existe.');
     const origen = origenSnap.data() as Record<string, unknown>;
@@ -87,6 +99,18 @@ export const repostularCandidato = onCall({ region: 'us-central1' }, async (req)
     if (!yaSnap.empty) {
       throw new HttpsError('already-exists', 'El candidato ya tiene una postulación en esa vacante.');
     }
+
+    // Carpetas del proceso de origen (última lectura, antes de escribir). Se anulan
+    // abajo; una 'aprobada' implicaría un contratado (ya bloqueado arriba) y una
+    // 'anulada' ya tiene su traza → esas dos no se tocan.
+    const carpetasSnap = await tx.get(
+      db.collection('carpetas_digitales').where('postulacion_id', '==', origenId),
+    );
+    const carpetasAAnular = carpetasSnap.docs.filter((d) => {
+      const estado = String(d.data().estado ?? '');
+      return estado !== 'aprobada' && estado !== 'anulada';
+    });
+    const portalToken = String(origen.portal_token ?? '').trim();
 
     const ahora = FieldValue.serverTimestamp();
     const nuevaRef = db.collection('postulaciones').doc();
@@ -128,13 +152,15 @@ export const repostularCandidato = onCall({ region: 'us-central1' }, async (req)
       actualizado_por: req.auth!.uid,
     });
 
-    // 2) Origen: queda repostulado, con traza de a dónde se movió.
+    // 2) Origen: queda repostulado, con traza de a dónde se movió. Si tenía portal,
+    //    portal_revocado_en hace que la UI lo muestre revocado (ver paso 5).
     tx.update(origenRef, {
       estado: 'repostulado',
       repostulado_a_vacante_id: destinoVacanteId,
       repostulado_a_vacante_consecutivo: consecutivoDestino,
       'marcas.repostulado_en': ahora,
       ultima_transicion_estado: ahora,
+      ...(portalToken ? { portal_revocado_en: ahora } : {}),
       actualizado_en: ahora,
       actualizado_por: req.auth!.uid,
     });
@@ -149,17 +175,54 @@ export const repostularCandidato = onCall({ region: 'us-central1' }, async (req)
       actualizado_por: req.auth!.uid,
     });
 
-    return nuevaRef.id;
+    // 4) Carpetas del origen: anuladas, con traza de la postulación que la reemplaza.
+    //    CarpetasPage deja de ofrecerlas y aprobarCarpeta / el depósito a Drive las
+    //    rechazan.
+    const motivoAnulacion = `Repostulado a ${consecutivoDestino || 'otra vacante'}`;
+    for (const c of carpetasAAnular) {
+      tx.update(c.ref, {
+        estado: 'anulada',
+        anulada_motivo: motivoAnulacion,
+        reemplazada_por_postulacion_id: nuevaRef.id,
+        anulada_en: ahora,
+        actualizado_en: ahora,
+        actualizado_por: req.auth!.uid,
+      });
+    }
+
+    // 5) Portal del origen: revocado con el mismo formato que revocarPortalCandidato
+    //    + motivo. "Reenviar portal" no lo reabre: enviarPortalCandidato rechaza
+    //    postulaciones terminales.
+    if (portalToken) {
+      tx.set(
+        db.collection('portal_candidato_tokens').doc(portalToken),
+        {
+          revocado: true,
+          revocado_en: ahora,
+          revocado_por: req.auth!.uid,
+          revocado_motivo: 'repostulado',
+        },
+        { merge: true },
+      );
+    }
+
+    return {
+      nuevaPostulacionId: nuevaRef.id,
+      carpetasAnuladas: carpetasAAnular.length,
+      portalRevocado: Boolean(portalToken),
+    };
   });
 
   logger.info('repostularCandidato', {
     origen: origenId,
     destino: destinoVacanteId,
+    carpetas_anuladas: resultado.carpetasAnuladas,
+    portal_revocado: resultado.portalRevocado,
     por: req.auth.uid,
   });
   return {
     ok: true as const,
-    nueva_postulacion_id: nuevaPostulacionId,
+    nueva_postulacion_id: resultado.nuevaPostulacionId,
     vacante_destino_consecutivo: consecutivoDestino,
   };
 });

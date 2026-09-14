@@ -15,7 +15,14 @@ import { VacanteCard } from '../components/VacanteCard';
 import { useAuth } from '../hooks/useAuth';
 import { useColeccion, type FiltroTupla } from '../hooks/useColeccion';
 import { useFestivosTodos } from '../hooks/useCatalogos';
+import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { cn } from '../utils/cn';
+import {
+  FASES_TARJETA,
+  faseTarjeta,
+  type FaseTarjeta,
+  type LetraFase,
+} from '../utils/reportesVacantes';
 import type { VacanteDoc } from '../schemas';
 import { Button, KpiCard } from '../components/brand';
 import { SaludoInicio } from '../components/SaludoInicio';
@@ -30,23 +37,25 @@ import { EncabezadoPagina } from '../components/ui/EncabezadoPagina';
  * Segmentación crítico vs no crítico — eje pedido por Cristina —
  * con KpiCards tono danger/success y barra de proporción.
  * VacanteCards mantienen su componente (sistema viejo) hasta migración.
+ *
+ * La fase de cada vacante (tarjetas, KPIs por fase y drill-down) es la REAL: la
+ * más avanzada entre su estado y sus candidatos en curso, con el resumen que
+ * mantiene el servidor (`vacantes_resumen`). Aquí no se leen postulaciones:
+ * apoyo, talentos y gerente no pueden (reu Karen 10-sep: ET-MOS-1018 salía en
+ * reclutamiento con una persona en exámenes). Las suspendidas se cuentan aparte.
  */
 
-interface FaseDef {
-  clave: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
-  label: string;
-  estados: string[];
-  tono: 'brand' | 'warning' | 'info' | 'danger' | 'success' | 'neutral';
-}
+type TonoFase = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
-const FASES: FaseDef[] = [
-  { clave: 'A', label: 'Inicio', estados: ['borrador', 'aprobada'], tono: 'brand' },
-  { clave: 'B', label: 'Reclutamiento', estados: ['lista_para_publicar', 'publicada'], tono: 'warning' },
-  { clave: 'C', label: 'Selección', estados: ['en_proceso'], tono: 'info' },
-  { clave: 'D', label: 'Decisión', estados: ['terna_enviada', 'seleccionado'], tono: 'danger' },
-  { clave: 'E', label: 'Ingreso', estados: ['en_contratacion'], tono: 'success' },
-  { clave: 'F', label: 'Vinculación', estados: ['cerrada'], tono: 'neutral' },
-];
+// Tono de cada fase A–F (su nombre y su cálculo viven en `faseTarjeta`).
+const TONO_FASE: Record<LetraFase, TonoFase> = {
+  A: 'brand',
+  B: 'warning',
+  C: 'info',
+  D: 'danger',
+  E: 'success',
+  F: 'neutral',
+};
 
 const TERMINADAS = ['cerrada', 'desierta', 'cancelada'];
 
@@ -74,6 +83,17 @@ export default function SeguimientoPage() {
     orden: ['creado_en', 'desc'],
     limit: 200,
   });
+
+  // Candidatos en curso por vacante (servidor) → fase real de cada una.
+  const ids = useMemo(() => vacantes.map((v) => v.id), [vacantes]);
+  const { porVacante: resumenes } = useResumenesVacantes(ids);
+  const fasePorVacante = useMemo(
+    () =>
+      new Map<string, FaseTarjeta>(
+        vacantes.map((v) => [v.id, faseTarjeta(v, resumenes.get(v.id))]),
+      ),
+    [vacantes, resumenes],
+  );
 
   const puedeVerMias = rol === 'lider' || rol === 'analista';
   const puedeCrear = rol === 'lider' || rol === 'coordinador' || rol === 'admin';
@@ -132,10 +152,13 @@ export default function SeguimientoPage() {
 
   const stats = useMemo(() => {
     const activas = vacantes.filter((v) => !TERMINADAS.includes(v.estado));
-    const porFase: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+    const porFase: Record<LetraFase, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+    let suspendidas = 0;
     activas.forEach((v) => {
-      const f = FASES.find((fase) => fase.estados.includes(v.estado));
-      if (f) porFase[f.clave] += 1;
+      const f = fasePorVacante.get(v.id);
+      if (!f) return;
+      if (f.suspendida) suspendidas += 1;
+      else if (f.letra) porFase[f.letra] += 1;
     });
     // Segmentación crítico vs no crítico (pedido por Cristina).
     const criticasActivas = activas.filter((v) => v.criticidad === 'Alta').length;
@@ -147,8 +170,9 @@ export default function SeguimientoPage() {
       criticasActivas,
       noCriticasActivas,
       porFase,
+      suspendidas,
     };
-  }, [vacantes]);
+  }, [vacantes, fasePorVacante]);
 
   // Listas por grupo (para el pop-up de cada card).
   const activasList = useMemo(() => vacantes.filter((v) => !TERMINADAS.includes(v.estado)), [vacantes]);
@@ -246,30 +270,49 @@ export default function SeguimientoPage() {
         />
       </div>
 
-      {/* ─── KPIs por fase (más chicos) ────────────────────────── */}
+      {/* ─── KPIs por fase real (más chicos) ──────────────────────── */}
       <div>
         <div className="flex items-center gap-2 mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
           <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-            Distribución por fase · activas
+            Distribución por fase real · activas
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {FASES.map((f) => (
+          {FASES_TARJETA.map((f) => (
             <KpiCardCompact
-              key={f.clave}
-              eyebrow={`${f.clave} · ${f.label}`}
-              valor={stats.porFase[f.clave] ?? 0}
-              tono={f.tono}
+              key={f.letra}
+              eyebrow={`${f.letra} · ${f.etiqueta}`}
+              valor={stats.porFase[f.letra]}
+              tono={TONO_FASE[f.letra]}
               onClick={() =>
                 setDrill({
-                  titulo: `Fase ${f.clave} · ${f.label}`,
-                  lista: activasList.filter((v) => f.estados.includes(v.estado)),
+                  titulo: `Fase ${f.letra} · ${f.etiqueta}`,
+                  lista: activasList.filter((v) => {
+                    const fase = fasePorVacante.get(v.id);
+                    return !!fase && !fase.suspendida && fase.letra === f.letra;
+                  }),
                 })
               }
             />
           ))}
         </div>
+        {stats.suspendidas > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setDrill({
+                titulo: 'Suspendidas',
+                lista: activasList.filter((v) => fasePorVacante.get(v.id)?.suspendida),
+              })
+            }
+            className="mt-3 text-[12px] font-medium text-text-muted hover:text-text-strong hover:underline"
+          >
+            + {stats.suspendidas}{' '}
+            {stats.suspendidas === 1 ? 'vacante suspendida' : 'vacantes suspendidas'} (no cuentan en
+            las fases)
+          </button>
+        )}
       </div>
 
       {/* ─── Filtros ─────────────────────────────────────────────── */}
@@ -386,12 +429,22 @@ export default function SeguimientoPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtradas.map((v) => (
-          <VacanteCard key={v.id} vacante={v} festivos={festivos} />
+          <VacanteCard
+            key={v.id}
+            vacante={v}
+            festivos={festivos}
+            resumen={resumenes.get(v.id) ?? null}
+          />
         ))}
       </div>
 
       {drill && (
-        <DrillModal titulo={drill.titulo} lista={drill.lista} onClose={() => setDrill(null)} />
+        <DrillModal
+          titulo={drill.titulo}
+          lista={drill.lista}
+          fases={fasePorVacante}
+          onClose={() => setDrill(null)}
+        />
       )}
     </div>
   );
@@ -401,10 +454,13 @@ export default function SeguimientoPage() {
 function DrillModal({
   titulo,
   lista,
+  fases,
   onClose,
 }: {
   titulo: string;
   lista: VacanteDoc[];
+  /** Fase real por vacante: se muestra en vez del estado crudo. */
+  fases?: Map<string, FaseTarjeta>;
   onClose: () => void;
 }) {
   return (
@@ -434,27 +490,32 @@ function DrillModal({
               Ninguna vacante en este grupo.
             </p>
           )}
-          {lista.map((v) => (
-            <Link
-              key={v.id}
-              to={`/vacantes/${v.id}`}
-              onClick={onClose}
-              className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-subtle">
-                  {v.consecutivo || 'pendiente'}
-                </p>
-                <p className="text-[13px] font-medium text-text-strong truncate">{v.cargo_nombre}</p>
-                <p className="text-[11px] text-text-muted truncate">
-                  {v.empresa_nombre} · {v.sede_nombre}
-                </p>
-              </div>
-              <span className="text-[11px] text-text-muted whitespace-nowrap capitalize">
-                {(v.estado ?? '').replace(/_/g, ' ')}
-              </span>
-            </Link>
-          ))}
+          {lista.map((v) => {
+            const f = fases?.get(v.id);
+            return (
+              <Link
+                key={v.id}
+                to={`/vacantes/${v.id}`}
+                onClick={onClose}
+                className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-subtle">
+                    {v.consecutivo || 'pendiente'}
+                  </p>
+                  <p className="text-[13px] font-medium text-text-strong truncate">{v.cargo_nombre}</p>
+                  <p className="text-[11px] text-text-muted truncate">
+                    {v.empresa_nombre} · {v.sede_nombre}
+                  </p>
+                </div>
+                <span className="text-[11px] text-text-muted text-right max-w-[45%]">
+                  {f
+                    ? `${f.letra ? `${f.letra} · ` : ''}${f.texto}`
+                    : (v.estado ?? '').replace(/_/g, ' ')}
+                </span>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -473,10 +534,10 @@ function KpiCardCompact({
 }: {
   eyebrow: string;
   valor: number;
-  tono: 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  tono: TonoFase;
   onClick?: () => void;
 }) {
-  const TONO: Record<typeof tono, { dot: string; label: string; valor: string }> = {
+  const TONO: Record<TonoFase, { dot: string; label: string; valor: string }> = {
     brand: { dot: 'bg-brand-500', label: 'text-brand-700', valor: 'text-brand-700' },
     success: { dot: 'bg-success-500', label: 'text-success-700', valor: 'text-success-700' },
     warning: { dot: 'bg-warning-500', label: 'text-warning-700', valor: 'text-warning-700' },

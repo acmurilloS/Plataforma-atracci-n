@@ -257,6 +257,24 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Resumen del pipeline por vacante (reu Karen 10-sep · fase real en
+    // Seguimiento): conteo de postulaciones EN CURSO por estado, para que la
+    // tarjeta pinte la fase real sin leer postulaciones (apoyo, talentos y gerente
+    // no pueden: leeCandidato). Solo cuenta estados vivos (y 'contratado'); nunca
+    // descartes, así no expone resultados médicos.
+    // Vive APARTE del doc de la vacante a propósito: el `get` de vacantes es
+    // público (landing) y reescribir la vacante re-dispara los efectos de
+    // PerfilamientoPage/SolicitudIntegrantePage en cada snapshot.
+    // `get` para cualquier interno (la tarjeta abre el de SU vacante por id). El
+    // `list` queda fuera para líder y gerente, cuyo alcance de vacantes está
+    // acotado: listar les mostraría el pipeline de vacantes ajenas.
+    // Lo escribe SOLO la Cloud Function (Admin SDK).
+    match /vacantes_resumen/{id} {
+      allow get: if interno();
+      allow list: if interno() && !isLider() && !isGerente();
+      allow write: if false;
+    }
+
     // ===== Procesos y colecciones derivadas =====
     match /procesos/{id} {
       allow read: if interno();
@@ -354,7 +372,26 @@ service cloud.firestore {
     }
     match /carpetas_digitales/{id} {
       allow read: if leeCarpeta();
-      allow write: if staff() || isAnalista() || isDocumentacion();
+      // Carpeta huérfana de un repostulado (reu Karen 10-sep). Antes era un `write`
+      // abierto a los roles de /carpetas; ahora se separa:
+      //  - create: SOLO con el id determinístico `carpeta_{postulacion_id}`, el
+      //    mismo del trigger onCarpetaCompletaCheck y de asegurarCarpetaRef. Con el
+      //    id aleatorio del botón viejo de CarpetasPage una postulación podía
+      //    quedar con dos carpetas (manual + automática).
+      //  - update: la carpeta no se cambia de postulación, y una `anulada` (proceso
+      //    repostulado o terminado sin contratación) queda congelada: ni se
+      //    entrega, ni se observa, ni se "revive" desde el cliente. Anular también
+      //    es server-only (repostularCandidato, Admin SDK), igual que
+      //    'contratado'/'repostulado' en postulaciones.
+      //  - delete: nadie desde el cliente.
+      allow create: if (staff() || isAnalista() || isDocumentacion())
+        && request.resource.data.postulacion_id is string
+        && id == 'carpeta_' + request.resource.data.postulacion_id;
+      allow update: if (staff() || isAnalista() || isDocumentacion())
+        && request.resource.data.postulacion_id == resource.data.postulacion_id
+        && resource.data.get('estado', '') != 'anulada'
+        && request.resource.data.get('estado', '') != 'anulada';
+      allow delete: if false;
     }
     match /tickets_conexion/{id} {
       allow get: if staff() || isAnalista()

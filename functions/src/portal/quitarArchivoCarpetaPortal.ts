@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { asegurarPortalEscribible } from './portalEscribible';
 import { verificarCedula } from './verificarCedula';
 import { CLAVES_APORTA_CANDIDATO } from '../documentos/catalogoCarpeta';
 import { archivosDe } from './registrarDocumentoCarpetaPortal';
@@ -50,8 +51,8 @@ export const quitarArchivoCarpetaPortal = onCall({ region: 'us-central1' }, asyn
     throw new HttpsError('permission-denied', 'Verifica tu número de cédula para continuar.');
   }
 
-  const postulacionId = String(t.postulacion_id ?? '');
-  if (!postulacionId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
+  // Tampoco se quitan archivos de una postulación que ya terminó (reu Karen 10-sep).
+  const { postulacionId } = await asegurarPortalEscribible(t);
 
   const existentes = await db
     .collection('documentos_candidato')

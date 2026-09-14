@@ -2,23 +2,11 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { db } from '../utils/admin';
+import { esPostulacionTerminal } from '../postulaciones/estadosTerminales';
 import { cargoRequiereDotacion, enviarSolicitudDotacionCore, TALLAS } from './enviarSolicitudDotacion';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
-
-/**
- * Estados donde NO tiene sentido pedir dotación (el candidato se descartó o retiró):
- * evita disparar la solicitud para alguien que ya salió del proceso.
- */
-const ESTADOS_SIN_DOTACION = new Set([
-  'filtrado_no_cumple',
-  'descartado_por_lider',
-  'descartado_examenes_medicos',
-  'desistio_candidato',
-  'pre_entrevistado_no_interesado',
-  'repostulado',
-]);
 
 /** ¿El doc de Datos Básicos tiene al menos una talla diligenciada? */
 function tieneTalla(d: Record<string, unknown> | undefined): boolean {
@@ -60,7 +48,10 @@ export const onDatosBasicosTallas = onDocumentWritten(
     const post = postSnap.data() as Record<string, unknown>;
 
     if (post.solicitud_dotacion_enviada_en) return; // ya se envió (manual o auto previo)
-    if (ESTADOS_SIN_DOTACION.has(String(post.estado ?? ''))) return; // candidato fuera del proceso
+    // Candidato fuera del proceso (se descartó, retiró o repostuló): no se pide
+    // dotación. Usa la fuente única esPostulacionTerminal — misma semántica que la
+    // copia local que había aquí, a la que le faltaba 'descartado_entrevista_analista'.
+    if (esPostulacionTerminal(post.estado)) return;
     if (!(await cargoRequiereDotacion(post))) return; // el cargo no requiere dotación
 
     const tallas: Record<string, unknown> = {};

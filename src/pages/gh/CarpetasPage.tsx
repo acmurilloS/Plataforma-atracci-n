@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
   AlertTriangle,
@@ -17,7 +17,7 @@ import {
   Sparkles,
   User,
 } from 'lucide-react';
-import { functions } from '../../lib/firebase';
+import { auth, db, functions } from '../../lib/firebase';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
@@ -30,6 +30,7 @@ import { FolderCheck } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import {
   CATALOGO_DOCUMENTOS_CARPETA,
+  ESTADOS_TERMINALES_SIN_CONTRATO,
   SECCIONES_LABEL,
   calcularCompletitudCarpeta,
   catalogoCarpetaPara,
@@ -86,6 +87,9 @@ const ESTADO_TONO: Record<string, PillTono> = {
   entregada_gh: 'warning',
   observada: 'warning',
   aprobada: 'success',
+  // Proceso repostulado o terminado sin contratación (reu 10-sep). Se oculta de
+  // la lista, pero queda mapeada por si una vista la pinta.
+  anulada: 'neutral',
 };
 
 const DOC_ESTADO_TONO: Record<EstadoDocumento, PillTono> = {
@@ -127,6 +131,24 @@ export default function CarpetasPage() {
     () => new Map(todasPostulaciones.map((p) => [p.id, p])),
     [todasPostulaciones],
   );
+  // Carpetas VIVAS (reu Karen 10-sep · carpeta huérfana de un repostulado): GH veía
+  // la carpeta del proceso viejo al 92% ("Faltan 1 obligatorios") y no la podía
+  // aprobar. Fuera las anuladas y las NO aprobadas cuya postulación terminó sin
+  // contratación (repostulado, desistió, descartes…). Una aprobada se queda: es la
+  // historia del ingreso. Si la postulación no está cargada (tope de la lectura),
+  // la carpeta se deja visible — mejor mostrar de más que esconder una viva.
+  // Todo lo que se pinta (lista, filtro, vacío) sale de aquí; la detección de
+  // "aptos sin carpeta" NO (ver postSinCarpeta).
+  const carpetasVisibles = useMemo(
+    () =>
+      carpetas.filter((c) => {
+        if (c.estado === 'anulada') return false;
+        if (c.estado === 'aprobada') return true;
+        const post = postPorId.get(c.postulacion_id);
+        return !post || !ESTADOS_TERMINALES_SIN_CONTRATO.includes(post.estado);
+      }),
+    [carpetas, postPorId],
+  );
   // Procesos: para saber si el cargo de cada carpeta requiere dotación (flag del
   // perfilamiento) y mostrar el subpaso de solicitud de dotación.
   const { docs: procesos } = useColeccion<ProcesoDotacion>('procesos', { limit: 3000 });
@@ -158,7 +180,7 @@ export default function CarpetasPage() {
     return m;
   }, [todasPostulaciones]);
 
-  const { crear, actualizar } = useMutacion();
+  const { actualizar } = useMutacion();
   const { user, perfil } = useAuth();
   const [procesando, setProcesando] = useState<string | null>(null);
   const [verificandoDoc, setVerificandoDoc] = useState<string | null>(null);
@@ -231,22 +253,54 @@ export default function CarpetasPage() {
     };
   }
 
+  /**
+   * "Abrir carpeta" manual (el trigger onCarpetaCompletaCheck también la crea solo
+   * al completar los obligatorios). Id DETERMINÍSTICO `carpeta_{postulacion_id}`,
+   * el mismo del servidor: antes el botón usaba id aleatorio y botón + trigger
+   * podían dejar dos carpetas para la misma postulación (reu Karen 10-sep). Las
+   * reglas ya exigen ese id.
+   *
+   * Set-if-not-exists en transacción: un setDoc a secas (o setConId) pisaría los
+   * drive_* de una carpeta que el trigger ya creó y depositó en Drive. Si ya
+   * existe, no hace nada — el listener la muestra.
+   *
+   * Campos = los que escribía useMutacion.crear (id + auditoría incluidos).
+   */
   async function crearCarpeta(p: PostulacionDoc) {
     setProcesando(p.id);
-    await crear('carpetas_digitales', {
-      postulacion_id: p.id,
-      candidato_id: p.candidato_id,
-      vacante_id: p.vacante_id,
-      candidato_nombre: p.candidato_nombre,
-      cargo_nombre: p.cargo_nombre,
-      vacante_consecutivo: p.vacante_consecutivo,
-      estado: 'armando',
-      entregada_en: null,
-      entregada_a_uid: null,
-      observaciones_gh: null,
-      aprobada_en: null,
-    });
-    setProcesando(null);
+    try {
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('No hay sesión activa.');
+      const ref = doc(db, 'carpetas_digitales', `carpeta_${p.id}`);
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists()) return;
+        tx.set(ref, {
+          id: ref.id,
+          postulacion_id: p.id,
+          candidato_id: p.candidato_id,
+          vacante_id: p.vacante_id,
+          candidato_nombre: p.candidato_nombre,
+          cargo_nombre: p.cargo_nombre,
+          vacante_consecutivo: p.vacante_consecutivo,
+          estado: 'armando',
+          entregada_en: null,
+          entregada_a_uid: null,
+          observaciones_gh: null,
+          aprobada_en: null,
+          creado_en: serverTimestamp(),
+          creado_por: uid,
+          actualizado_en: serverTimestamp(),
+          actualizado_por: uid,
+        });
+      });
+    } catch (e) {
+      window.alert(
+        e instanceof Error ? e.message : 'No se pudo abrir la carpeta. Intenta de nuevo.',
+      );
+    } finally {
+      setProcesando(null);
+    }
   }
 
   async function marcarLista(c: CarpetaDoc) {
@@ -325,6 +379,9 @@ export default function CarpetasPage() {
     }
   }
 
+  // Contra TODAS las carpetas (anuladas u ocultas incluidas), NO contra
+  // carpetasVisibles: el id es determinístico, así que ofrecer "Abrir carpeta" a
+  // una postulación que ya tiene una sería un botón que no hace nada.
   const postSinCarpeta = postulacionesEnContratacion.filter(
     (p) => !carpetas.some((c) => c.postulacion_id === p.id),
   );
@@ -402,7 +459,7 @@ export default function CarpetasPage() {
 
       {cargando && <p className="text-[13px] text-text-muted">Cargando…</p>}
 
-      {!cargando && carpetas.length === 0 && postSinCarpeta.length === 0 && (
+      {!cargando && carpetasVisibles.length === 0 && postSinCarpeta.length === 0 && (
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
           <p className="text-[14px] font-medium text-text-strong">Sin carpetas en proceso</p>
           <p className="text-[12px] text-text-muted mt-1">
@@ -411,7 +468,7 @@ export default function CarpetasPage() {
         </div>
       )}
 
-      {carpetas.length > 0 && (
+      {carpetasVisibles.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
@@ -435,11 +492,11 @@ export default function CarpetasPage() {
 
       <div className="space-y-4">
         {(soloListasGH
-          ? carpetas.filter((c) => {
+          ? carpetasVisibles.filter((c) => {
               const comp = calcularCompletitud(c.postulacion_id);
               return comp.porcentaje === 100 && comp.gh.porcentaje < 100;
             })
-          : carpetas
+          : carpetasVisibles
         ).map((c) => {
           const tono = ESTADO_TONO[c.estado] ?? 'neutral';
           const info = resolverInfo(c);

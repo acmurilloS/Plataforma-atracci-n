@@ -1,8 +1,11 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Briefcase, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
+import { useResumenesVacantes } from '../../hooks/useResumenesVacantes';
 import { formatearFecha } from '../../utils/fechas';
+import { faseTarjeta } from '../../utils/reportesVacantes';
 import { formatearCOP } from '../../utils/moneda';
 import type { VacanteDoc } from '../../schemas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
@@ -38,6 +41,10 @@ export default function MisVacantesPage() {
     filtros: user ? [['lider_uid', '==', user.uid]] : [],
     orden: ['creado_en', 'desc'],
   });
+  // Fase real (candidatos en curso) para el histórico: el estado de la vacante se
+  // queda atrás cuando la analista avanza candidatos (reu Karen 10-sep).
+  const ids = useMemo(() => vacantes.map((v) => v.id), [vacantes]);
+  const { porVacante: resumenes } = useResumenesVacantes(ids);
 
   // Ternas con reloj activo: ya enviadas y sin respuesta del líder.
   const ternasPendientes = vacantes.filter(
@@ -228,6 +235,16 @@ export default function MisVacantesPage() {
                       <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
                         {v.estado.replace(/_/g, ' ')}
                       </Pill>
+                      {/* Fase real cuando los candidatos van por delante del estado. */}
+                      {(() => {
+                        const f = faseTarjeta(v, resumenes.get(v.id));
+                        return f.secundario ? (
+                          <p className="mt-1 text-[11px] text-text-muted">
+                            {f.letra ? `Fase ${f.letra} · ` : ''}
+                            {f.texto}
+                          </p>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-text-muted text-[12px] tabular-nums">
                       {v.creado_en ? formatearFecha(v.creado_en.toDate()) : '—'}

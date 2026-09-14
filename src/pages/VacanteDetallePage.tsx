@@ -27,10 +27,16 @@ import { useMutacion } from '../hooks/useMutacion';
 import { SelectorCargo } from '../components/vacantes/SelectorCargo';
 import { EditarIdentificacionModal } from '../components/vacantes/EditarIdentificacionModal';
 import { useFestivosTodos } from '../hooks/useCatalogos';
+import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { functions, db } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
 import { formatearCOP, soloDigitos } from '../utils/moneda';
-import { agruparPostulaciones, construirBaseVacantes } from '../utils/reportesVacantes';
+import {
+  agruparPostulaciones,
+  construirBaseVacantes,
+  faseTarjeta,
+  pipelineReal,
+} from '../utils/reportesVacantes';
 import { exportarVacanteIndividual } from '../utils/exportarExcel';
 import {
   TIPO_MOVIMIENTO_LABEL,
@@ -75,6 +81,8 @@ export default function VacanteDetallePage() {
   const { rol, user } = useAuth();
   const festivos = useFestivosTodos();
   const [vac, setVac] = useState<VacanteDoc | null>(null);
+  // Candidatos en curso de esta vacante (servidor) → fase real junto al estado.
+  const { porVacante: resumenVacante } = useResumenesVacantes(id ? [id] : []);
   const [err, setErr] = useState<string | null>(null);
   const [descargando, setDescargando] = useState(false);
   const { actualizar } = useMutacion();
@@ -234,7 +242,9 @@ export default function VacanteDetallePage() {
       );
       const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PostulacionDoc[];
       const conteos = agruparPostulaciones(posts);
-      const [fila] = construirBaseVacantes([vac], conteos, festivos, new Date());
+      // Misma "Fase real" que el Excel del dashboard.
+      const fases = pipelineReal([vac], posts).porVacante;
+      const [fila] = construirBaseVacantes([vac], conteos, festivos, new Date(), undefined, fases);
       if (fila) await exportarVacanteIndividual(fila, vac.consecutivo || vac.id);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No pudimos generar el Excel de la vacante.');
@@ -291,9 +301,21 @@ export default function VacanteDetallePage() {
             {vac.empresa_nombre} · {vac.sede_nombre} · {vac.unidad_nombre}
           </p>
         </div>
-        <Pill tono={tono} dot className="self-start">
-          {vac.estado.replace(/_/g, ' ')}
-        </Pill>
+        <div className="self-start flex flex-col items-end gap-1">
+          <Pill tono={tono} dot>
+            {vac.estado.replace(/_/g, ' ')}
+          </Pill>
+          {/* Fase real cuando los candidatos van por delante del estado (reu Karen 10-sep). */}
+          {(() => {
+            const f = faseTarjeta(vac, resumenVacante.get(vac.id));
+            return f.secundario ? (
+              <span className="text-[11px] text-text-muted text-right">
+                {f.letra ? `Fase ${f.letra} · ` : ''}
+                {f.texto}
+              </span>
+            ) : null;
+          })()}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 print:hidden">

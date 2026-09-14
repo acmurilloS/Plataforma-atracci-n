@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { tokenVigente } from './tokenVigente';
+import { asegurarPortalEscribible } from './portalEscribible';
 import { verificarCedula } from './verificarCedula';
 import { urlPortalDocValida } from './urlPortalDocValida';
 import { CLAVES_APORTA_CANDIDATO, ITEM_POR_CLAVE } from '../documentos/catalogoCarpeta';
@@ -99,24 +100,15 @@ export const registrarDocumentoCarpetaPortal = onCall({ region: 'us-central1' },
     throw new HttpsError('permission-denied', 'Verifica tu número de cédula para continuar.');
   }
 
-  const postulacionId = String(t.postulacion_id ?? '');
-  if (!postulacionId) throw new HttpsError('failed-precondition', 'Token sin postulación.');
+  // Nunca escribir en una postulación que ya terminó (repostulado, descartado…):
+  // su carpeta ya no es la viva (reu Karen 10-sep).
+  const { postulacionId, postulacion: pd } = await asegurarPortalEscribible(t);
 
   const item = ITEM_POR_CLAVE[clave];
 
   // candidato_id / nombre: preferir la postulación; fallback al snapshot del token.
-  let candidatoId = String(t.candidato_id ?? '');
-  let candidatoNombre = String(t.candidato_nombre ?? '');
-  try {
-    const p = await db.collection('postulaciones').doc(postulacionId).get();
-    if (p.exists) {
-      const pd = p.data() ?? {};
-      candidatoId = String(pd.candidato_id ?? candidatoId);
-      candidatoNombre = String(pd.candidato_nombre ?? candidatoNombre);
-    }
-  } catch {
-    /* usar snapshot del token */
-  }
+  const candidatoId = String(pd.candidato_id ?? t.candidato_id ?? '');
+  const candidatoNombre = String(pd.candidato_nombre ?? t.candidato_nombre ?? '');
 
   const ahora = Timestamp.now();
 

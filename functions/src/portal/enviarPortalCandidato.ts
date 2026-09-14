@@ -5,6 +5,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { emailAnalistaDeVacante } from '../notificaciones/emailAnalista';
+import { esPostulacionTerminal } from '../postulaciones/estadosTerminales';
 import { generarSlug } from '../referidos/generarSlug';
 import { DIAS_VIGENCIA_TOKEN } from './tokenVigente';
 
@@ -25,6 +26,9 @@ const APP_URL = 'https://ptm-atraccion.web.app';
  *
  * El token vive en `portal_candidato_tokens/{token}` con un snapshot de los
  * datos que el portal muestra; la resolución pública la hace `resolverPortalToken`.
+ *
+ * No se envía ni se reabre para una postulación terminal (repostulado,
+ * descartado, desistió…) — ver el guard abajo (reu Karen 10-sep).
  */
 export const enviarPortalCandidato = onCall(
   { region: 'us-central1', secrets: [GMAIL_USER, GMAIL_APP_PASSWORD] },
@@ -44,6 +48,25 @@ export const enviarPortalCandidato = onCall(
     const postSnap = await postRef.get();
     if (!postSnap.exists) throw new HttpsError('not-found', 'Postulación no existe.');
     const post = postSnap.data() as Record<string, unknown>;
+
+    // Proceso terminado sin contratación: no se envía ni se reabre el portal. El
+    // correo invita a "continuar" y aceptar autorizaciones, y rehabilitar el token
+    // dejaría subir documentos a un proceso muerto (repostulado de CU-BOG-1240,
+    // reu Karen 10-sep: su portal viejo seguía recibiendo documentos). Ningún flujo
+    // legítimo lo necesita: el agradecimiento del descarte (enviarAgradecimientoCore,
+    // manual u onPostulacionDescartada) va COMPLETO por correo y no toca el token;
+    // onPostulacionAvance solo avisa en contratación; y un portal que siga vigente
+    // igual muestra su mensaje de cierre. Si un descarte se reabre al pool, el
+    // estado cambia y el guard deja de aplicar solo.
+    if (esPostulacionTerminal(post.estado)) {
+      const destino = String(post.repostulado_a_vacante_consecutivo ?? '').trim();
+      throw new HttpsError(
+        'failed-precondition',
+        post.estado === 'repostulado'
+          ? `Este candidato fue repostulado${destino ? ` a ${destino}` : ''}; envía el portal desde su postulación en esa vacante.`
+          : 'El proceso de esta postulación ya finalizó; no se puede enviar ni reabrir el portal.',
+      );
+    }
 
     const email = String(post.candidato_email ?? '').trim();
     if (!email) {
@@ -99,10 +122,18 @@ export const enviarPortalCandidato = onCall(
       });
     } else {
       // Mantener el snapshot fresco (la cédula pudo completarse después) y
-      // extender la vigencia + re-habilitar al reenviar.
-      await tokensCol
-        .doc(token)
-        .set({ ...snapshot, revocado: false, expira_en: nuevaCaducidad() }, { merge: true });
+      // extender la vigencia + re-habilitar al reenviar. Si estaba revocado, la
+      // postulación se limpia en el MISMO batch: si no, la UI seguía mostrándolo
+      // revocado (sin enlace ni botón "Revocar portal") con el token ya vivo,
+      // incluso si luego falla el correo.
+      const batch = db.batch();
+      batch.set(
+        tokensCol.doc(token),
+        { ...snapshot, revocado: false, expira_en: nuevaCaducidad() },
+        { merge: true },
+      );
+      if (post.portal_revocado_en) batch.update(postRef, { portal_revocado_en: null });
+      await batch.commit();
     }
 
     const url = `${APP_URL}/portal/${token}`;

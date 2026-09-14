@@ -54,9 +54,14 @@ export const probarConexionDrive = onCall(
   },
 );
 
+const MSG_CARPETA_ANULADA = 'Esta carpeta fue anulada; no se deposita en Drive.';
+
 /**
  * sincronizarCarpetaDrive · reintento MANUAL del depósito (botón en CarpetasPage).
- * Solo si la carpeta está al 100% total (CyD + GH). Idempotente (no duplica).
+ * Solo si la carpeta llega al 85% de CyD (carpetaListaParaDrive). Idempotente (no
+ * duplica). Rechaza carpetas 'anuladas' y postulaciones terminales (reu Karen
+ * 10-sep): el proceso viejo de un repostulado escribiría en la misma subcarpeta
+ * del candidato que el nuevo.
  */
 export const sincronizarCarpetaDrive = onCall(
   { region: 'us-central1', secrets: [GDRIVE_SERVICE_ACCOUNT_JSON], timeoutSeconds: 300, memory: '512MiB' },
@@ -71,6 +76,10 @@ export const sincronizarCarpetaDrive = onCall(
     const carpetaRef = db.collection('carpetas_digitales').doc(carpetaId);
     const carpetaSnap = await carpetaRef.get();
     if (!carpetaSnap.exists) throw new HttpsError('not-found', 'La carpeta no existe.');
+    // Anulada → mensaje claro ANTES del chequeo del 85% (el lock lo re-valida abajo).
+    if (carpetaSnap.data()?.estado === 'anulada') {
+      throw new HttpsError('failed-precondition', MSG_CARPETA_ANULADA);
+    }
     const postulacionId = String(carpetaSnap.data()?.postulacion_id ?? '');
     if (!postulacionId) throw new HttpsError('failed-precondition', 'La carpeta no tiene postulación.');
 
@@ -92,6 +101,17 @@ export const sincronizarCarpetaDrive = onCall(
     }
     if (r.estado === 'ocupado') {
       throw new HttpsError('aborted', 'Ya hay una sincronización en curso; intenta en un momento.');
+    }
+    // El lock re-valida en transacción: la carpeta pudo anularse (o su postulación
+    // terminar) entre la lectura de arriba y el depósito.
+    if (r.estado === 'anulada') {
+      throw new HttpsError('failed-precondition', MSG_CARPETA_ANULADA);
+    }
+    if (r.estado === 'postulacion_terminal') {
+      throw new HttpsError(
+        'failed-precondition',
+        'El proceso de esta postulación ya terminó; su carpeta no se deposita en Drive.',
+      );
     }
     throw new HttpsError('internal', r.error ?? 'No se pudo sincronizar a Drive.');
   },

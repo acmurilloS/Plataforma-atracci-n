@@ -19,6 +19,7 @@ import { cn } from '../../utils/cn';
 import {
   diasTranscurridos,
   esVacanteCerrada,
+  etiquetaFasePipeline,
   FASES_PIPELINE,
   pipelineReal,
   tiemposPorEtapa,
@@ -224,14 +225,18 @@ export default function DashboardCoordPage() {
         ) : (
           <Building2 size={20} strokeWidth={1.75} />
         ),
-        items: arr.map((v) => ({
-          ...base(v),
-          right: (
-            <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
-              {v.estado.replace(/_/g, ' ')}
-            </Pill>
-          ),
-        })),
+        items: arr.map((v) => {
+          // Activas: la fase real (candidato más avanzado); cerradas: su estado.
+          const fase = pipe.porVacante.get(v.id);
+          return {
+            ...base(v),
+            right: (
+              <Pill tono={fase ? 'info' : (ESTADO_TONO[v.estado] ?? 'neutral')} dot>
+                {fase ? etiquetaFasePipeline(fase) : v.estado.replace(/_/g, ' ')}
+              </Pill>
+            ),
+          };
+        }),
       };
     }
 
@@ -458,9 +463,15 @@ export default function DashboardCoordPage() {
                     umbralCritico={15}
                     etiqueta="Días hábiles desde la apertura"
                   />
-                  <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
-                    {v.estado.replace(/_/g, ' ')}
-                  </Pill>
+                  {(() => {
+                    // Fase real (candidato más avanzado), no el estado crudo de la vacante.
+                    const fase = pipe.porVacante.get(v.id);
+                    return (
+                      <Pill tono={fase ? 'info' : (ESTADO_TONO[v.estado] ?? 'neutral')} dot>
+                        {fase ? etiquetaFasePipeline(fase) : v.estado.replace(/_/g, ' ')}
+                      </Pill>
+                    );
+                  })()}
                 </div>
               </li>
             ))}
