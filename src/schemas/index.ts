@@ -25,3 +25,4 @@ export * from './politicasCriticidad';
 export * from './referidoSchema';
 export * from './novedadVacanteSchema';
 export * from './vacanteResumenSchema';
+export * from './configuracionSchema';

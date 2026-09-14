@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, Briefcase, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
+import { useDoc } from '../../hooks/useDoc';
 import { useResumenesVacantes } from '../../hooks/useResumenesVacantes';
 import { formatearFecha } from '../../utils/fechas';
 import { faseTarjeta } from '../../utils/reportesVacantes';
 import { formatearCOP } from '../../utils/moneda';
-import type { VacanteDoc } from '../../schemas';
+import { validarRelojLider } from '../../schemas';
+import type { ConfigRelojLiderDoc, VacanteDoc } from '../../schemas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
@@ -15,9 +17,11 @@ import { cn } from '../../utils/cn';
 /**
  * MisVacantesPage · sistema brand.
  *
- * Vista líder: todas las vacantes que abrió + alertas urgentes de ternas
- * con reloj activo. La alerta es el corazón de la pantalla: si tiene
- * terna pendiente, ese bloque se ve antes que nada.
+ * Vista líder: todas las vacantes que abrió + alertas urgentes de los procesos
+ * con el reloj del líder corriendo (reu Karen 09-sep, punto 7): tras recibir el
+ * Concepto de Atracción tiene un plazo para dar la fecha de la entrevista. La
+ * alerta es el corazón de la pantalla: si hay plazo corriendo, ese bloque se ve
+ * antes que nada. Sin la regla encendida no se muestra ninguna cuenta regresiva.
  */
 
 const ESTADO_TONO: Record<string, PillTono> = {
@@ -45,11 +49,13 @@ export default function MisVacantesPage() {
   // queda atrás cuando la analista avanza candidatos (reu Karen 10-sep).
   const ids = useMemo(() => vacantes.map((v) => v.id), [vacantes]);
   const { porVacante: resumenes } = useResumenesVacantes(ids);
+  const { doc: configReloj } = useDoc<ConfigRelojLiderDoc>('configuracion_global', 'reloj_lider');
+  const relojEfectivo = validarRelojLider(configReloj).efectivo;
 
-  // Ternas con reloj activo: ya enviadas y sin respuesta del líder.
-  const ternasPendientes = vacantes.filter(
-    (v) => v.estado === 'terna_enviada' && v.terna_enviada_en && !v.terna_respondida_en,
-  );
+  // Procesos con el plazo del líder corriendo (lo arma el servidor en reloj_lider).
+  const plazosPendientes = relojEfectivo
+    ? vacantes.filter((v) => v.reloj_lider?.estado === 'corriendo' && v.estado !== 'pausada')
+    : [];
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
@@ -61,12 +67,15 @@ export default function MisVacantesPage() {
         descripcion={
           <>
             Todas las solicitudes que has abierto y su estado actual en el flujograma.
-            {ternasPendientes.length > 0 && (
+            {plazosPendientes.length > 0 && (
               <>
                 {' '}
                 Tienes{' '}
                 <span className="font-semibold text-danger-700">
-                  {ternasPendientes.length} terna(s) pendiente(s) de revisar
+                  {plazosPendientes.length}{' '}
+                  {plazosPendientes.length === 1
+                    ? 'proceso esperando la fecha de entrevista'
+                    : 'procesos esperando la fecha de entrevista'}
                 </span>
                 .
               </>
@@ -82,15 +91,15 @@ export default function MisVacantesPage() {
         }
       />
 
-      {/* Alertas de terna pendiente · paso 13 con reloj 48h */}
-      {ternasPendientes.length > 0 && (
+      {/* Alertas del reloj del líder · fecha de entrevista pendiente */}
+      {plazosPendientes.length > 0 && (
         <div className="space-y-3">
-          {ternasPendientes.map((v) => {
-            const inicioMs = v.terna_enviada_en?.toMillis() ?? 0;
-            const msRestantes = 48 * 60 * 60 * 1000 - (Date.now() - inicioMs);
+          {plazosPendientes.map((v) => {
+            const venceMs = v.reloj_lider?.vence_en?.toMillis() ?? 0;
+            const msRestantes = venceMs - Date.now();
             const horasRestantes = Math.max(0, Math.floor(msRestantes / (60 * 60 * 1000)));
             const vencido = msRestantes <= 0;
-            const urgente = horasRestantes <= 24;
+            const urgente = !vencido && !!v.reloj_lider?.recordatorio_enviado_en;
 
             const cajaCls = vencido
               ? 'border-2 border-danger-300 bg-danger-50/40'
@@ -122,7 +131,7 @@ export default function MisVacantesPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-                        Terna pendiente · paso 13
+                        Fecha de entrevista pendiente
                       </p>
                       <p className="mt-1 text-[15px] font-semibold text-text-strong">
                         Ya te conseguimos integrantes para{' '}
@@ -131,6 +140,9 @@ export default function MisVacantesPage() {
                       <p className="text-[12px] text-text-muted mt-0.5">
                         <span className="font-mono">{v.consecutivo}</span> · {v.empresa_nombre} ·{' '}
                         {v.sede_nombre}
+                        {venceMs > 0 && (
+                          <> · plazo hasta el {formatearFecha(new Date(venceMs), "dd/MM/yyyy h:mm a")}</>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -145,15 +157,15 @@ export default function MisVacantesPage() {
                         {vencido ? 'Vencido' : `${horasRestantes}h`}
                       </p>
                       <p className="text-[10px] uppercase tracking-[0.08em] text-text-subtle font-bold">
-                        {vencido ? 'Se pausará' : 'restantes'}
+                        {vencido ? 'Se suspenderá' : 'restantes'}
                       </p>
                     </div>
-                    <Link to={`/vacantes/${v.id}/terna`}>
+                    <Link to={`/vacantes/${v.id}/concepto-atraccion`}>
                       <Button
                         variant={vencido ? 'destructive-primary' : 'brand-primary'}
                         size="medium"
                       >
-                        Revisar terna →
+                        Ver concepto →
                       </Button>
                     </Link>
                   </div>

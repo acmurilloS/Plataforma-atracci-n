@@ -31,6 +31,10 @@ export {
   recalcularResumenesVacantes,
   recalcularResumenesVacantesDiario,
 } from './vacantes/recalcularResumenesVacantes';
+// Reloj del líder tras el Concepto (reu Karen 09-sep, punto 7): se arma al enviar el
+// Concepto/terna y se detiene al agendar la entrevista con el líder. Apagado por config.
+export { onVacanteEnvioLider } from './vacantes/onVacanteEnvioLider';
+export { onEntrevistaLiderDetieneReloj } from './entrevistas/onEntrevistaLiderDetieneReloj';
 // Repostular un candidato a otra vacante activa sin re-inscribirlo (reu 26-jun).
 export { repostularCandidato } from './postulaciones/repostularCandidato';
 // Registrar fecha de vinculacion -> contratado + cierra la vacante (reu Karen 27-ago).

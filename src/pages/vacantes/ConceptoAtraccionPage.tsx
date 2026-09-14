@@ -1,16 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Timestamp, doc, getDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, FileDown, Plus, Printer, Save, Send, Trash2 } from 'lucide-react';
-import { db } from '../../lib/firebase';
+import {
+  Timestamp,
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+  writeBatch,
+} from 'firebase/firestore';
+import {
+  ArrowLeft,
+  Check,
+  Clock,
+  FileDown,
+  Plus,
+  Printer,
+  Save,
+  Send,
+  Trash2,
+} from 'lucide-react';
+import { auth, db } from '../../lib/firebase';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
+import { validarRelojLider } from '../../schemas';
 import type {
   CandidatoConcepto,
   ConceptoAtraccionDoc,
+  ConfigRelojLiderDoc,
+  MotivoRelojLider,
   PostulacionDoc,
   VacanteDoc,
 } from '../../schemas';
@@ -63,6 +83,67 @@ export default function ConceptoAtraccionPage() {
   });
   const { crear, actualizar } = useMutacion();
   const { user, perfil, rol } = useAuth();
+  // Reloj del líder (reu Karen 09-sep, punto 7): plazo para dar la fecha de la
+  // entrevista tras recibir el Concepto. Solo se muestra con la regla encendida.
+  const { doc: configReloj } = useDoc<ConfigRelojLiderDoc>('configuracion_global', 'reloj_lider');
+  const [deteniendoReloj, setDeteniendoReloj] = useState(false);
+  const motivoReloj: Record<MotivoRelojLider, string> = {
+    entrevista_lider: 'se agendó la entrevista con el líder',
+    candidato_avanzo: 'el líder ya decidió sobre los candidatos',
+    descarte_lider: 'el líder descartó candidatos',
+    decision_lider: 'el líder decidió la terna',
+    estado_no_aplica: 'la vacante cambió de etapa',
+    manual: 'se detuvo a mano',
+    suspension_manual: 'la vacante se suspendió a mano',
+    config_reiniciada: 'la regla se reinició',
+    aviso_sin_correo: 'no se pudo confirmar el correo del aviso al líder',
+    recordatorio_sin_correo: 'no se pudo confirmar el correo del recordatorio',
+  };
+
+  /** "El líder ya dio fecha": detiene el reloj a mano y lo deja en la bitácora. */
+  async function detenerReloj() {
+    if (!vacante) return;
+    if (
+      !window.confirm(
+        '¿El líder ya dio la fecha de la entrevista? El plazo se detiene y la vacante no se suspenderá.',
+      )
+    )
+      return;
+    setDeteniendoReloj(true);
+    setErr(null);
+    try {
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('No hay sesión activa.');
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'vacantes', vacante.id), {
+        'reloj_lider.estado': 'detenido',
+        'reloj_lider.motivo': 'manual',
+        'reloj_lider.detenido_en': serverTimestamp(),
+        actualizado_en: serverTimestamp(),
+        actualizado_por: uid,
+      });
+      const novRef = doc(collection(db, 'vacante_novedades'));
+      batch.set(novRef, {
+        id: novRef.id,
+        vacante_id: vacante.id,
+        vacante_consecutivo: vacante.consecutivo,
+        tipo: 'observacion',
+        motivo: 'Reloj del líder detenido a mano: el líder ya dio la fecha de la entrevista.',
+        estado_anterior: null,
+        estado_nuevo: null,
+        registrado_por_nombre: perfil ? `${perfil.nombre} ${perfil.apellido}` : '—',
+        creado_en: serverTimestamp(),
+        creado_por: uid,
+        actualizado_en: serverTimestamp(),
+        actualizado_por: uid,
+      });
+      await batch.commit();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No pudimos detener el reloj.');
+    } finally {
+      setDeteniendoReloj(false);
+    }
+  }
 
   const concepto = conceptos[0] ?? null;
   // El líder "puro" (rol lider) ve la hoja en solo-lectura, solo para revisar/imprimir.
@@ -255,10 +336,22 @@ export default function ConceptoAtraccionPage() {
         titulo: 'Concepto de atracción listo para tu revisión',
         mensaje: `${analista} te compartió el concepto de atracción de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${nombres.length} integrante(s) finalista(s)${lista}. Ábrelo para revisarlo desde la plataforma.`,
         link: `/vacantes/${vacante.id}/concepto-atraccion`,
+        // Con vacante_id el correo sale con reply-to a la analista del proceso.
+        vacante_id: vacante.id,
         leida: false,
         leida_en: null,
       });
-      await actualizar('vacantes', vacante.id, { concepto_enviado_lider_en: Timestamp.now() });
+      try {
+        // Hora del SERVIDOR (no la del navegador): con ella arranca el reloj del
+        // líder si la regla está encendida (reu Karen 09-sep, punto 7).
+        await actualizar('vacantes', vacante.id, { concepto_enviado_lider_en: serverTimestamp() });
+      } catch {
+        // La notificación ya salió: reintentar le duplicaría el correo al líder.
+        setErr(
+          'El Concepto ya se le envió al líder, pero no se registró la fecha de envío: solo la analista asignada o coordinación pueden registrarla.',
+        );
+        return;
+      }
       setEnviadoLider(true);
       setTimeout(() => setEnviadoLider(false), 4000);
     } catch (e) {
@@ -387,6 +480,70 @@ export default function ConceptoAtraccionPage() {
           {err}
         </div>
       )}
+
+      {/* ─── Reloj del líder (reu Karen 09-sep, punto 7) ─────────────── */}
+      {(() => {
+        const reloj = vacante.reloj_lider;
+        if (!reloj || !validarRelojLider(configReloj).efectivo) return null;
+        const vigenteMs = configReloj?.vigente_desde?.toMillis?.() ?? 0;
+        if (reloj.inicio.toMillis() < vigenteMs) return null;
+        if (vacante.estado === 'pausada' && reloj.estado !== 'pausada') return null;
+        const fmt = (ms: number) => formatearFecha(new Date(ms), 'dd/MM/yyyy h:mm a');
+        const puedeDetener =
+          reloj.estado === 'corriendo' &&
+          !esLider &&
+          (['admin', 'coordinador', 'gh'].includes(rol ?? '') || vacante.analista_uid === user?.uid);
+        let titulo = '';
+        let detalle = '';
+        if (reloj.estado === 'corriendo') {
+          titulo = `Plazo del líder para dar la fecha de la entrevista: hasta el ${fmt(reloj.vence_en.toMillis())}`;
+          detalle = reloj.recordatorio_enviado_en
+            ? 'Ya se le envió el recordatorio.'
+            : `Recordatorio el ${fmt(reloj.recordatorio_en.toMillis())}.`;
+        } else if (reloj.estado === 'detenido') {
+          titulo = 'Plazo del líder detenido';
+          detalle = reloj.motivo ? `Motivo: ${motivoReloj[reloj.motivo]}.` : '';
+        } else if (reloj.estado === 'pausada') {
+          titulo = 'Proceso suspendido por el plazo del líder';
+          detalle = 'Se reactiva desde la bitácora de la vacante.';
+        } else {
+          titulo = 'El plazo del líder no está corriendo';
+          detalle = `${reloj.motivo ? `Motivo: ${motivoReloj[reloj.motivo]}. ` : ''}La vacante no se suspenderá.`;
+        }
+        const caja =
+          reloj.estado === 'corriendo'
+            ? 'border-brand-200 bg-brand-50/40'
+            : reloj.estado === 'detenido'
+              ? 'border-slate-200 bg-slate-50'
+              : 'border-warning-300 bg-warning-50/40';
+        return (
+          <div
+            className={`print:hidden rounded-md border px-4 py-3 flex items-start justify-between gap-3 flex-wrap ${caja}`}
+          >
+            <div className="flex items-start gap-2.5 min-w-0">
+              <Clock size={16} strokeWidth={1.75} className="text-brand-700 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                  Reloj del líder
+                </p>
+                <p className="text-[13px] font-medium text-text-strong mt-0.5">{titulo}</p>
+                {detalle && <p className="text-[12px] text-text-muted mt-0.5">{detalle}</p>}
+              </div>
+            </div>
+            {puedeDetener && (
+              <Button
+                variant="neutral-secondary"
+                size="medium"
+                onClick={detenerReloj}
+                loading={deteniendoReloj}
+                disabled={deteniendoReloj}
+              >
+                El líder ya dio fecha · detener
+              </Button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Hoja oficial imprimible · mantiene formato VIDA-F-03 */}
       <div className="bg-white border border-slate-300 print:border-0 print:p-0 p-8 shadow-brand-card print:shadow-none">

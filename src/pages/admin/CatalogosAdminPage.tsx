@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  BellRing,
   Building2,
   MapPin,
   Layers,
@@ -19,17 +20,18 @@ import { SeedTab } from '../../components/admin/SeedTab';
 import { ReferidosTab } from '../../components/admin/ReferidosTab';
 import { IntegracionesTab } from '../../components/admin/IntegracionesTab';
 import { CartaBienvenidaTab } from '../../components/admin/CartaBienvenidaTab';
+import { MensajesReglasTab } from '../../components/admin/MensajesReglasTab';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
 /**
  * CatalogosAdminPage · sistema brand.
  *
- * 7 tabs con underline brand-600 e icono dedicado por tab. Las pestañas de
+ * 9 tabs con underline brand-600 e icono dedicado por tab. Las pestañas de
  * datos del holding (empresas, sedes, unidades, cargos) las ve cualquiera con
- * acceso a esta página; Seed, Integraciones y Referidos son SOLO para admin
- * pleno (`soloAdmin`) — un usuario que entra por el permiso 'catalogos'
- * (p.ej. Karen coordinadora) no las ve.
+ * acceso a esta página; Referidos, Integraciones, Carta, Mensajes y reglas y Seed
+ * son SOLO para admin pleno (`soloAdmin`) — un usuario que entra por el permiso
+ * 'catalogos' no las ve (configuracion_global se escribe solo con isAdmin).
  */
 
 type Tab =
@@ -40,6 +42,7 @@ type Tab =
   | 'referidos'
   | 'integraciones'
   | 'carta'
+  | 'mensajes'
   | 'seed';
 
 const TABS: { key: Tab; label: string; icono: LucideIcon; soloAdmin?: boolean }[] = [
@@ -50,6 +53,8 @@ const TABS: { key: Tab; label: string; icono: LucideIcon; soloAdmin?: boolean }[
   { key: 'referidos', label: 'Referidos', icono: Users2, soloAdmin: true },
   { key: 'integraciones', label: 'Integraciones', icono: Cloud, soloAdmin: true },
   { key: 'carta', label: 'Carta bienvenida', icono: FileText, soloAdmin: true },
+  // Aviso de compromiso al candidato + reloj del líder (reu Karen 09-sep).
+  { key: 'mensajes', label: 'Mensajes y reglas', icono: BellRing, soloAdmin: true },
   { key: 'seed', label: 'Seed', icono: Database, soloAdmin: true },
 ];
 
@@ -101,6 +106,7 @@ export default function CatalogosAdminPage() {
         {tab === 'referidos' && esAdmin && <ReferidosTab />}
         {tab === 'integraciones' && esAdmin && <IntegracionesTab />}
         {tab === 'carta' && esAdmin && <CartaBienvenidaTab />}
+        {tab === 'mensajes' && esAdmin && <MensajesReglasTab />}
         {tab === 'seed' && esAdmin && <SeedTab />}
       </div>
     </div>

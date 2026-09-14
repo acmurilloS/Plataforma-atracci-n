@@ -25,10 +25,11 @@ import {
   MOTIVOS_RECICLABLES,
   MOTIVO_DESCARTE_LABEL,
   politicaParaCriticidad,
+  validarRelojLider,
   validarTransicion,
   type MotivoDescarte,
 } from '../../schemas';
-import type { VacanteDoc, PostulacionDoc } from '../../schemas';
+import type { ConfigRelojLiderDoc, VacanteDoc, PostulacionDoc } from '../../schemas';
 import { DescarteModal } from '../../components/vacantes/DescarteModal';
 import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCriticidadBanner';
 import { Button, Card, Pill } from '../../components/brand';
@@ -40,8 +41,9 @@ import { cn } from '../../utils/cn';
  * TernaPage · sistema brand.
  *
  * Centraliza pasos 12-14 del flujograma:
- *  · Paso 12: analista cierra terna → arranca reloj 48h del líder
- *  · Paso 13: reloj activo · countdown visible para todos los roles
+ *  · Paso 12: analista cierra terna → arranca el reloj del líder (si la regla está
+ *    encendida en Catálogos → Mensajes y reglas; ver onVacanteEnvioLider)
+ *  · Paso 13: reloj activo · countdown hasta reloj_lider.vence_en
  *  · Paso 14: líder aprueba / descarta con motivo tipificado · loop al pool
  */
 
@@ -49,6 +51,8 @@ export default function TernaPage() {
   const { id } = useParams<{ id: string }>();
   const { user, perfil, rol } = useAuth();
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', id);
+  // Regla del reloj del líder (Catálogos → Mensajes y reglas): sin ella no hay plazo.
+  const { doc: configReloj } = useDoc<ConfigRelojLiderDoc>('configuracion_global', 'reloj_lider');
   const { docs: postulaciones } = useColeccion<PostulacionDoc>('postulaciones', {
     filtros: id ? [['vacante_id', '==', id]] : [],
   });
@@ -89,17 +93,21 @@ export default function TernaPage() {
   const puedeCerrarTerna = rol === 'analista' || rol === 'coordinador' || rol === 'admin';
 
   const ternaEnviada = vacante?.terna_enviada_en ?? null;
-  const ternaRespondida = vacante?.terna_respondida_en ?? null;
-  const relojActivo = !!ternaEnviada && !ternaRespondida && vacante?.estado === 'terna_enviada';
+  // Reloj del líder (reu Karen 09-sep, punto 7): lo arma el servidor en
+  // `reloj_lider` y solo corre con la regla encendida en Catálogos → Mensajes y
+  // reglas. Ya no hay 48 h fijas: el plazo y la fecha límite salen del reloj.
+  const reloj = vacante?.reloj_lider ?? null;
+  const relojEfectivo = validarRelojLider(configReloj).efectivo;
+  const horasPlazo = configReloj?.horas_pausa ?? 0;
+  const relojActivo =
+    relojEfectivo && reloj?.estado === 'corriendo' && vacante?.estado !== 'pausada';
   const politica = vacante ? politicaParaCriticidad(vacante.criticidad) : null;
   const minCandidatos = politica?.min_candidatos_terna ?? 1;
   const faltanCandidatos = enTerna.length < minCandidatos;
-  const msRestantes = ternaEnviada
-    ? 48 * 60 * 60 * 1000 - (Date.now() - ternaEnviada.toMillis())
-    : 0;
+  const msRestantes = relojActivo && reloj ? reloj.vence_en.toMillis() - Date.now() : 0;
   const horasRestantes = Math.max(0, Math.floor(msRestantes / (60 * 60 * 1000)));
   const vencido = relojActivo && msRestantes <= 0;
-  const urgente = relojActivo && !vencido && horasRestantes <= 24;
+  const urgente = relojActivo && !vencido && !!reloj?.recordatorio_enviado_en;
 
   // La decisión de terna (aprobar/descartar) es del LÍDER, y las reglas no le
   // permiten escribir postulaciones/vacantes/tickets/candidatos directo. Todo eso
@@ -150,10 +158,17 @@ export default function TernaPage() {
       setErr('No hay integrantes en terna para enviar al líder.');
       return;
     }
+    // El plazo solo se promete si la regla del reloj está encendida (punto 7).
+    const plazoTexto =
+      configReloj?.modo_plazo === 'dias_habiles'
+        ? `${horasPlazo / 24} días hábiles`
+        : `${horasPlazo} horas`;
     if (
       !window.confirm(
-        `¿Cerrar la terna con ${enTerna.length} integrante(s) y enviar al líder ${vacante.lider_nombre}?\n\n` +
-          'Arranca un reloj de 48h. A las 24h le mandamos recordatorio; a las 48h sin respuesta, la vacante se pausa.',
+        `¿Cerrar la terna con ${enTerna.length} integrante(s) y enviar al líder ${vacante.lider_nombre}?` +
+          (relojEfectivo
+            ? `\n\nArranca el plazo del líder (${plazoTexto}) para dar la fecha de la entrevista; sin respuesta, el proceso se suspende.`
+            : ''),
       )
     )
       return;
@@ -184,7 +199,9 @@ export default function TernaPage() {
             destinatario_uid: vacante.lider_uid,
             tipo: 'terna_lista',
             titulo: 'Terna lista para tu revisión',
-            mensaje: `${analista} te envió la terna de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${enTerna.length} integrante(s)${lista}. Revísala y decide desde la plataforma — tienes 48 horas.`,
+            mensaje: `${analista} te envió la terna de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${enTerna.length} integrante(s)${lista}. Revísala y decide desde la plataforma${
+              relojEfectivo ? ` — tienes ${plazoTexto} para dar la fecha de la entrevista` : ''
+            }.`,
             link: `/vacantes/${vacante.id}/terna`,
             leida: false,
             leida_en: null,
@@ -362,11 +379,11 @@ export default function TernaPage() {
                   Reloj del líder · paso 13
                 </p>
                 <p className="text-[14px] text-text-body mt-1">
-                  Terna enviada a{' '}
+                  Plazo de{' '}
                   <span className="font-semibold text-text-strong">{vacante.lider_nombre}</span>{' '}
-                  el{' '}
+                  para dar la fecha de la entrevista: hasta el{' '}
                   <span className="tabular-nums">
-                    {vacante.terna_enviada_en?.toDate().toLocaleString('es-CO')}
+                    {reloj?.vence_en.toDate().toLocaleString('es-CO')}
                   </span>
                 </p>
               </div>
@@ -386,9 +403,9 @@ export default function TernaPage() {
               </p>
               <p className="text-[11px] text-text-subtle mt-1">
                 {vencido
-                  ? 'La vacante se pausará en el próximo ciclo'
+                  ? 'Se suspenderá en el próximo ciclo en horario laboral'
                   : urgente
-                    ? 'Recordatorio de 24h enviado'
+                    ? 'Recordatorio enviado'
                     : 'Sin respuesta aún'}
               </p>
             </div>
@@ -429,8 +446,9 @@ export default function TernaPage() {
                   ) : (
                     <>
                       Política {vacante.criticidad}: {minCandidatos} mínimo,{' '}
-                      {politica?.candidatos_terna_sugeridos} sugeridos. Al enviar arranca el reloj
-                      de 48h.
+                      {politica?.candidatos_terna_sugeridos} sugeridos.
+                      {relojEfectivo &&
+                        ' Al enviar arranca el plazo del líder para dar la fecha de la entrevista.'}
                     </>
                   )}
                 </p>

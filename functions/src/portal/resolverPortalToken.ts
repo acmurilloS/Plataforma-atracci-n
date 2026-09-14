@@ -7,6 +7,7 @@ import { verificarCedula, MAX_INTENTOS_CEDULA } from './verificarCedula';
 import { ipBloqueada, registrarFalloIp } from './rateLimitIp';
 import { validarTurnstile } from '../security/validarTurnstile';
 import { esContratado, esEstadoFinalizado, faseDeEstado } from './faseProceso';
+import { avisoAplicaTipo, leerAvisoCompromiso, textoAviso } from '../notificaciones/avisoCompromiso';
 import { CLAVES_APORTA_CANDIDATO, ITEM_POR_CLAVE } from '../documentos/catalogoCarpeta';
 import { archivosDe } from './registrarDocumentoCarpetaPortal';
 
@@ -238,6 +239,8 @@ export const resolverPortalToken = onCall(
     modalidad: string;
     sala_o_link: string;
     tipo: string;
+    /** Aviso de compromiso (reu Karen 09-sep, punto 6): solo junto a una entrevista futura. */
+    aviso_compromiso: { titulo: string; texto: string } | null;
   } | null = null;
   let examen: {
     centro_medico: string;
@@ -262,6 +265,8 @@ export const resolverPortalToken = onCall(
             modalidad: String(d.modalidad ?? 'virtual'),
             sala_o_link: String(d.sala_o_link ?? ''),
             tipo: String(d.tipo ?? 'analista'),
+            // Interno (para el aviso): nunca se devuelve al candidato.
+            estado: String(d.estado ?? 'programada'),
           };
         })
         .filter((d) => d.ms !== null) as {
@@ -269,16 +274,38 @@ export const resolverPortalToken = onCall(
         modalidad: string;
         sala_o_link: string;
         tipo: string;
+        estado: string;
       }[];
       // Próxima futura; si no hay futuras, la más reciente.
       const futuras = lista.filter((d) => d.ms >= ahora).sort((a, b) => a.ms - b.ms);
       const elegida = futuras[0] ?? lista.sort((a, b) => b.ms - a.ms)[0];
       if (elegida) {
+        // Aviso de compromiso (punto 6): solo junto a una entrevista FUTURA y
+        // programada, fuera de movimientos internos y de procesos finalizados.
+        let avisoCompromiso: { titulo: string; texto: string } | null = null;
+        if (
+          elegida.ms >= ahora &&
+          elegida.estado === 'programada' &&
+          !movimientoInterno &&
+          !esEstadoFinalizado(estado)
+        ) {
+          const cfg = await leerAvisoCompromiso();
+          if (cfg.enPortal && avisoAplicaTipo(cfg, elegida.tipo)) {
+            avisoCompromiso = {
+              titulo: cfg.titulo,
+              texto: textoAviso(cfg, {
+                nombre: String(t.candidato_nombre ?? '').split(' ')[0] ?? '',
+                cargo: String(t.cargo_nombre ?? ''),
+              }),
+            };
+          }
+        }
         entrevista = {
           programada_para_ms: elegida.ms,
           modalidad: elegida.modalidad,
           sala_o_link: elegida.sala_o_link,
           tipo: elegida.tipo,
+          aviso_compromiso: avisoCompromiso,
         };
       }
     }

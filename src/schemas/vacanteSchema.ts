@@ -172,6 +172,12 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
    * usar "Enviar al líder"; sale como columna del Excel (pedido Karen 09-sep).
    */
   concepto_enviado_lider_en?: Timestamp | null;
+  /**
+   * Reloj del líder tras el Concepto/terna (reu Karen 09-sep, punto 7). Lo arma y
+   * avanza el servidor (onVacanteEnvioLider + recordatoriosLider); el cliente solo
+   * lo detiene a mano. Solo enums, uids y fechas: el get de vacantes es público.
+   */
+  reloj_lider?: RelojLider | null;
   recordatorio_48h_enviado_en: Timestamp | null;
   recordatorio_24h_enviado_en: Timestamp | null;
   recordatorio_expirado_en: Timestamp | null;
@@ -184,6 +190,39 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
   correo_cultura_destinatario?: string | null;
   correo_cultura_error?: string | null;
   correo_cultura_error_en?: Timestamp | null;
+}
+
+export type EstadoRelojLider = 'corriendo' | 'detenido' | 'pausada' | 'bloqueado';
+
+export type MotivoRelojLider =
+  | 'entrevista_lider'
+  | 'candidato_avanzo'
+  | 'descarte_lider'
+  | 'decision_lider'
+  | 'estado_no_aplica'
+  | 'manual'
+  | 'suspension_manual'
+  | 'config_reiniciada'
+  | 'aviso_sin_correo'
+  | 'recordatorio_sin_correo';
+
+export interface RelojLider {
+  estado: EstadoRelojLider;
+  origen: 'concepto' | 'terna';
+  ciclo: number;
+  envio_ms: number;
+  inicio: Timestamp;
+  recordatorio_en: Timestamp;
+  vence_en: Timestamp;
+  modo_plazo: string;
+  aviso_notificacion_id: string;
+  recordatorio_notificacion_id: string | null;
+  recordatorio_enviado_en: Timestamp | null;
+  pausada_en: Timestamp | null;
+  detenido_en: Timestamp | null;
+  motivo: MotivoRelojLider | null;
+  reenvios: number;
+  lider_uid: string;
 }
 
 export { estadoVacante };

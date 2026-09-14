@@ -6,6 +6,9 @@ import { CalendarPlus, MapPin, Stethoscope, Video } from 'lucide-react';
  * Muestra (si existen) la próxima entrevista y la orden de exámenes médicos, con
  * fecha legible es-CO (zona Bogotá) y botón "Agregar a Google Calendar" para la
  * entrevista. Solo lectura; los datos los entrega el resolver tras la cédula.
+ *
+ * Si Atracción activó el aviso de compromiso (reu Karen 09-sep, punto 6), el
+ * resolver lo manda junto a la entrevista futura y se muestra en la tarjeta.
  */
 
 export interface CitaEntrevista {
@@ -13,6 +16,8 @@ export interface CitaEntrevista {
   modalidad: string;
   sala_o_link: string;
   tipo: string;
+  /** Aviso de compromiso; texto plano (se pinta con saltos de línea, sin HTML). */
+  aviso_compromiso?: { titulo: string; texto: string } | null;
 }
 export interface CitaExamen {
   centro_medico: string;
@@ -128,6 +133,18 @@ export function PortalCitaciones({
               <CalendarPlus size={14} strokeWidth={2} />
               Agregar a Google Calendar
             </a>
+            {entrevista.aviso_compromiso && entrevista.aviso_compromiso.texto && (
+              <div className="mt-3 rounded-md border-l-2 border-brand-600 bg-brand-50/60 px-3 py-2">
+                {entrevista.aviso_compromiso.titulo && (
+                  <p className="text-[12.5px] font-semibold text-text-strong">
+                    {entrevista.aviso_compromiso.titulo}
+                  </p>
+                )}
+                <p className="text-[12.5px] text-text-body mt-0.5 whitespace-pre-line">
+                  {entrevista.aviso_compromiso.texto}
+                </p>
+              </div>
+            )}
           </div>
         )}
 

@@ -91,6 +91,13 @@ export function BitacoraReprocesos({ vacante }: Props) {
         estadoNuevo = 'pausada';
         cambioVacante.estado = 'pausada';
         cambioVacante.estado_previo_pausa = vacante.estado;
+        // Una suspensión manual detiene el reloj del líder (reu Karen 09-sep, punto
+        // 7): si no, al reactivar podría suspenderse otra vez por un plazo viejo.
+        if (vacante.reloj_lider?.estado === 'corriendo') {
+          cambioVacante['reloj_lider.estado'] = 'detenido';
+          cambioVacante['reloj_lider.motivo'] = 'suspension_manual';
+          cambioVacante['reloj_lider.detenido_en'] = serverTimestamp();
+        }
       } else if (tipo === 'reactivacion' && estaPausada) {
         estadoAnterior = 'pausada';
         estadoNuevo = (vacante.estado_previo_pausa as EstadoVacante | null) ?? 'en_proceso';

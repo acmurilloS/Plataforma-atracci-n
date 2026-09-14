@@ -22,6 +22,15 @@ export const tipoNotificacion = z.enum([
   'terna_expirada_coordinador',
   'ticket_creado',
   'generica',
+  // Ya se usaban sin estar en el enum (Concepto e Informe enviados al líder).
+  'concepto_listo',
+  'informe_listo',
+  // Reloj del líder tras el Concepto (reu Karen 09-sep, punto 7).
+  'reloj_lider_aviso',
+  'reloj_lider_recordatorio',
+  'reloj_lider_pausa',
+  'reloj_lider_pausa_equipo',
+  'reloj_lider_bloqueado',
 ]);
 export type TipoNotificacion = z.infer<typeof tipoNotificacion>;
 

@@ -9,6 +9,13 @@ import {
   emailAnalistaDePostulacion,
   emailAnalistaDeVacante,
 } from '../notificaciones/emailAnalista';
+import {
+  avisoAplicaTipo,
+  bloqueAvisoHtml,
+  leerAvisoCompromiso,
+  textoAviso,
+} from '../notificaciones/avisoCompromiso';
+import { esPostulacionTerminal } from '../postulaciones/estadosTerminales';
 
 const GMAIL_USER = defineSecret('GMAIL_USER');
 const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
@@ -28,6 +35,13 @@ const APP_URL = 'https://ptm-atraccion.web.app';
  * calendario. (Auto-crear el evento en el Google Calendar Workspace del
  * analista requeriría OAuth/delegación — eso queda como integración futura; el
  * link "Agregar a Google Calendar" cubre la necesidad de un click.)
+ *
+ * Aviso de compromiso (reu Karen 09-sep, punto 6): si está activo en
+ * `configuracion_global/aviso_compromiso` para este tipo de entrevista, el correo
+ * del CANDIDATO lleva el recordatorio de honrar el tiempo y asistir (nunca el del
+ * líder). Fail-closed: movimiento interno, proceso terminado o cualquier fallo →
+ * sin aviso. Si se incluyó, queda evidencia inmutable en `eventos` (texto y
+ * versión), solo si el correo salió.
  *
  * Idempotente: marca correo_candidato_enviado_en para no reenviar.
  */
@@ -163,6 +177,39 @@ export const onEntrevistaCreate = onDocumentCreated(
       ubicacion: locationCal,
     });
 
+    // Aviso de compromiso (punto 6): solo si aplica; con config apagada queda ''
+    // y el correo sale idéntico al de siempre.
+    let bloqueAviso = '';
+    let aviso: { version: string; texto: string } | null = null;
+    if (email) {
+      const cfgAviso = await leerAvisoCompromiso();
+      if (
+        avisoAplicaTipo(cfgAviso, tipo) &&
+        !post.movimiento_interno &&
+        !esPostulacionTerminal(post.estado)
+      ) {
+        let omitir = true; // fail-closed
+        try {
+          const vacId = String(ent.vacante_id ?? post.vacante_id ?? '');
+          omitir = vacId
+            ? (await db.collection('vacantes').doc(vacId).get()).data()?.es_movimiento_interno === true
+            : false;
+        } catch (e) {
+          logger.warn('onEntrevistaCreate · no se pudo leer la vacante para el aviso; se omite', {
+            e: String(e),
+          });
+        }
+        if (!omitir) {
+          const primerNombre = nombreCandidato.split(' ')[0] || nombreCandidato;
+          bloqueAviso = bloqueAvisoHtml(cfgAviso, { nombre: primerNombre, cargo });
+          aviso = {
+            version: cfgAviso.version,
+            texto: textoAviso(cfgAviso, { nombre: primerNombre, cargo }),
+          };
+        }
+      }
+    }
+
     const html = `
       <div style="font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; max-width:560px;">
         <p>Hola ${escapeHtml(nombreCandidato.split(' ')[0] || nombreCandidato)},</p>
@@ -181,7 +228,7 @@ export const onEntrevistaCreate = onDocumentCreated(
                     border-radius:6px; font-weight:600; display:inline-block;">
             Agregar a Google Calendar
           </a>
-        </p>
+        </p>${bloqueAviso}
         <p style="font-size:13px; color:#555;">Si necesitas reprogramar, responde a este correo.</p>
         ${bloquePortal}
         <p style="font-size:13px; color:#555;">¡Te esperamos!<br>Equipo de Atracción · Organización Equitel</p>
@@ -189,6 +236,7 @@ export const onEntrevistaCreate = onDocumentCreated(
     `.trim();
 
     // Correo al candidato (si tiene correo registrado).
+    let enviadoCandidato = false;
     if (email) {
       try {
         await enviarConGmail({
@@ -198,6 +246,7 @@ export const onEntrevistaCreate = onDocumentCreated(
           html,
           replyTo: correoAnalista || undefined,
         });
+        enviadoCandidato = true;
       } catch (e) {
         logger.error('onEntrevistaCreate · correo candidato falló', {
           id: snap.id,
@@ -302,7 +351,11 @@ export const onEntrevistaCreate = onDocumentCreated(
       }
     }
 
-    await snap.ref.update({ correo_candidato_enviado_en: FieldValue.serverTimestamp() });
+    await snap.ref.update({
+      correo_candidato_enviado_en: FieldValue.serverTimestamp(),
+      // Informativo (editable desde el cliente); la evidencia va en `eventos`.
+      ...(aviso ? { aviso_compromiso_incluido: enviadoCandidato } : {}),
+    });
     await db.collection('eventos').add({
       tipo: 'entrevista_notificada',
       entrevista_id: snap.id,
@@ -310,6 +363,14 @@ export const onEntrevistaCreate = onDocumentCreated(
       modalidad,
       tipo_entrevista: tipo,
       email_destinatario: email || null,
+      // Evidencia inmutable del aviso de compromiso: qué texto recibió y cuándo.
+      ...(aviso
+        ? {
+            aviso_compromiso_incluido: enviadoCandidato,
+            aviso_compromiso_version: aviso.version,
+            aviso_compromiso_texto: enviadoCandidato ? aviso.texto : null,
+          }
+        : {}),
       creado_en: FieldValue.serverTimestamp(),
       creado_por: 'system',
     });
