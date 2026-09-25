@@ -173,8 +173,11 @@ export function puedeAbrirRuta(rol: RolUsuario | null | undefined, ruta: string)
   // uid) la valida cada página con su guard "Sin acceso"; quien pinte estos links
   // para gh debe hacerlo con la vacante en mano (`puedeVerVacanteDe`). El concepto
   // ya lo permitía App.tsx pero aquí se negaba: inconsistencia corregida. Van
-  // ANTES del patrón genérico para NO abrirle publicación ni solicitud-integrante.
-  if (/^\/vacantes\/[^/]+\/(postulaciones|terna|concepto-atraccion)$/.test(r))
+  // ANTES del patrón genérico para NO abrirle publicación, perfilamiento ni sourcing.
+  // La Solicitud de Integrantes (VIDA-F-01) la consulta de CUALQUIER vacante: es
+  // la solicitud formal que Cultura y Desarrollo valida (decisión Karen 25-sep);
+  // la página lo deja en solo lectura y las reglas le niegan el write.
+  if (/^\/vacantes\/[^/]+\/(postulaciones|terna|concepto-atraccion|solicitud-integrante)$/.test(r))
     return tiene(ROLES_PROCESO, rol) || rol === 'gh';
   if (/^\/vacantes\/[^/]+\/.+$/.test(r)) return tiene(ROLES_PROCESO, rol);
   if (/^\/vacantes\/[^/]+$/.test(r)) return tiene(ROLES_VACANTE_DETALLE, rol) || rol === 'gh';

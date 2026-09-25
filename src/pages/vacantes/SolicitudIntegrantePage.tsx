@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Download, Save } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -87,8 +88,18 @@ function vinculacionDeTipoSolicitud(tipo: string | undefined | null): string {
   return '';
 }
 
+/**
+ * Solo lectura para gh (Diego, Cultura y Desarrollo): consulta el VIDA-F-01 tal
+ * como lo diligenció Atracción para validar condiciones (reu Karen 16-sep,
+ * decisión 25-sep). Las reglas le niegan el write; aquí se ocultan Guardar y se
+ * bloquean las entradas. El contexto evita pasar `readOnly` a cada campo.
+ */
+const SoloLecturaCtx = createContext(false);
+
 export default function SolicitudIntegrantePage() {
   const { id } = useParams<{ id: string }>();
+  const { rol } = useAuth();
+  const soloLectura = rol === 'gh';
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', id);
   const { docs: solicitudes } = useColeccion<SolicitudIntegranteDoc>('solicitudes_integrante', {
     filtros: id ? [['vacante_id', '==', id]] : [],
@@ -258,15 +269,17 @@ export default function SolicitudIntegrantePage() {
       : 'NA';
 
   return (
+    <SoloLecturaCtx.Provider value={soloLectura}>
     <div className="max-w-4xl mx-auto px-6 py-12 space-y-8">
       {/* Controles · no se imprimen */}
       <div className="print:hidden">
+        {/* gh llega desde Aprobaciones (el detalle solo lo abre de sus propias vacantes). */}
         <Link
-          to={`/vacantes/${vacante.id}`}
+          to={soloLectura ? '/aprobaciones-aval' : `/vacantes/${vacante.id}`}
           className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-text-strong transition-colors"
         >
           <ArrowLeft size={13} strokeWidth={1.75} />
-          Volver al detalle
+          {soloLectura ? 'Volver a aprobaciones' : 'Volver al detalle'}
         </Link>
         <div className="mt-6 flex items-start justify-between flex-wrap gap-6">
           <div>
@@ -280,8 +293,9 @@ export default function SolicitudIntegrantePage() {
               Solicitud de Integrantes
             </h1>
             <p className="mt-3 text-[14px] text-text-muted leading-[1.55] max-w-xl">
-              Formato oficial VIDA-F-01 v08. Lo de la vacante sale solo; completa los campos que
-              falten (condiciones, reporte, rodamiento…), guarda y exporta a PDF.
+              {soloLectura
+                ? 'Formato oficial VIDA-F-01 v08, tal como lo diligenció el equipo de Atracción. Solo consulta; puedes descargarlo en PDF.'
+                : 'Formato oficial VIDA-F-01 v08. Lo de la vacante sale solo; completa los campos que falten (condiciones, reporte, rodamiento…), guarda y exporta a PDF.'}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -291,15 +305,17 @@ export default function SolicitudIntegrantePage() {
                 Guardado
               </span>
             )}
-            <Button
-              onClick={guardar}
-              disabled={guardando}
-              loading={guardando}
-              variant="brand-primary"
-              icon={<Save size={13} strokeWidth={1.75} />}
-            >
-              {guardando ? 'Guardando…' : 'Guardar'}
-            </Button>
+            {!soloLectura && (
+              <Button
+                onClick={guardar}
+                disabled={guardando}
+                loading={guardando}
+                variant="brand-primary"
+                icon={<Save size={13} strokeWidth={1.75} />}
+              >
+                {guardando ? 'Guardando…' : 'Guardar'}
+              </Button>
+            )}
             <Button
               onClick={descargarOficial}
               disabled={descargando}
@@ -415,6 +431,7 @@ export default function SolicitudIntegrantePage() {
             <div className="flex flex-col gap-1">
               <select
                 value={rodOtro ? '__otro__' : RODAMIENTO_FIJOS.has(form.rodamiento_valor) ? form.rodamiento_valor : ''}
+                disabled={soloLectura}
                 onChange={(e) => {
                   const v = e.target.value;
                   if (v === '__otro__') {
@@ -480,6 +497,7 @@ export default function SolicitudIntegrantePage() {
         </Bloque>
       </div>
     </div>
+    </SoloLecturaCtx.Provider>
   );
 }
 
@@ -526,12 +544,16 @@ function Entrada({
   onChange: (v: string) => void;
   placeholder?: string;
 }) {
+  const soloLectura = useContext(SoloLecturaCtx);
   return (
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full px-2 py-1 text-[12px] border-0 bg-transparent focus:bg-brand-50/40 focus:outline-none print:placeholder:text-transparent"
+      placeholder={soloLectura ? '' : placeholder}
+      readOnly={soloLectura}
+      className={`w-full px-2 py-1 text-[12px] border-0 bg-transparent focus:outline-none print:placeholder:text-transparent ${
+        soloLectura ? 'cursor-default' : 'focus:bg-brand-50/40'
+      }`}
     />
   );
 }
@@ -543,12 +565,16 @@ function EntradaArea({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const soloLectura = useContext(SoloLecturaCtx);
   return (
     <textarea
       value={value}
       onChange={(e) => onChange(e.target.value)}
       rows={2}
-      className="w-full px-2 py-1 text-[12px] border-0 bg-transparent resize-none focus:bg-brand-50/40 focus:outline-none"
+      readOnly={soloLectura}
+      className={`w-full px-2 py-1 text-[12px] border-0 bg-transparent resize-none focus:outline-none ${
+        soloLectura ? 'cursor-default' : 'focus:bg-brand-50/40'
+      }`}
     />
   );
 }

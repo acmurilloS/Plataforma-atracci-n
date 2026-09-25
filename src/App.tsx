@@ -218,10 +218,13 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* gh (Diego/C&D) consulta el VIDA-F-01 de cualquier vacante: es la
+                solicitud formal que él valida (reu Karen 16-sep, decisión 25-sep).
+                La página lo pone en solo lectura; las reglas le niegan el write. */}
             <Route
               path="/vacantes/:id/solicitud-integrante"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={[...ROLES_PROCESO, 'gh']}>
                   <SolicitudIntegrantePage />
                 </ProtectedRoute>
               }

@@ -56,6 +56,8 @@ const DATOS = {
   'carpetas_digitales/carpeta_p1': { postulacion_id: 'p1', estado: 'armando' },
   'carpetas_digitales/carpeta_p9': { postulacion_id: 'p9', estado: 'anulada' },
   'vacantes_resumen/v1': { vacante_id: 'v1', por_estado: { en_examenes_medicos: 1 }, total_en_curso: 1 },
+  // Solicitud de Integrantes (VIDA-F-01): GH la consulta, no la escribe (reu 16-sep).
+  'solicitudes_integrante/si1': { vacante_id: 'v1', rodamiento_valor: '$415.000' },
 };
 
 const casos = [];
@@ -212,6 +214,19 @@ caso(G9, 'analista lista resúmenes (Seguimiento)', { token: analista, path: 'va
 caso(G9, 'coord lista resúmenes', { token: coord, path: 'vacantes_resumen/v1', method: 'list', esperado: 'ALLOW' });
 caso(G9, 'analista NO escribe el resumen (solo Admin SDK)', { token: analista, path: 'vacantes_resumen/v1', method: 'create', esperado: 'DENY', payload: { vacante_id: 'v1', por_estado: {}, total_en_curso: 0 } });
 caso(G9, 'coord NO actualiza el resumen', { token: coord, path: 'vacantes_resumen/v1', method: 'update', esperado: 'DENY', payload: { vacante_id: 'v1', por_estado: {}, total_en_curso: 0 } });
+
+const G10 = '10. VIDA-F-01 PARA CULTURA Y DESARROLLO (reu 16-sep · gh consulta, no escribe)';
+caso(G10, 'GH lee la Solicitud de Integrantes', { token: gh, path: 'solicitudes_integrante/si1', esperado: 'ALLOW' });
+caso(G10, 'GH lista la solicitud de una vacante', { token: gh, path: 'solicitudes_integrante/si1', method: 'list', esperado: 'ALLOW' });
+caso(G10, 'analista lee la solicitud', { token: analista, path: 'solicitudes_integrante/si1', esperado: 'ALLOW' });
+caso(G10, 'líder lee la solicitud', { token: lider, path: 'solicitudes_integrante/si1', esperado: 'ALLOW' });
+caso(G10, 'GH NO crea la solicitud', { token: gh, path: 'solicitudes_integrante/si1', method: 'create', esperado: 'DENY', payload: { vacante_id: 'v1' } });
+caso(G10, 'GH NO edita la solicitud', { token: gh, path: 'solicitudes_integrante/si1', method: 'update', esperado: 'DENY', payload: { vacante_id: 'v1', observaciones: 'x' } });
+caso(G10, 'analista edita la solicitud', { token: analista, path: 'solicitudes_integrante/si1', method: 'update', esperado: 'ALLOW', payload: { vacante_id: 'v1', observaciones: 'x' } });
+caso(G10, 'coord crea la solicitud', { token: coord, path: 'solicitudes_integrante/si1', method: 'create', esperado: 'ALLOW', payload: { vacante_id: 'v1' } });
+caso(G10, 'gestor NO lee la solicitud', { token: gestor, path: 'solicitudes_integrante/si1', esperado: 'DENY' });
+caso(G10, 'Carla NO lee la solicitud', { token: carla, path: 'solicitudes_integrante/si1', esperado: 'DENY' });
+caso(G10, 'anónimo NO lee la solicitud', { token: ANON, path: 'solicitudes_integrante/si1', esperado: 'DENY' });
 
 // ── Ejecutar ────────────────────────────────────────────────────────────
 const res = await fetch(`https://firebaserules.googleapis.com/v1/projects/${PROJECT}:test`, {

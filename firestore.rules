@@ -471,10 +471,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Solicitud de Integrantes (VIDA-F-01). Es la solicitud formal que Cultura y
+    // Desarrollo (gh) valida: la LEE en consulta desde Aprobaciones (reu Karen
+    // 16-sep, decisión 25-sep). GH no la escribe: la llenan analista/coordinación
+    // (antes `staff()` le abría el write a gh sin que pudiera leerla).
     match /solicitudes_integrante/{id} {
-      allow read: if leePipeline();
-      allow create: if isAnalista() || staff();
-      allow update: if isAnalista() || staff();
+      allow read: if leePipeline() || isGH();
+      allow create: if isAnalista() || isCoord() || isAdmin();
+      allow update: if isAnalista() || isCoord() || isAdmin();
       allow delete: if false;
     }
 

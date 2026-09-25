@@ -381,10 +381,9 @@ export default function VacanteDetallePage() {
       <div className="flex flex-wrap gap-2 print:hidden">
         {/* Talentos (José) y apoyo (IT/compras) entran a la vacante pero NO al
             formato VIDA-F-01 (es del proceso) — sin este gate el botón los
-            mandaba a "Sin permisos" (re-auditoría 14-jul). El gh dueño tampoco
-            lo ve: abrirle el VIDA-F-01 es una decisión aparte, aún pendiente
-            (reu Karen 16-sep). */}
-        {puedeVerProceso(rol) && (
+            mandaba a "Sin permisos" (re-auditoría 14-jul). gh sí lo consulta
+            (decisión Karen 25-sep): aquí solo llega como dueño de la vacante. */}
+        {(puedeVerProceso(rol) || rol === 'gh') && (
           <Link
             to={`/vacantes/${vac.id}/solicitud-integrante`}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-[12px] font-medium text-text-strong hover:bg-slate-50 transition-colors duration-150"

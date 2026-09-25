@@ -501,15 +501,25 @@ function VacanteCardAprobacion({
             )}
           </p>
         </div>
-        {puedeVerDetalle && (
+        <div className="flex items-center gap-4 shrink-0">
+          {/* VIDA-F-01 en consulta: el formato que Karen le mostraba a Diego (decisión 25-sep). */}
           <Link
-            to={`/vacantes/${vacante.id}`}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline whitespace-nowrap"
+            to={`/vacantes/${vacante.id}/solicitud-integrante`}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-text-body hover:text-text-strong hover:underline whitespace-nowrap"
           >
-            Ver detalle completo
-            <ExternalLink size={11} strokeWidth={1.75} />
+            <FileText size={11} strokeWidth={1.75} />
+            Solicitud de Integrantes
           </Link>
-        )}
+          {puedeVerDetalle && (
+            <Link
+              to={`/vacantes/${vacante.id}`}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline whitespace-nowrap"
+            >
+              Ver detalle completo
+              <ExternalLink size={11} strokeWidth={1.75} />
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Condiciones completas: lo que Cultura y Desarrollo valida. */}
@@ -709,6 +719,13 @@ function VacanteRowHistorica({
               Aval PDF
             </a>
           )}
+          <Link
+            to={`/vacantes/${vacante.id}/solicitud-integrante`}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-text-body hover:text-text-strong hover:underline"
+            title="Solicitud de Integrantes (VIDA-F-01)"
+          >
+            VIDA-F-01
+          </Link>
           {puedeVerDetalle && (
             <Link
               to={`/vacantes/${vacante.id}`}
