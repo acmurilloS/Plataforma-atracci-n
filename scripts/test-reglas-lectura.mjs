@@ -228,6 +228,11 @@ caso(G10, 'gestor NO lee la solicitud', { token: gestor, path: 'solicitudes_inte
 caso(G10, 'Carla NO lee la solicitud', { token: carla, path: 'solicitudes_integrante/si1', esperado: 'DENY' });
 caso(G10, 'anónimo NO lee la solicitud', { token: ANON, path: 'solicitudes_integrante/si1', esperado: 'DENY' });
 
+const G11 = '11. REVISIÓN AUTOMÁTICA DE CARPETA (reu 16-sep · revision_datos es server-only)';
+caso(G11, 'analista NO escribe revision_datos', { token: analista, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'DENY', payload: { postulacion_id: 'p1', estado: 'armando', revision_datos: { errores: 0 } } });
+caso(G11, 'GH NO borra revision_datos', { token: gh, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'DENY', data: { postulacion_id: 'p1', estado: 'armando', revision_datos: { errores: 1 } }, payload: { postulacion_id: 'p1', estado: 'armando' } });
+caso(G11, 'GH actualiza sin tocar revision_datos', { token: gh, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'ALLOW', data: { postulacion_id: 'p1', estado: 'armando', revision_datos: { errores: 1 } }, payload: { postulacion_id: 'p1', estado: 'lista', revision_datos: { errores: 1 } } });
+
 // ── Ejecutar ────────────────────────────────────────────────────────────
 const res = await fetch(`https://firebaserules.googleapis.com/v1/projects/${PROJECT}:test`, {
   method: 'POST',

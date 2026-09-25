@@ -46,7 +46,19 @@ export const vacanteInputSchema = z.object({
     })
     .positive('El salario debe ser mayor a 0')
     .max(100_000_000, 'Valor fuera de rango'),
-  comisiones_texto: z.string().max(500).default(''),
+  /** Concepto / resumen de la comisión para el candidato (texto libre de siempre). */
+  comisiones_texto: z.string().max(1500).default(''),
+  /**
+   * Comisiones estructuradas (reu Karen 16-sep): Cultura y Desarrollo necesita
+   * saber si es por presupuesto o por indicadores, cuál, cómo se mide y si
+   * aplica bolsa. null = vacante anterior a este cambio (sin clasificar).
+   * Ver src/utils/comisiones.ts.
+   */
+  comision_tipo: z.enum(['ninguna', 'presupuesto', 'indicadores', 'mixta']).nullable().default(null),
+  comision_base: z.string().max(600).default(''),
+  comision_medicion: z.string().max(600).default(''),
+  comision_aplica_bolsa: z.boolean().default(false),
+  comision_bolsa_detalle: z.string().max(300).default(''),
   rodamiento: z.boolean().default(false),
   /** Valor del auxilio de rodamiento (lista de Karen o texto libre). Vacío / "No aplica" = sin rodamiento. */
   rodamiento_valor: z.string().max(120).default(''),

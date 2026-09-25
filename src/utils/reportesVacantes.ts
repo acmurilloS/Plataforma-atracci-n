@@ -1,6 +1,8 @@
 import { format } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { aZonaBogota, diasHabilesEntre, formatearFecha, TZ_BOGOTA } from './fechas';
+import { COMISION_TIPO_LABEL, lineasComisiones } from './comisiones';
+import { textoRodamiento } from './rodamiento';
 import type { PostulacionDoc, ResumenVacanteDoc, VacanteDoc } from '../schemas';
 
 /**
@@ -652,6 +654,16 @@ export function construirBaseVacantes(
       Contratado: c.contratado ? 'Sí' : 'No',
       'Fecha de vinculación': c.fechaVinculacion,
       'Salario base': typeof v.salario_base === 'number' ? v.salario_base : '',
+      // Condiciones completas (reu Karen 16-sep): lo que Cultura y Desarrollo valida.
+      'Comisiones (tipo)': v.comision_tipo
+        ? COMISION_TIPO_LABEL[v.comision_tipo]
+        : v.comisiones_texto?.trim()
+          ? 'Sin clasificar'
+          : 'Sin comisiones',
+      Comisiones: lineasComisiones(v).join(' · '),
+      'Aplica bolsa': v.comision_aplica_bolsa ? 'Sí' : 'No',
+      Rodamiento: textoRodamiento(v),
+      Garantizado: v.garantizado_texto ?? '',
     };
   });
 }

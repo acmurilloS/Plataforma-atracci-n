@@ -17,6 +17,7 @@ import {
 import { useVacantes } from '../../hooks/useVacantes';
 import { useAuth } from '../../hooks/useAuth';
 import { RODAMIENTO_OPCIONES, RODAMIENTO_FIJOS } from '../../utils/rodamiento';
+import { COMISION_TIPOS, COMISION_TIPO_LABEL } from '../../utils/comisiones';
 import {
   vacanteInputSchema,
   type CargoDoc,
@@ -61,6 +62,9 @@ const ETIQUETA_CAMPO: Record<string, string> = {
   temporalidad_meses: 'Tiempo de temporalidad',
   justificacion: 'Justificación (mínimo 20 caracteres)',
   salario_base: 'Salario base mensual',
+  comision_tipo: 'Tipo de comisión',
+  comision_base: 'Presupuesto / indicadores de la comisión',
+  comision_medicion: 'Cómo se mide la comisión',
   en_banda: 'Validación de banda salarial',
   fecha_entrevista_propuesta: 'Fecha de entrevista propuesta',
   lider_nombre: 'Líder solicitante',
@@ -209,6 +213,11 @@ export function VacanteForm() {
       justificacion: '',
       salario_base: undefined as unknown as number,
       comisiones_texto: '',
+      comision_tipo: 'ninguna',
+      comision_base: '',
+      comision_medicion: '',
+      comision_aplica_bolsa: false,
+      comision_bolsa_detalle: '',
       rodamiento: false,
       rodamiento_valor: '',
       horario_laboral: '',
@@ -230,6 +239,8 @@ export function VacanteForm() {
 
   const empresaCodigo = watch('empresa_codigo');
   const rodamientoValor = watch('rodamiento_valor');
+  const comisionTipo = watch('comision_tipo');
+  const comisionAplicaBolsa = watch('comision_aplica_bolsa');
   const sedeCodigo = watch('sede_codigo');
   const unidadId = watch('unidad_id');
   const salario = watch('salario_base');
@@ -334,10 +345,29 @@ export function VacanteForm() {
       setErrorSubmit('Propón una fecha de entrevista con el líder.');
       return;
     }
+    // Comisiones (reu Karen 16-sep): si hay comisión, Cultura y Desarrollo
+    // necesita saber cuál presupuesto/indicadores y cómo se mide. Sin eso no
+    // se puede armar el contrato.
+    const hayComision = !!data.comision_tipo && data.comision_tipo !== 'ninguna';
+    if (hayComision && (!data.comision_base.trim() || !data.comision_medicion.trim())) {
+      setEnviando(false);
+      setErrorSubmit(
+        'Para la comisión indica cuál presupuesto o indicadores aplican y cómo se mide.',
+      );
+      return;
+    }
 
     try {
       const payload: VacanteInput = {
         ...data,
+        // Sin comisión: no arrastrar detalle ni concepto viejo.
+        comision_tipo: data.comision_tipo ?? 'ninguna',
+        comision_base: hayComision ? data.comision_base.trim() : '',
+        comision_medicion: hayComision ? data.comision_medicion.trim() : '',
+        comision_aplica_bolsa: hayComision ? data.comision_aplica_bolsa : false,
+        comision_bolsa_detalle:
+          hayComision && data.comision_aplica_bolsa ? data.comision_bolsa_detalle.trim() : '',
+        comisiones_texto: hayComision ? data.comisiones_texto.trim() : '',
         // Movimiento interno: sin entrevista; si no lo es, sin tipo de movimiento.
         tipo_movimiento: data.es_movimiento_interno ? data.tipo_movimiento : null,
         fecha_entrevista_propuesta: data.es_movimiento_interno ? null : data.fecha_entrevista_propuesta,
@@ -591,13 +621,14 @@ export function VacanteForm() {
             />
           </Campo>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <Campo label="Comisiones (descripción)">
-              <textarea
-                {...register('comisiones_texto')}
-                rows={3}
-                placeholder="Describe el esquema si aplica"
-                className={textareaClass}
-              />
+            <Campo label="Comisiones" requerido error={errors.comision_tipo?.message}>
+              <select {...register('comision_tipo')} className={selectClass}>
+                {COMISION_TIPOS.map((t) => (
+                  <option key={t} value={t}>
+                    {COMISION_TIPO_LABEL[t]}
+                  </option>
+                ))}
+              </select>
             </Campo>
             <Campo label="Garantizado (descripción)">
               <textarea
@@ -608,6 +639,78 @@ export function VacanteForm() {
               />
             </Campo>
           </div>
+          {/* Detalle de la comisión (reu Karen 16-sep): Cultura y Desarrollo
+              necesita saber exactamente cómo se gana para armar el contrato;
+              una tabla pegada sin contexto no alcanza. */}
+          {comisionTipo && comisionTipo !== 'ninguna' && (
+            <div className="rounded-md border border-slate-200 bg-slate-50/60 p-4 space-y-4">
+              <p className="text-[12px] text-text-muted leading-[1.5]">
+                Cultura y Desarrollo revisa estas condiciones antes de la contratación: describe
+                con qué se gana la comisión y cómo se liquida, sin dejarlo solo en una tabla.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Campo
+                  label={`¿${
+                    comisionTipo === 'presupuesto'
+                      ? 'Cuál presupuesto'
+                      : comisionTipo === 'indicadores'
+                        ? 'Cuáles indicadores'
+                        : 'Cuál presupuesto y cuáles indicadores'
+                  }?`}
+                  requerido
+                >
+                  <textarea
+                    {...register('comision_base')}
+                    rows={3}
+                    placeholder={
+                      comisionTipo === 'indicadores'
+                        ? 'Ej.: cumplimiento de mantenimientos programados del mes; NPS del cliente'
+                        : 'Ej.: presupuesto mensual de ventas de la unidad'
+                    }
+                    className={textareaClass}
+                  />
+                </Campo>
+                <Campo label="¿Cómo se mide y se paga?" requerido>
+                  <textarea
+                    {...register('comision_medicion')}
+                    rows={3}
+                    placeholder="Ej.: % sobre lo vendido, liquidación mensual; o tabla por rangos de cumplimiento (60% → 0,8%, 80% → 1%…)"
+                    className={textareaClass}
+                  />
+                </Campo>
+              </div>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  {...register('comision_aplica_bolsa')}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
+                />
+                <span className="text-[13px] text-text-strong">
+                  Aplica bolsa{' '}
+                  <span className="text-text-muted">
+                    (p. ej. técnicos: el valor que pones más la bolsa)
+                  </span>
+                </span>
+              </label>
+              {comisionAplicaBolsa && (
+                <Campo label="Detalle de la bolsa">
+                  <input
+                    {...register('comision_bolsa_detalle')}
+                    placeholder="Ej.: bolsa mensual de $300.000 repartida según cumplimiento"
+                    className={inputClass}
+                  />
+                </Campo>
+              )}
+              <Campo label="Concepto para el candidato (resumen)">
+                <textarea
+                  {...register('comisiones_texto')}
+                  rows={2}
+                  placeholder="Cómo se le explica la comisión al candidato en una o dos frases"
+                  className={textareaClass}
+                />
+              </Campo>
+            </div>
+          )}
           <Campo label="Auxilio de rodamiento">
             <select
               value={rodOtro ? '__otro__' : RODAMIENTO_FIJOS.has(rodamientoValor ?? '') ? rodamientoValor : ''}

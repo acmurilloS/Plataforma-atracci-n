@@ -31,6 +31,7 @@ import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCrit
 import { Button, Card, Pill } from '../../components/brand';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
+import { lineasComisiones } from '../../utils/comisiones';
 import type { CargoDoc, VacanteDoc } from '../../schemas';
 import type { ProcesoDoc } from '../../schemas/procesoSchema';
 
@@ -169,7 +170,8 @@ export default function PerfilamientoPage() {
         // Compensación adicional al salario base. Sin esto, la IA pensaba que
         // el salario base era el paquete total y alertaba que faltaba
         // rodamiento aunque la líder sí lo había marcado.
-        comisiones_texto: vacante.comisiones_texto ?? '',
+        // Comisiones estructuradas (reu 16-sep) resumidas en una línea para la IA.
+        comisiones_texto: lineasComisiones(vacante).join(' · '),
         rodamiento: vacante.rodamiento ?? false,
         garantizado_texto: vacante.garantizado_texto ?? '',
       });

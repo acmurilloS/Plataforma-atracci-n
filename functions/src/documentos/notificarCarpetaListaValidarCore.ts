@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { db } from '../utils/admin';
 import { esPostulacionTerminal } from '../postulaciones/estadosTerminales';
+import { revisarCarpetaCore } from '../carpetas/revisarCarpetaCore';
 
 /**
  * notificarCarpetaListaValidarCore · C.1 / F5.
@@ -61,6 +62,19 @@ export async function notificarCarpetaListaValidarCore(
     return { ok: true, notificados: 0, yaNotificado: true };
   }
   const post = turno.data;
+
+  // Revisión automática de datos (reu Karen 16-sep, C): cuando la carpeta queda
+  // lista para GH, deja las alertas calculadas para que Diego/Paola/Carla las
+  // vean de una en /carpetas. Best-effort: si la carpeta aún no existe (la crea
+  // onCarpetaCompletaCheck) el botón "Revisar datos" la calcula después.
+  try {
+    await revisarCarpetaCore(`carpeta_${postulacionId}`, 'system');
+  } catch (e) {
+    logger.info('[carpeta] revisión automática omitida', {
+      postulacionId,
+      msg: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   const nombre = String(post.candidato_nombre ?? 'el candidato').trim();
   const cargo = String(post.cargo_nombre ?? '').trim();

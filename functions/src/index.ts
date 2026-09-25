@@ -109,6 +109,9 @@ export { onCandidatoContratado } from './tickets/onCandidatoContratado';
 // Aprobar carpeta = contratar + cerrar vacante + tickets, transaccional y con
 // unicidad de 1 contratado por vacante (BUG 3+4, 2026-06-24).
 export { aprobarCarpeta } from './carpetas/aprobarCarpeta';
+// Revisión automática de la carpeta (capa 0, sin IA): cruces de cédula/nombre/
+// correo/celular/cargo entre candidato, postulación, vacante y DGH-F-05 (reu 16-sep).
+export { revisarCarpeta } from './carpetas/revisarCarpeta';
 export { decidirTerna } from './decisiones/decidirTerna';
 // Solicitud de dotación con tallas (subpaso de entrega de carpeta, reu 26-jun).
 export { enviarSolicitudDotacion } from './dotacion/enviarSolicitudDotacion';

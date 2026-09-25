@@ -81,21 +81,54 @@ const AREAS: [CampoKey, number, number, number, number, number][] = [
 
 export const RUTA_SOLICITUD_INTEGRANTE = '/formatos/solicitud-integrantes.pdf';
 
+/** Ajuste de línea por palabra. Respeta los saltos de línea del texto (una tabla
+ *  de comisiones por rangos pegada en el textarea salía en una sola tira). */
 function envolver(texto: string, font: PDFFont, size: number, maxAncho: number): string[] {
-  const palabras = String(texto).split(/\s+/).filter(Boolean);
   const lineas: string[] = [];
-  let actual = '';
-  for (const w of palabras) {
-    const prueba = actual ? `${actual} ${w}` : w;
-    if (actual && font.widthOfTextAtSize(prueba, size) > maxAncho) {
-      lineas.push(actual);
-      actual = w;
-    } else {
-      actual = prueba;
+  for (const parrafo of String(texto).split(/\r?\n/)) {
+    const palabras = parrafo.split(/\s+/).filter(Boolean);
+    if (palabras.length === 0) continue;
+    let actual = '';
+    for (const w of palabras) {
+      const prueba = actual ? `${actual} ${w}` : w;
+      if (actual && font.widthOfTextAtSize(prueba, size) > maxAncho) {
+        lineas.push(actual);
+        actual = w;
+      } else {
+        actual = prueba;
+      }
     }
+    if (actual) lineas.push(actual);
   }
-  if (actual) lineas.push(actual);
   return lineas;
+}
+
+/** Líneas que caben en cada área antes de pisar la siguiente del formato
+ *  (medido sobre el PDF: comisiones y=330 → bonificaciones y=410). */
+const MAX_LINEAS: Record<string, number> = { comisiones: 8, bonificaciones: 6, observaciones: 6 };
+
+/**
+ * Envuelve y, si no cabe, baja la fuente hasta 5.5pt antes de cortar; si aun así
+ * sobra, corta y termina con "…" para que se note (antes cortaba en silencio).
+ */
+function ajustarArea(
+  texto: string,
+  font: PDFFont,
+  size: number,
+  maxAncho: number,
+  maxLineas: number,
+): { lineas: string[]; size: number } {
+  let s = size;
+  let lineas = envolver(texto, font, s, maxAncho);
+  while (lineas.length > maxLineas && s > 5.5) {
+    s = Math.round((s - 0.5) * 10) / 10;
+    lineas = envolver(texto, font, s, maxAncho);
+  }
+  if (lineas.length > maxLineas) {
+    lineas = lineas.slice(0, maxLineas);
+    lineas[maxLineas - 1] = `${lineas[maxLineas - 1].replace(/[\s.,;:]+$/, '')}…`;
+  }
+  return { lineas, size: s };
 }
 
 export async function estamparSolicitudIntegrante(datos: SolicitudEstampado): Promise<Blob> {
@@ -124,11 +157,12 @@ export async function estamparSolicitudIntegrante(datos: SolicitudEstampado): Pr
   for (const [k, x, yTop, maxA, size, lh] of AREAS) {
     const s0 = datos[k] ? String(datos[k]) : '';
     if (!s0) continue;
-    envolver(s0, font, size, maxA)
-      .slice(0, 6)
-      .forEach((linea, i) => {
-        page.drawText(linea, { x, y: H - (yTop + i * lh), size, font, color: tinta });
-      });
+    const { lineas, size: sz } = ajustarArea(s0, font, size, maxA, MAX_LINEAS[k] ?? 6);
+    // Con fuente reducida, interlineado proporcional para que sigan cabiendo.
+    const lhAjustado = sz < size ? Math.max(7, (lh * sz) / size) : lh;
+    lineas.forEach((linea, i) => {
+      page.drawText(linea, { x, y: H - (yTop + i * lhAjustado), size: sz, font, color: tinta });
+    });
   }
 
   const out = await pdf.save();

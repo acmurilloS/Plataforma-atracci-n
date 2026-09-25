@@ -72,7 +72,26 @@ interface CarpetaDoc {
   drive_sincronizada_en?: Timestamp | null;
   drive_error?: string | null;
   drive_carpeta_id?: string | null;
+  /** Revisión automática de datos (server-only; reu Karen 16-sep, C). */
+  revision_datos?: RevisionDatos | null;
   [k: string]: unknown;
+}
+
+interface AlertaRevision {
+  clave: string;
+  severidad: 'error' | 'aviso';
+  titulo: string;
+  detalle: string;
+  esperado?: string;
+  encontrado?: string;
+}
+interface RevisionDatos {
+  version: number;
+  ejecutada_en: Timestamp | null;
+  ejecutada_por: string;
+  alertas: AlertaRevision[];
+  errores: number;
+  avisos: number;
 }
 
 /** Mínimo del proceso que necesitamos para saber si el cargo requiere dotación. */
@@ -359,6 +378,29 @@ export default function CarpetasPage() {
     }
   }
 
+  /**
+   * Revisión automática de datos (reu Karen 16-sep, C): cruza cédula, nombre,
+   * correo, celular y cargo entre candidato, postulación, vacante y DGH-F-05.
+   * La calcula el servidor (revisarCarpeta) y queda en `revision_datos`.
+   */
+  async function revisarDatos(c: CarpetaDoc) {
+    if (procesando) return;
+    setProcesando(c.id);
+    try {
+      const fn = httpsCallable<
+        { carpeta_id: string },
+        { ok: true; errores: number; avisos: number }
+      >(functions, 'revisarCarpeta');
+      await fn({ carpeta_id: c.id });
+    } catch (e) {
+      window.alert(
+        e instanceof Error ? e.message : 'No se pudo revisar la carpeta. Intenta de nuevo.',
+      );
+    } finally {
+      setProcesando(null);
+    }
+  }
+
   /** Reintento manual del depósito a Drive (cuando la sync automática falló). */
   async function reintentarDrive(c: CarpetaDoc) {
     if (procesando) return;
@@ -608,6 +650,13 @@ export default function CarpetasPage() {
                   </div>
                 )}
               </div>
+
+              {/* Revisión automática de datos (reu Karen 16-sep, C). */}
+              <RevisionDatosBox
+                revision={c.revision_datos ?? null}
+                procesando={procesando === c.id}
+                onRevisar={() => revisarDatos(c)}
+              />
 
               {/* Toggle expandir/colapsar el detalle de documentos */}
               <button
@@ -920,6 +969,113 @@ export default function CarpetasPage() {
           yaEnviada={dotacion.yaEnviada}
           onClose={() => setDotacion(null)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Caja "Revisión de datos" (reu Karen 16-sep, C): errores en rojo, avisos en
+ * ámbar, "sin alertas" en verde. La calcula el servidor; aquí solo se pinta y
+ * se puede volver a correr. No bloquea la aprobación: es un aviso para GH.
+ */
+function RevisionDatosBox({
+  revision,
+  procesando,
+  onRevisar,
+}: {
+  revision: RevisionDatos | null;
+  procesando: boolean;
+  onRevisar: () => void;
+}) {
+  const alertas = revision?.alertas ?? [];
+  const hayErrores = (revision?.errores ?? 0) > 0;
+  const hayAvisos = (revision?.avisos ?? 0) > 0;
+  const tono = !revision
+    ? 'border-slate-200 bg-slate-50/60'
+    : hayErrores
+      ? 'border-danger-500/30 bg-danger-50/60'
+      : hayAvisos
+        ? 'border-warning-500/30 bg-warning-50/60'
+        : 'border-success-500/30 bg-success-50/60';
+  return (
+    <div className={cn('mb-5 rounded-md border px-3.5 py-3', tono)}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          {!revision ? (
+            <Sparkles size={13} strokeWidth={1.75} className="text-text-muted shrink-0" />
+          ) : hayErrores ? (
+            <AlertTriangle size={13} strokeWidth={1.75} className="text-danger-700 shrink-0" />
+          ) : hayAvisos ? (
+            <AlertTriangle size={13} strokeWidth={1.75} className="text-warning-700 shrink-0" />
+          ) : (
+            <CheckCircle2 size={13} strokeWidth={1.75} className="text-success-700 shrink-0" />
+          )}
+          <p className="text-[12px] font-semibold text-text-strong">
+            Revisión de datos
+            {revision && (
+              <span className="font-normal text-text-muted">
+                {' · '}
+                {hayErrores || hayAvisos
+                  ? `${revision.errores} ${revision.errores === 1 ? 'error' : 'errores'} · ${
+                      revision.avisos
+                    } ${revision.avisos === 1 ? 'aviso' : 'avisos'}`
+                  : 'sin alertas'}
+                {revision.ejecutada_en && (
+                  <> · {formatearFecha(revision.ejecutada_en.toDate())}</>
+                )}
+              </span>
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRevisar}
+          disabled={procesando}
+          className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline disabled:opacity-50"
+        >
+          <RefreshCw size={11} strokeWidth={1.75} className={cn(procesando && 'animate-spin')} />
+          {revision ? 'Revisar de nuevo' : 'Revisar datos'}
+        </button>
+      </div>
+      {!revision && (
+        <p className="mt-1.5 text-[11px] text-text-muted leading-[1.5]">
+          Cruza cédula, nombre, correo, celular y cargo entre la postulación, el candidato, la
+          vacante y el DGH-F-05 antes de armar el contrato. Corre sola cuando la carpeta queda
+          lista para Gestión Humana.
+        </p>
+      )}
+      {alertas.length > 0 && (
+        <ul className="mt-2.5 space-y-2">
+          {alertas.map((a) => (
+            <li key={a.clave} className="text-[12px] leading-[1.5]">
+              <span
+                className={cn(
+                  'font-semibold',
+                  a.severidad === 'error' ? 'text-danger-700' : 'text-warning-800',
+                )}
+              >
+                {a.titulo}
+              </span>
+              <span className="text-text-body"> · {a.detalle}</span>
+              {(a.esperado || a.encontrado) && (
+                <span className="block text-[11px] text-text-muted tabular-nums">
+                  {a.esperado && (
+                    <>
+                      Registrado: <span className="font-medium text-text-body">{a.esperado}</span>
+                    </>
+                  )}
+                  {a.esperado && a.encontrado && ' · '}
+                  {a.encontrado && (
+                    <>
+                      DGH-F-05: <span className="font-medium text-text-body">{a.encontrado}</span>
+                    </>
+                  )}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

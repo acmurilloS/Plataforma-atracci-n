@@ -11,6 +11,7 @@ import {
   escapeHtml,
   FOOTER_EMPRESAS_DEFAULT,
 } from '../notificaciones/plantillasMensajes';
+import { textoComisiones } from '../utils/comisiones';
 
 const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
@@ -86,7 +87,8 @@ export async function avisarCondicionesCultura(
   const consecutivo = String(v.consecutivo ?? '').trim();
   const liderNombre = String(v.lider_nombre ?? '').trim();
   const salario = Number(v.salario_base ?? 0);
-  const comisiones = String(v.comisiones_texto ?? '').trim();
+  // Tipo · presupuesto/indicadores · medición · bolsa · concepto (reu 16-sep).
+  const comisiones = textoComisiones(v, '\n');
   const garantizado = String(v.garantizado_texto ?? '').trim();
   // Rodamiento con VALOR (reu Karen 16-sep): Diego solo veía "Sí/No" y necesita
   // el monto que puso el líder. Manda el booleano; el valor solo si dice que sí.
@@ -132,16 +134,18 @@ export async function avisarCondicionesCultura(
   const condiciones: [string, string][] = [
     ['Tipo de solicitud', tipoSolicitud || '—'],
     ['Salario base', formatearCOP(salario)],
-    ['Comisiones', comisiones || 'No aplica'],
+    ['Comisiones', comisiones],
     ['Rodamiento', rodamiento],
     ['Garantizado', garantizado || 'No aplica'],
   ];
+  // Los saltos de línea se respetan (comisiones y garantizado son textareas: una
+  // tabla por rangos pegada en una sola tira era ilegible para Diego).
   const filasHtml = condiciones
     .map(
       ([k, val]) =>
-        `<tr><td style="padding:4px 14px 4px 0;font-weight:600;color:#475569;white-space:nowrap;">${k}:</td><td style="padding:4px 0;">${escapeHtml(
+        `<tr><td style="padding:4px 14px 4px 0;font-weight:600;color:#475569;white-space:nowrap;vertical-align:top;">${k}:</td><td style="padding:4px 0;">${escapeHtml(
           val,
-        )}</td></tr>`,
+        ).replace(/\n/g, '<br>')}</td></tr>`,
     )
     .join('');
 

@@ -35,6 +35,12 @@ import { formatearFecha } from '../utils/fechas';
 import { formatearCOP, soloDigitos } from '../utils/moneda';
 import { RODAMIENTO_FIJOS, RODAMIENTO_OPCIONES, tieneRodamiento } from '../utils/rodamiento';
 import {
+  COMISION_TIPOS,
+  COMISION_TIPO_LABEL,
+  etiquetaBaseComision,
+  type ComisionTipo,
+} from '../utils/comisiones';
+import {
   agruparPostulaciones,
   construirBaseVacantes,
   faseTarjeta,
@@ -123,6 +129,12 @@ export default function VacanteDetallePage() {
   const [editarCondAbierto, setEditarCondAbierto] = useState(false);
   const [condForm, setCondForm] = useState({
     salario_base: '',
+    // Comisiones estructuradas (reu 16-sep). '' = vacante vieja sin clasificar.
+    comision_tipo: '' as ComisionTipo | '',
+    comision_base: '',
+    comision_medicion: '',
+    comision_aplica_bolsa: false,
+    comision_bolsa_detalle: '',
     comisiones_texto: '',
     rodamiento_valor: '',
     garantizado_texto: '',
@@ -146,6 +158,11 @@ export default function VacanteDetallePage() {
     const valor = vac.rodamiento ? (tieneRodamiento(guardado) ? guardado : '') : 'No aplica';
     setCondForm({
       salario_base: String(vac.salario_base ?? ''),
+      comision_tipo: vac.comision_tipo ?? '',
+      comision_base: vac.comision_base ?? '',
+      comision_medicion: vac.comision_medicion ?? '',
+      comision_aplica_bolsa: Boolean(vac.comision_aplica_bolsa),
+      comision_bolsa_detalle: vac.comision_bolsa_detalle ?? '',
       comisiones_texto: vac.comisiones_texto ?? '',
       rodamiento_valor: valor,
       garantizado_texto: vac.garantizado_texto ?? '',
@@ -167,12 +184,26 @@ export default function VacanteDetallePage() {
       setErrCond('Escribe el valor del rodamiento o elige "No aplica".');
       return;
     }
+    // Comisiones: con tipo distinto de "ninguna" hay que decir cuál y cómo se mide.
+    const tipoComision = condForm.comision_tipo === '' ? null : condForm.comision_tipo;
+    const hayComision = tipoComision !== null && tipoComision !== 'ninguna';
+    if (hayComision && (!condForm.comision_base.trim() || !condForm.comision_medicion.trim())) {
+      setErrCond('Para la comisión indica cuál presupuesto o indicadores aplican y cómo se mide.');
+      return;
+    }
     setGuardandoCond(true);
     setErrCond(null);
     try {
       await actualizar('vacantes', vac.id, {
         salario_base: salario,
-        comisiones_texto: condForm.comisiones_texto.trim(),
+        comision_tipo: tipoComision,
+        comision_base: hayComision ? condForm.comision_base.trim() : '',
+        comision_medicion: hayComision ? condForm.comision_medicion.trim() : '',
+        comision_aplica_bolsa: hayComision ? condForm.comision_aplica_bolsa : false,
+        comision_bolsa_detalle:
+          hayComision && condForm.comision_aplica_bolsa ? condForm.comision_bolsa_detalle.trim() : '',
+        // Sin comisión ("ninguna") el concepto no aplica; sin clasificar (null) se conserva.
+        comisiones_texto: tipoComision === 'ninguna' ? '' : condForm.comisiones_texto.trim(),
         rodamiento_valor: rodamientoValor,
         // "Otro valor…" vacío en un doc que ya venía sin valor: se conserva el sí.
         rodamiento: otroVacio ? Boolean(vac.rodamiento) : tieneRodamiento(rodamientoValor),
@@ -524,14 +555,95 @@ export default function VacanteDetallePage() {
                 <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
                   Comisiones
                 </span>
-                <input
-                  value={condForm.comisiones_texto}
-                  onChange={(e) => setCondForm((p) => ({ ...p, comisiones_texto: e.target.value }))}
+                <select
+                  value={condForm.comision_tipo}
+                  onChange={(e) =>
+                    setCondForm((p) => ({ ...p, comision_tipo: e.target.value as ComisionTipo | '' }))
+                  }
                   disabled={guardandoCond}
-                  placeholder="Ej.: 3% sobre ventas · vacío = No aplica"
                   className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
-                />
+                >
+                  {condForm.comision_tipo === '' && (
+                    <option value="">Sin clasificar (vacante anterior)</option>
+                  )}
+                  {COMISION_TIPOS.map((t) => (
+                    <option key={t} value={t}>
+                      {COMISION_TIPO_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
               </label>
+              {condForm.comision_tipo !== 'ninguna' && (
+                <>
+                  {condForm.comision_tipo !== '' && (
+                    <>
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+                          {etiquetaBaseComision(condForm.comision_tipo)}
+                        </span>
+                        <textarea
+                          value={condForm.comision_base}
+                          onChange={(e) => setCondForm((p) => ({ ...p, comision_base: e.target.value }))}
+                          disabled={guardandoCond}
+                          rows={2}
+                          placeholder="Cuál presupuesto o cuáles indicadores"
+                          className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500 resize-none"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+                          Cómo se mide y se paga
+                        </span>
+                        <textarea
+                          value={condForm.comision_medicion}
+                          onChange={(e) =>
+                            setCondForm((p) => ({ ...p, comision_medicion: e.target.value }))
+                          }
+                          disabled={guardandoCond}
+                          rows={2}
+                          placeholder="% sobre lo vendido, periodicidad, tabla por rangos…"
+                          className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500 resize-none"
+                        />
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={condForm.comision_aplica_bolsa}
+                          onChange={(e) =>
+                            setCondForm((p) => ({ ...p, comision_aplica_bolsa: e.target.checked }))
+                          }
+                          disabled={guardandoCond}
+                          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
+                        />
+                        <span className="text-[13px] text-text-strong">Aplica bolsa</span>
+                      </label>
+                      {condForm.comision_aplica_bolsa && (
+                        <input
+                          value={condForm.comision_bolsa_detalle}
+                          onChange={(e) =>
+                            setCondForm((p) => ({ ...p, comision_bolsa_detalle: e.target.value }))
+                          }
+                          disabled={guardandoCond}
+                          placeholder="Detalle de la bolsa"
+                          className="w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
+                        />
+                      )}
+                    </>
+                  )}
+                  <label className="block">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+                      Concepto para el candidato
+                    </span>
+                    <input
+                      value={condForm.comisiones_texto}
+                      onChange={(e) => setCondForm((p) => ({ ...p, comisiones_texto: e.target.value }))}
+                      disabled={guardandoCond}
+                      placeholder="Ej.: 3% sobre ventas · vacío = No aplica"
+                      className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
+                    />
+                  </label>
+                </>
+              )}
               <label className="block">
                 <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
                   Garantizado

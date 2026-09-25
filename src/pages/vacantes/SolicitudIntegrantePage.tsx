@@ -7,6 +7,7 @@ import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
 import { RODAMIENTO_OPCIONES, RODAMIENTO_FIJOS } from '../../utils/rodamiento';
+import { lineasComisiones, textoComisiones } from '../../utils/comisiones';
 import type { SolicitudIntegranteDoc, VacanteDoc } from '../../schemas';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Pill } from '../../components/brand';
@@ -229,7 +230,8 @@ export default function SolicitudIntegrantePage() {
         salario_base: vacante.salario_base != null ? vacante.salario_base.toLocaleString('es-CO') : '',
         rodamiento: vacante.rodamiento ? 'Sí' : 'No',
         rodamiento_valor: form.rodamiento_valor,
-        comisiones: vacante.comisiones_texto,
+        // Una línea por renglón (tipo, presupuesto/indicadores, medición, bolsa, concepto).
+        comisiones: lineasComisiones(vacante).join('\n'),
         bonificaciones: form.bonificaciones_texto,
         garantizado_total: form.garantizado_total,
         valor_prestacional: form.valor_prestacional,
@@ -461,7 +463,9 @@ export default function SolicitudIntegrantePage() {
               )}
             </div>
           </Fila>
-          <Fila label="Esquema de comisiones">{vacante.comisiones_texto || '—'}</Fila>
+          <Fila label="Esquema de comisiones">
+            <span className="whitespace-pre-line">{textoComisiones(vacante)}</span>
+          </Fila>
           <Fila label="Esquema de bonificaciones">
             <EntradaArea
               value={form.bonificaciones_texto}

@@ -390,7 +390,10 @@ service cloud.firestore {
       allow update: if (staff() || isAnalista() || isDocumentacion())
         && request.resource.data.postulacion_id == resource.data.postulacion_id
         && resource.data.get('estado', '') != 'anulada'
-        && request.resource.data.get('estado', '') != 'anulada';
+        && request.resource.data.get('estado', '') != 'anulada'
+        // La revisión automática de datos la escribe solo el servidor
+        // (revisarCarpeta / notificarCarpetaListaValidarCore, reu 16-sep).
+        && request.resource.data.get('revision_datos', null) == resource.data.get('revision_datos', null);
       allow delete: if false;
     }
     match /tickets_conexion/{id} {

@@ -17,6 +17,7 @@ import { Button, Card, Pill } from '../../components/brand';
 import { TIPO_SOLICITUD_LABEL } from '../../schemas';
 import { auth, db, functions, storage } from '../../lib/firebase';
 import { formatearCOP } from '../../utils/moneda';
+import { COMISION_TIPO_LABEL, tieneComisiones } from '../../utils/comisiones';
 import { cn } from '../../utils/cn';
 import type { VacanteDoc } from '../../schemas';
 
@@ -486,13 +487,16 @@ export default function CarreraPublicaPage() {
                   {formatearCOP(vacante.salario_base)}
                 </dd>
               </div>
-              {vacante.comisiones_texto && (
+              {/* Público: solo el concepto para el candidato (o el tipo); el detalle de
+                  presupuesto/indicadores es interno (reu 16-sep). */}
+              {tieneComisiones(vacante) && (
                 <div>
                   <dt className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-muted mb-1">
                     Comisiones
                   </dt>
                   <dd className="text-[13px] text-text-body leading-[1.5]">
-                    {vacante.comisiones_texto}
+                    {vacante.comisiones_texto?.trim() ||
+                      (vacante.comision_tipo ? COMISION_TIPO_LABEL[vacante.comision_tipo] : '')}
                   </dd>
                 </div>
               )}

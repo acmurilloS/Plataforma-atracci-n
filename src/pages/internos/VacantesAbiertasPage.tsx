@@ -11,6 +11,7 @@ import { PoliticaCriticidadBanner } from '../../components/vacantes/PoliticaCrit
 import { Button, Card } from '../../components/brand';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
+import { tieneComisiones } from '../../utils/comisiones';
 
 /**
  * VacantesAbiertasPage · sistema brand.
@@ -174,7 +175,7 @@ export default function VacantesAbiertasPage() {
                 <p className="flex items-center gap-1.5 tabular-nums">
                   <Briefcase size={12} strokeWidth={1.5} className="text-text-subtle" />
                   {formatearCOP(v.salario_base)}
-                  {v.comisiones_texto && (
+                  {tieneComisiones(v) && (
                     <span className="text-text-subtle"> + comisiones</span>
                   )}
                 </p>

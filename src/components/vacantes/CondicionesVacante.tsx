@@ -1,6 +1,7 @@
 import { Pill, type PillTono } from '../brand';
 import { formatearCOP } from '../../utils/moneda';
 import { textoRodamiento } from '../../utils/rodamiento';
+import { textoComisiones } from '../../utils/comisiones';
 import { cn } from '../../utils/cn';
 import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../../schemas';
 
@@ -56,10 +57,11 @@ export function CondicionesVacante({ vacante: v, variante = 'tarjeta', incluirTi
       />
       <Dato variante={variante} label="Rodamiento" valor={textoRodamiento(v)} />
       <Dato variante={variante} label="Contrato" valor={contrato} />
+      {/* Tipo · presupuesto/indicadores · medición · bolsa · concepto (reu 16-sep). */}
       <Dato
         variante={variante}
         label="Comisiones"
-        valor={v.comisiones_texto?.trim() || 'No aplica'}
+        valor={textoComisiones(v)}
         ancho="md:col-span-2"
         preserveBreaks
       />
