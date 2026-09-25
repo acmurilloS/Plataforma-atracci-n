@@ -26,6 +26,15 @@ const APP_URL = 'https://ptm-atraccion.web.app';
  */
 const DIEGO_CULTURA = 'dortiz@equitel.com.co';
 
+// Espejo de TIPO_SOLICITUD_LABEL del front (functions no importa de src).
+const TIPO_LABEL: Record<string, string> = {
+  reemplazo_indefinido: 'Reemplazo indefinido',
+  aumento_planta: 'Aumento de planta',
+  necesidad_temporal: 'Necesidad temporal',
+  reemplazo: 'Reemplazo indefinido',
+  aumento: 'Aumento de planta',
+};
+
 function formatearCOP(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '—';
   return '$ ' + Math.round(n).toLocaleString('es-CO');
@@ -78,8 +87,26 @@ export async function avisarCondicionesCultura(
   const liderNombre = String(v.lider_nombre ?? '').trim();
   const salario = Number(v.salario_base ?? 0);
   const comisiones = String(v.comisiones_texto ?? '').trim();
-  const rodamiento = v.rodamiento === true;
   const garantizado = String(v.garantizado_texto ?? '').trim();
+  // Rodamiento con VALOR (reu Karen 16-sep): Diego solo veía "Sí/No" y necesita
+  // el monto que puso el líder. Manda el booleano; el valor solo si dice que sí.
+  const rodamientoValor = String(v.rodamiento_valor ?? '').trim();
+  const rodamiento =
+    v.rodamiento === true
+      ? rodamientoValor && rodamientoValor.toLowerCase() !== 'no aplica'
+        ? rodamientoValor
+        : 'Sí (valor no registrado)'
+      : 'No aplica';
+  // Tipo de solicitud + a quién reemplaza / duración (Diego cruza contra planta).
+  const tipoRaw = String(v.tipo_solicitud ?? '').trim();
+  const reemplaza = String(v.reemplaza_a_nombre ?? '').trim();
+  const meses = Number(v.temporalidad_meses);
+  const tipoSolicitud =
+    (TIPO_LABEL[tipoRaw] ?? tipoRaw) +
+    (tipoRaw === 'reemplazo_indefinido' && reemplaza ? ` · reemplaza a ${reemplaza}` : '') +
+    (tipoRaw === 'necesidad_temporal' && Number.isFinite(meses) && meses > 0
+      ? ` · ${meses} mes${meses === 1 ? '' : 'es'}`
+      : '');
 
   // CC a coordinación. (El reply-to ya no va al líder: va al analista del
   // proceso —ver más abajo—, nunca al líder ni a Steve.)
@@ -103,10 +130,11 @@ export async function avisarCondicionesCultura(
 
   // Tabla de condiciones (escapeHtml a todo lo que viene del líder).
   const condiciones: [string, string][] = [
+    ['Tipo de solicitud', tipoSolicitud || '—'],
     ['Salario base', formatearCOP(salario)],
-    ['Comisiones', comisiones || '—'],
-    ['Rodamiento', rodamiento ? 'Sí' : 'No'],
-    ['Garantizado', garantizado || '—'],
+    ['Comisiones', comisiones || 'No aplica'],
+    ['Rodamiento', rodamiento],
+    ['Garantizado', garantizado || 'No aplica'],
   ];
   const filasHtml = condiciones
     .map(

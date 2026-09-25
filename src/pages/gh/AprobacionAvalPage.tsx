@@ -8,7 +8,9 @@ import { useMutacion } from '../../hooks/useMutacion';
 import { formatearCOP } from '../../utils/moneda';
 import { formatearFecha } from '../../utils/fechas';
 import { puedeVerVacante } from '../../utils/accesoRutas';
+import { textoRodamiento } from '../../utils/rodamiento';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
+import { CondicionesVacante } from '../../components/vacantes/CondicionesVacante';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../../schemas';
@@ -19,6 +21,11 @@ import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../../schemas';
  * GH revisa el aval firmado por Alejandro (paso 2 del flujograma).
  * Tabs: Pendientes / Aprobadas / Rechazadas. Card de vacante con datos
  * clave + PDF + acciones Aprobar / Rechazar con motivo obligatorio.
+ *
+ * Las condiciones (salario, rodamiento con VALOR, comisiones, garantizado, a
+ * quién reemplaza) salen de `CondicionesVacante` (reu Karen 16-sep: Diego, rol
+ * gh, no ve el detalle de la vacante y aquí le faltaban esos datos). Las filas
+ * históricas conservan el link al aval: antes desaparecía al aprobar.
  */
 
 type Filtro = 'pendientes' | 'aprobadas' | 'rechazadas';
@@ -276,15 +283,6 @@ function VacanteCardAprobacion({
   const [nota, setNota] = useState('');
   const [mostrarRechazo, setMostrarRechazo] = useState(false);
 
-  const bandaTono: PillTono =
-    vacante.en_banda === null ? 'warning' : vacante.en_banda ? 'success' : 'danger';
-  const bandaLabel =
-    vacante.en_banda === null
-      ? 'Sin banda definida'
-      : vacante.en_banda
-        ? 'En banda'
-        : 'Fuera de banda';
-
   return (
     <Card padding="lg">
       {/* Header */}
@@ -303,7 +301,7 @@ function VacanteCardAprobacion({
             Solicitado por{' '}
             <span className="font-medium text-text-body">{vacante.lider_nombre}</span> ·{' '}
             Criticidad <span className="font-medium text-text-body">{vacante.criticidad}</span> ·{' '}
-            {vacante.tipo_solicitud}
+            {TIPO_SOLICITUD_LABEL[vacante.tipo_solicitud] ?? vacante.tipo_solicitud}
             {vacante.creado_en && (
               <> · creada {formatearFecha(vacante.creado_en.toDate())}</>
             )}
@@ -320,15 +318,9 @@ function VacanteCardAprobacion({
         )}
       </div>
 
-      {/* Datos clave */}
-      <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Dato label="Salario base" valor={formatearCOP(vacante.salario_base)} hero />
-        <DatoPill label="Banda salarial" valor={bandaLabel} tono={bandaTono} />
-        <Dato
-          label="Tipo solicitud"
-          valor={TIPO_SOLICITUD_LABEL[vacante.tipo_solicitud] ?? '—'}
-        />
-        <Dato label="Comisiones" valor={vacante.comisiones_texto || 'No aplica'} />
+      {/* Condiciones completas: lo que Cultura y Desarrollo valida. */}
+      <div className="mt-5">
+        <CondicionesVacante vacante={vacante} incluirTipoSolicitud />
       </div>
 
       {/* Justificación */}
@@ -513,7 +505,10 @@ function VacanteRowHistorica({
             {rechazada ? (
               <span className="italic">{vacante.razon_cierre}</span>
             ) : (
-              <span className="tabular-nums">Salario {formatearCOP(vacante.salario_base)}</span>
+              <>
+                <span className="tabular-nums">Salario {formatearCOP(vacante.salario_base)}</span>
+                {' · '}Rodamiento {textoRodamiento(vacante)}
+              </>
             )}
             {vacante.aval_aprobado_en && !rechazada && (
               <>
@@ -525,69 +520,45 @@ function VacanteRowHistorica({
               </>
             )}
           </p>
+          <p className="text-[12px] text-text-muted mt-0.5">
+            {TIPO_SOLICITUD_LABEL[vacante.tipo_solicitud] ?? vacante.tipo_solicitud}
+            {vacante.tipo_solicitud === 'reemplazo_indefinido' && vacante.reemplaza_a_nombre && (
+              <>
+                {' '}
+                · reemplaza a{' '}
+                <span className="font-medium text-text-body">{vacante.reemplaza_a_nombre}</span>
+              </>
+            )}
+          </p>
           {!rechazada && vacante.aval_observaciones && (
             <p className="text-[12px] text-text-muted mt-1 italic">
               Observaciones: {vacante.aval_observaciones}
             </p>
           )}
         </div>
-        {puedeVerDetalle && (
-          <Link
-            to={`/vacantes/${vacante.id}`}
-            className="text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
-          >
-            Ver →
-          </Link>
-        )}
+        <div className="flex items-center gap-4 shrink-0">
+          {vacante.aval_url && (
+            <a
+              href={vacante.aval_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-text-body hover:text-text-strong hover:underline"
+            >
+              <FileText size={11} strokeWidth={1.75} />
+              Aval PDF
+            </a>
+          )}
+          {puedeVerDetalle && (
+            <Link
+              to={`/vacantes/${vacante.id}`}
+              className="text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+            >
+              Ver →
+            </Link>
+          )}
+        </div>
       </div>
     </Card>
-  );
-}
-
-function Dato({
-  label,
-  valor,
-  hero,
-}: {
-  label: string;
-  valor: string;
-  hero?: boolean;
-}) {
-  return (
-    <div className="rounded-md bg-slate-50 border border-slate-200 px-3 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-subtle">{label}</p>
-      <p
-        className={cn(
-          'mt-1 text-text-strong',
-          hero
-            ? 'text-[18px] font-light tracking-[-0.02em] tabular-nums'
-            : 'text-[13px] font-medium',
-        )}
-      >
-        {valor}
-      </p>
-    </div>
-  );
-}
-
-function DatoPill({
-  label,
-  valor,
-  tono,
-}: {
-  label: string;
-  valor: string;
-  tono: PillTono;
-}) {
-  return (
-    <div className="rounded-md bg-slate-50 border border-slate-200 px-3 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-subtle">{label}</p>
-      <div className="mt-1.5">
-        <Pill tono={tono} dot>
-          {valor}
-        </Pill>
-      </div>
-    </div>
   );
 }
 

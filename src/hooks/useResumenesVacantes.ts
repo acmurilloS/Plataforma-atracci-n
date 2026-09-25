@@ -29,7 +29,9 @@ const ROLES_LISTA: ReadonlySet<RolUsuario> = new Set<RolUsuario>([
   'apoyo',
   'talentos',
 ]);
-const ROLES_POR_DOC: ReadonlySet<RolUsuario> = new Set<RolUsuario>(['lider', 'gerente']);
+// gh: Diego (C&D) es líder solicitante de sus propias vacantes y las ve en
+// "Mis vacantes"; la regla de vacantes_resumen ya le permite el get (reu 16-sep).
+const ROLES_POR_DOC: ReadonlySet<RolUsuario> = new Set<RolUsuario>(['lider', 'gerente', 'gh']);
 
 const TOPE_LISTA = 1000;
 const TOPE_DOCS = 200;

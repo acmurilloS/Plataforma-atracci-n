@@ -14,3 +14,20 @@ export const RODAMIENTO_OPCIONES: { valor: string; label: string }[] = [
 
 /** Los valores fijos (para saber si el guardado es uno de la lista o "Otro"). */
 export const RODAMIENTO_FIJOS = new Set(RODAMIENTO_OPCIONES.map((o) => o.valor));
+
+/** True si el valor guardado es un rodamiento real (no vacío ni "No aplica"). */
+export function tieneRodamiento(valor: string | null | undefined): boolean {
+  const v = (valor ?? '').trim();
+  return v !== '' && v.toLowerCase() !== 'no aplica';
+}
+
+/**
+ * Texto del rodamiento para pintar (reu Karen 16-sep: Diego solo veía "Sí/No").
+ * Manda el booleano `rodamiento` (es lo que coordinación edita); el valor solo
+ * se muestra cuando el booleano dice que sí. Si dice sí pero no hay valor (docs
+ * viejos o editados solo con el checkbox), se avisa en vez de inventar un monto.
+ */
+export function textoRodamiento(v: { rodamiento?: boolean; rodamiento_valor?: string }): string {
+  if (!v.rodamiento) return 'No aplica';
+  return tieneRodamiento(v.rodamiento_valor) ? v.rodamiento_valor!.trim() : 'Sí (valor no registrado)';
+}

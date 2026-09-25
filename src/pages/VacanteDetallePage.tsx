@@ -25,12 +25,14 @@ import { puedeVerProceso } from '../utils/accesoRutas';
 import { useVacantes } from '../hooks/useVacantes';
 import { useMutacion } from '../hooks/useMutacion';
 import { SelectorCargo } from '../components/vacantes/SelectorCargo';
+import { CondicionesVacante } from '../components/vacantes/CondicionesVacante';
 import { EditarIdentificacionModal } from '../components/vacantes/EditarIdentificacionModal';
 import { useFestivosTodos } from '../hooks/useCatalogos';
 import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { functions, db } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
 import { formatearCOP, soloDigitos } from '../utils/moneda';
+import { RODAMIENTO_FIJOS, RODAMIENTO_OPCIONES, tieneRodamiento } from '../utils/rodamiento';
 import {
   agruparPostulaciones,
   construirBaseVacantes,
@@ -111,24 +113,41 @@ export default function VacanteDetallePage() {
   const esCoord = rol === 'coordinador' || rol === 'admin';
 
   // ── Editar condiciones (salario/comisiones/rodamiento/garantizado) ──────────
+  // El rodamiento se edita por VALOR (misma lista que al crear la vacante) y el
+  // booleano `rodamiento` se deriva de él, igual que en VacanteForm. Antes el
+  // modal solo tocaba el checkbox y dejaba `rodamiento_valor` desincronizado
+  // (reu Karen 16-sep: Diego necesita ver el monto, no un "Sí").
   const [editarCondAbierto, setEditarCondAbierto] = useState(false);
   const [condForm, setCondForm] = useState({
     salario_base: '',
     comisiones_texto: '',
-    rodamiento: false,
+    rodamiento_valor: '',
     garantizado_texto: '',
   });
+  // "Otro valor…" en el desplegable: el valor guardado no es uno de la lista.
+  const [rodOtro, setRodOtro] = useState(false);
   const [guardandoCond, setGuardandoCond] = useState(false);
   const [errCond, setErrCond] = useState<string | null>(null);
 
+  // Docs viejos o editados con el checkbox: rodamiento=true sin valor guardado.
+  // El modal los abre en "Otro valor…" vacío y deja guardar otros campos sin
+  // obligar a inventar un monto (la pantalla sigue diciendo "valor no registrado").
+  const rodamientoSinValorPrevio = !!vac && Boolean(vac.rodamiento) && !tieneRodamiento(vac.rodamiento_valor);
+
   function abrirEditarCondiciones() {
     if (!vac) return;
+    // Misma precedencia que `textoRodamiento` (el booleano manda): lo que se ve
+    // en pantalla es lo que aparece seleccionado. Si no, guardar otro campo
+    // podía voltear el rodamiento en silencio en docs desincronizados.
+    const guardado = (vac.rodamiento_valor ?? '').trim();
+    const valor = vac.rodamiento ? (tieneRodamiento(guardado) ? guardado : '') : 'No aplica';
     setCondForm({
       salario_base: String(vac.salario_base ?? ''),
       comisiones_texto: vac.comisiones_texto ?? '',
-      rodamiento: Boolean(vac.rodamiento),
+      rodamiento_valor: valor,
       garantizado_texto: vac.garantizado_texto ?? '',
     });
+    setRodOtro(Boolean(vac.rodamiento) && !RODAMIENTO_FIJOS.has(valor));
     setErrCond(null);
     setEditarCondAbierto(true);
   }
@@ -139,13 +158,21 @@ export default function VacanteDetallePage() {
       setErrCond('Ingresa un salario base válido.');
       return;
     }
+    const rodamientoValor = condForm.rodamiento_valor.trim();
+    const otroVacio = rodOtro && !rodamientoValor;
+    if (otroVacio && !rodamientoSinValorPrevio) {
+      setErrCond('Escribe el valor del rodamiento o elige "No aplica".');
+      return;
+    }
     setGuardandoCond(true);
     setErrCond(null);
     try {
       await actualizar('vacantes', vac.id, {
         salario_base: salario,
         comisiones_texto: condForm.comisiones_texto.trim(),
-        rodamiento: condForm.rodamiento,
+        rodamiento_valor: rodamientoValor,
+        // "Otro valor…" vacío en un doc que ya venía sin valor: se conserva el sí.
+        rodamiento: otroVacio ? Boolean(vac.rodamiento) : tieneRodamiento(rodamientoValor),
         garantizado_texto: condForm.garantizado_texto.trim(),
       });
       setEditarCondAbierto(false);
@@ -483,15 +510,48 @@ export default function VacanteDetallePage() {
                   className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
                 />
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={condForm.rodamiento}
-                  onChange={(e) => setCondForm((p) => ({ ...p, rodamiento: e.target.checked }))}
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+                  Auxilio de rodamiento
+                </span>
+                <select
+                  value={
+                    rodOtro
+                      ? '__otro__'
+                      : RODAMIENTO_FIJOS.has(condForm.rodamiento_valor)
+                        ? condForm.rodamiento_valor
+                        : ''
+                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '__otro__') {
+                      setRodOtro(true);
+                      setCondForm((p) => ({ ...p, rodamiento_valor: '' }));
+                    } else {
+                      setRodOtro(false);
+                      setCondForm((p) => ({ ...p, rodamiento_valor: v }));
+                    }
+                  }}
                   disabled={guardandoCond}
-                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
-                />
-                <span className="text-[13px] text-text-strong">Incluye auxilio de rodamiento</span>
+                  className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
+                >
+                  <option value="">Selecciona…</option>
+                  {RODAMIENTO_OPCIONES.map((o) => (
+                    <option key={o.valor} value={o.valor}>
+                      {o.label}
+                    </option>
+                  ))}
+                  <option value="__otro__">Otro valor…</option>
+                </select>
+                {rodOtro && (
+                  <input
+                    value={condForm.rodamiento_valor}
+                    onChange={(e) => setCondForm((p) => ({ ...p, rodamiento_valor: e.target.value }))}
+                    disabled={guardandoCond}
+                    placeholder="Escribe el valor del rodamiento"
+                    className="mt-2 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
+                  />
+                )}
               </label>
             </div>
             {errCond && <p className="mt-3 text-[12px] text-danger-700">{errCond}</p>}
@@ -603,26 +663,10 @@ export default function VacanteDetallePage() {
           Condiciones
         </SectionEyebrow>
         <Card padding="lg" className="mt-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
-            <Dato label="Salario base" valor={formatearCOP(vac.salario_base)} hero />
-            <Dato
-              label="En banda"
-              valor={
-                vac.en_banda === null
-                  ? 'Sin banda definida'
-                  : vac.en_banda
-                    ? 'Sí'
-                    : 'No · a validar por GH'
-              }
-            />
-            <Dato label="Rodamiento" valor={vac.rodamiento ? 'Sí' : 'No'} />
-            <Dato
-              label="Comisiones"
-              valor={vac.comisiones_texto || '—'}
-              ancho="md:col-span-2"
-            />
-            <Dato label="Garantizado" valor={vac.garantizado_texto || '—'} />
-            <Dato label="Justificación" valor={vac.justificacion} ancho="md:col-span-3" preserveBreaks />
+          {/* Mismo bloque que ve GH en Aprobaciones (rodamiento con valor, etc.). */}
+          <CondicionesVacante vacante={vac} variante="plana" />
+          <div className="mt-5">
+            <Dato label="Justificación" valor={vac.justificacion} preserveBreaks />
           </div>
         </Card>
       </section>
