@@ -8,6 +8,11 @@ import { ESTADOS_RELOJ_APLICA, liderYaRespondio, tsMs } from '../notificaciones/
 
 const APP_URL = 'https://ptm-atraccion.web.app';
 
+// Roles a los que se les arma el reloj cuando son el `lider_uid` de la vacante.
+// `gh` entra (reu Karen 16-sep): Diego (Cultura y Desarrollo) crea vacantes como
+// líder solicitante y debe recibir el mismo aviso/plazo que cualquier líder.
+const ROLES_DESTINATARIO_RELOJ = ['lider', 'gh'];
+
 /**
  * onVacanteEnvioLider · arma el reloj del líder (reu Karen 09-sep, punto 7).
  *
@@ -20,8 +25,10 @@ const APP_URL = 'https://ptm-atraccion.web.app';
  *    cambian esos campos, así que no se re-dispara.
  *  - No arma si la config está apagada, si el envío es anterior a `vigente_desde`
  *    (los Conceptos viejos nunca arman), en movimientos internos, en estados donde
- *    no aplica, si el destinatario no tiene rol 'lider', o si el líder ya respondió
- *    (entrevista con líder o candidato avanzado).
+ *    no aplica, si el destinatario no tiene rol 'lider' ni 'gh' (un `gh` como Diego
+ *    también es líder solicitante de sus propias vacantes: lider_uid == su uid,
+ *    reu Karen 16-sep), o si el líder ya respondió (entrevista con líder o
+ *    candidato avanzado).
  *  - Reenvío con el reloj corriendo: NO reinicia el plazo ni repite el aviso.
  *  - El aviso con la regla sale como notificación (campana + correo vía
  *    onNotificacionCreate, reply-to a la analista); el programador exige que ese
@@ -66,8 +73,11 @@ export const onVacanteEnvioLider = onDocumentUpdated(
     const liderUid = String(after.lider_uid ?? '');
     if (!liderUid) return;
     const lider = (await db.collection('usuarios').doc(liderUid).get()).data();
-    if (!lider || lider.rol !== 'lider' || lider.activo === false) {
-      logger.info('[reloj líder] el destinatario no es un líder activo; no se arma', { vacanteId });
+    if (!lider || !ROLES_DESTINATARIO_RELOJ.includes(String(lider.rol ?? '')) || lider.activo === false) {
+      logger.info('[reloj líder] el destinatario no es un líder activo (rol lider/gh); no se arma', {
+        vacanteId,
+        rol: lider?.rol ?? null,
+      });
       return;
     }
 

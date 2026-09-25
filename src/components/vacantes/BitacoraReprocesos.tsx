@@ -34,8 +34,10 @@ const TIPO_TONO: Record<TipoNovedadVacante, PillTono> = {
   asignacion_analista: 'info',
 };
 
-/** Roles del equipo de Atracción que ven y gestionan la bitácora (no líderes). */
-const ROLES_ATRACCION = ['admin', 'coordinador', 'gh', 'analista'];
+/** Roles del equipo de Atracción que ven y gestionan la bitácora (no líderes).
+ *  gh queda fuera: Diego entra al detalle de SU vacante como líder solicitante,
+ *  en consulta, y no debe suspender/reactivar procesos (reu Karen 16-sep). */
+const ROLES_ATRACCION = ['admin', 'coordinador', 'analista'];
 
 interface Props {
   vacante: VacanteDoc;

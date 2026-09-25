@@ -169,6 +169,10 @@ export function useColeccion<T extends DocumentoBase>(
       );
     }
 
+    // Al (re)habilitarse sin caché (p. ej. `habilitado` pasa de false a true
+    // cuando ya se sabe que el gh es dueño de la vacante), vuelve a "cargando"
+    // para no pintar un vacío falso hasta que llegue el primer snapshot.
+    if (!cacheColeccion.has(clave)) setCargando(true);
     suscribir(true);
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -382,6 +382,12 @@ export default function ConceptoAtraccionPage() {
           Este concepto pertenece a una vacante que no solicitaste tú. Solo puedes revisar los
           conceptos de los cargos que reportan a tu área.
         </p>
+        <Link
+          to="/mis-vacantes"
+          className="inline-block pt-2 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+        >
+          Ir a mis vacantes →
+        </Link>
       </div>
     );
 

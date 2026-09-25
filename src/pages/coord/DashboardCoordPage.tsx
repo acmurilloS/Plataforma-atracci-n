@@ -79,6 +79,7 @@ type DrillMode =
   | 'en_riesgo'
   | `fase:${FasePipeline}`
   | 'contratadas'
+  | 'contratadas_total'
   | `crit:${string}`
   | `emp:${string}`;
 
@@ -150,6 +151,11 @@ export default function DashboardCoordPage() {
     }
     return n;
   }, [postulaciones]);
+  // Histórico de contratados (todas las épocas), como el "de N históricas" del pipeline.
+  const contratadasTotal = useMemo(
+    () => postulaciones.filter((p) => p.estado === 'contratado').length,
+    [postulaciones],
+  );
 
   // Drill-down: al hundir una card, se abre el modal con esos ítems.
   const [drill, setDrill] = useState<DrillMode | null>(null);
@@ -240,6 +246,39 @@ export default function DashboardCoordPage() {
       };
     }
 
+    const fechaContrato = (p: PostulacionDoc) =>
+      fechaDe((p as { marcas?: { contratado_en?: unknown } }).marcas?.contratado_en) ??
+      fechaDe((p as { ultima_transicion_estado?: unknown }).ultima_transicion_estado);
+
+    if (drill === 'contratadas_total') {
+      const arr = postulaciones
+        .filter((p) => p.estado === 'contratado')
+        .map((p) => ({ p, d: fechaContrato(p) }))
+        .sort((a, b) => (b.d?.getTime() ?? 0) - (a.d?.getTime() ?? 0));
+      return {
+        titulo: 'Contratados · histórico',
+        descripcion: `${arr.length} personas vinculadas desde que arrancó la plataforma`,
+        tono: 'success' as const,
+        icono: <UserCheck size={20} strokeWidth={1.75} />,
+        items: arr.map(({ p, d }) => ({
+          id: p.id,
+          to: `/postulaciones/${p.id}`,
+          titulo: String((p as { candidato_nombre?: string }).candidato_nombre ?? 'Candidato'),
+          sub: [
+            (p as { cargo_nombre?: string }).cargo_nombre,
+            (p as { vacante_consecutivo?: string }).vacante_consecutivo,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          right: d ? (
+            <span className="text-[12px] text-text-muted tabular-nums">
+              {d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+          ) : undefined,
+        })),
+      };
+    }
+
     // contratadas del mes
     const now = new Date();
     const y = now.getFullYear();
@@ -302,7 +341,23 @@ export default function DashboardCoordPage() {
           />
           <KpiCard
             eyebrow="Contratadas · mes"
-            valor={contratadasMes}
+            valor={
+              <span className="inline-flex items-baseline gap-3">
+                {contratadasMes}
+                {/* Histórico "abajito chiquito" (petición Andrea 25-sep); abre la lista completa. */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDrill('contratadas_total');
+                  }}
+                  disabled={contratadasTotal === 0}
+                  className="text-[12px] font-medium tracking-normal text-text-subtle hover:text-success-700 hover:underline disabled:no-underline disabled:hover:text-text-subtle"
+                >
+                  de {contratadasTotal} en total
+                </button>
+              </span>
+            }
             caption={contratadasMes ? 'Toca para ver quiénes' : 'Sin contrataciones este mes'}
             icono={<UserCheck size={18} strokeWidth={1.75} />}
             tono="success"
@@ -602,16 +657,18 @@ function PipeCell({
           : undefined
       }
       className={cn(
-        'rounded-lg px-4 py-3.5 transition-all duration-200',
+        'rounded-lg px-3.5 py-3 transition-all duration-200',
         clicable &&
           'cursor-pointer hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40',
       )}
       style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)' }}
     >
-      {/* Alto fijo de 2 líneas: las etiquetas largas no desalinean los números. */}
-      <div className="flex items-start gap-1.5 mb-2 min-h-[23px]">
-        <span className={cn('mt-[3px] h-1 w-1 shrink-0 rounded-full', dotClass)} />
-        <p className="text-[9.5px] font-bold uppercase tracking-[0.10em] text-white/50 leading-[1.2]">
+      {/* Etiqueta en caja alta/baja y sin tracking: las mayúsculas espaciadas no
+          cabían en 3 columnas ("Reclutamiento" pisaba el punto y "Entrevista
+          líder" partía raro). Alto fijo de 2 líneas para no desalinear los números. */}
+      <div className="flex items-start gap-1.5 mb-2 min-h-[28px]">
+        <span className={cn('mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full', dotClass)} />
+        <p className="text-[11.5px] font-semibold text-white/60 leading-[1.2] tracking-[-0.01em]">
           {label}
         </p>
       </div>

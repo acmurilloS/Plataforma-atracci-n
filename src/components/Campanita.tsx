@@ -6,7 +6,9 @@ import { useAuth } from '../hooks/useAuth';
 import { useColeccion } from '../hooks/useColeccion';
 import { useMutacion } from '../hooks/useMutacion';
 import type { NotificacionDoc } from '../schemas';
+import { puedeAbrirRuta } from '../utils/accesoRutas';
 import { cn } from '../utils/cn';
+import { rutaHome } from '../utils/rutaHome';
 
 /**
  * Campanita de notificaciones en el topbar (sistema brand).
@@ -15,7 +17,7 @@ import { cn } from '../utils/cn';
  * dot rojo. Click marca como leída y navega al `link`.
  */
 export function Campanita() {
-  const { user } = useAuth();
+  const { user, rol } = useAuth();
   const { actualizar } = useMutacion();
   const [abierta, setAbierta] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -97,47 +99,54 @@ export function Campanita() {
                 <p className="text-[12px]">Sin notificaciones.</p>
               </div>
             )}
-            {docs.map((n) => (
-              <Link
-                key={n.id}
-                to={n.link ?? '#'}
-                onClick={() => {
-                  marcarLeida(n);
-                  setAbierta(false);
-                }}
-                className={cn(
-                  'block px-4 py-3 border-b border-slate-100 last:border-b-0 transition-colors',
-                  'hover:bg-slate-50/60',
-                  !n.leida && 'bg-brand-50/40',
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  {!n.leida && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-500 mt-1.5 shrink-0" />
+            {docs.map((n) => {
+              // Red de seguridad: una notificación nunca debe llevar a "Sin
+              // permisos". Si el rol no puede abrir el link (p. ej. un gh con la
+              // terna de una vacante que no es suya), va a su inicio en vez de
+              // estrellarse (reu Karen 16-sep, decisión 25-sep).
+              const destino = puedeAbrirRuta(rol, n.link ?? '') ? (n.link ?? '#') : rutaHome(rol);
+              return (
+                <Link
+                  key={n.id}
+                  to={destino}
+                  onClick={() => {
+                    marcarLeida(n);
+                    setAbierta(false);
+                  }}
+                  className={cn(
+                    'block px-4 py-3 border-b border-slate-100 last:border-b-0 transition-colors',
+                    'hover:bg-slate-50/60',
+                    !n.leida && 'bg-brand-50/40',
                   )}
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className={cn(
-                        'text-[13px]',
-                        !n.leida
-                          ? 'font-semibold text-text-strong'
-                          : 'font-medium text-text-body',
-                      )}
-                    >
-                      {n.titulo}
-                    </p>
-                    <p className="text-[12px] text-text-muted mt-0.5 line-clamp-2 leading-[1.45]">
-                      {n.mensaje}
-                    </p>
-                    {n.creado_en && (
-                      <p className="text-[10px] text-text-subtle mt-1 tabular-nums">
-                        {n.creado_en.toDate().toLocaleString('es-CO')}
-                      </p>
+                >
+                  <div className="flex items-start gap-2">
+                    {!n.leida && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-brand-500 mt-1.5 shrink-0" />
                     )}
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={cn(
+                          'text-[13px]',
+                          !n.leida
+                            ? 'font-semibold text-text-strong'
+                            : 'font-medium text-text-body',
+                        )}
+                      >
+                        {n.titulo}
+                      </p>
+                      <p className="text-[12px] text-text-muted mt-0.5 line-clamp-2 leading-[1.45]">
+                        {n.mensaje}
+                      </p>
+                      {n.creado_en && (
+                        <p className="text-[10px] text-text-subtle mt-1 tabular-nums">
+                          {n.creado_en.toDate().toLocaleString('es-CO')}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

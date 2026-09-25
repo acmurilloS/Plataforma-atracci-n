@@ -21,7 +21,8 @@ import { BitacoraReprocesos } from '../components/vacantes/BitacoraReprocesos';
 import { SelectorAnalista } from '../components/vacantes/SelectorAnalista';
 import { Button, Card, Pill, type PillTono } from '../components/brand';
 import { useAuth } from '../hooks/useAuth';
-import { puedeVerProceso } from '../utils/accesoRutas';
+import { puedeAbrirRuta, puedeVerProceso } from '../utils/accesoRutas';
+import { rutaHome } from '../utils/rutaHome';
 import { useVacantes } from '../hooks/useVacantes';
 import { useMutacion } from '../hooks/useMutacion';
 import { SelectorCargo } from '../components/vacantes/SelectorCargo';
@@ -93,8 +94,10 @@ export default function VacanteDetallePage() {
   const [guardandoCargo, setGuardandoCargo] = useState(false);
   const [errCargo, setErrCargo] = useState<string | null>(null);
 
-  const esStaffReporte =
-    rol === 'analista' || rol === 'coordinador' || rol === 'gh' || rol === 'admin';
+  // gh queda fuera: Diego entra al detalle solo como líder solicitante de SU
+  // vacante (consulta), no como staff (reu Karen 16-sep). Si es el creador, edita
+  // la identificación con los mismos límites que un líder.
+  const esStaffReporte = rol === 'analista' || rol === 'coordinador' || rol === 'admin';
 
   // ── Editar identificación (empresa/sede/unidad/tipo) ────────────────────────
   // La puede corregir el STAFF o el LÍDER CREADOR de la vacante (reu líder 19-ago).
@@ -295,20 +298,50 @@ export default function VacanteDetallePage() {
     );
   }
 
+  // Un gh (C&D) SOLO abre las vacantes que él mismo solicitó (es el líder). Para
+  // las demás sigue sin ver vacantes (reu Karen 09-jul); la excepción del dueño
+  // es la decisión de Karen del 25-sep (reu 16-sep). La ruta lo deja pasar; la
+  // propiedad se valida aquí, con la vacante en mano (mismo patrón del Concepto).
+  if (rol === 'gh' && !esCreador) {
+    return (
+      <div className="max-w-md mx-auto px-6 py-16 text-center space-y-2">
+        <h1 className="text-[18px] font-semibold text-text-strong">Sin acceso a esta vacante</h1>
+        <p className="text-[13px] text-text-muted leading-[1.55]">
+          Esta vacante la solicitó otro líder. Solo puedes ver las vacantes que tú mismo
+          solicitaste.
+        </p>
+        <Link
+          to="/mis-vacantes"
+          className="inline-block pt-2 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+        >
+          Ir a mis vacantes →
+        </Link>
+      </div>
+    );
+  }
+
   const fechaPropuesta = vac.fecha_entrevista_propuesta?.toDate?.() ?? null;
   const fechaPactada = vac.fecha_entrevista_pactada?.toDate?.() ?? null;
   const avalAprobadoEn = vac.aval_aprobado_en?.toDate?.() ?? null;
   const tono = ESTADO_TONO[vac.estado] ?? 'neutral';
+  // "Volver": Seguimiento para quien puede abrirlo. El gh dueño no ve Seguimiento
+  // (reu 09-jul) y llega desde "Mis vacantes", así que vuelve allá; sin este gate
+  // el link lo mandaba a "Sin permisos" (reu Karen 16-sep, decisión 25-sep).
+  const volver = puedeAbrirRuta(rol, '/seguimiento')
+    ? { a: '/seguimiento', texto: 'Volver a seguimiento' }
+    : puedeAbrirRuta(rol, '/mis-vacantes')
+      ? { a: '/mis-vacantes', texto: 'Volver a mis vacantes' }
+      : { a: rutaHome(rol), texto: 'Volver al inicio' };
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12 space-y-10">
       {/* Volver */}
       <Link
-        to="/seguimiento"
+        to={volver.a}
         className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-text-strong transition-colors"
       >
         <ArrowLeft size={13} strokeWidth={1.75} />
-        Volver a seguimiento
+        {volver.texto}
       </Link>
 
       {/* ─── Hero header ────────────────────────────────────────── */}
@@ -348,7 +381,9 @@ export default function VacanteDetallePage() {
       <div className="flex flex-wrap gap-2 print:hidden">
         {/* Talentos (José) y apoyo (IT/compras) entran a la vacante pero NO al
             formato VIDA-F-01 (es del proceso) — sin este gate el botón los
-            mandaba a "Sin permisos" (re-auditoría 14-jul). */}
+            mandaba a "Sin permisos" (re-auditoría 14-jul). El gh dueño tampoco
+            lo ve: abrirle el VIDA-F-01 es una decisión aparte, aún pendiente
+            (reu Karen 16-sep). */}
         {puedeVerProceso(rol) && (
           <Link
             to={`/vacantes/${vac.id}/solicitud-integrante`}

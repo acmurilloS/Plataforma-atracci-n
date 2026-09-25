@@ -153,10 +153,14 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* gh (Diego/C&D) entra al detalle de SUS vacantes (es el líder
+                solicitante): la página verifica lider_uid == uid y cierra las
+                demás (reu Karen 16-sep, decisión 25-sep). No va en la constante
+                porque otras pantallas la usan para pintar links a vacantes ajenas. */}
             <Route
               path="/vacantes/:id"
               element={
-                <ProtectedRoute roles={ROLES_VACANTE_DETALLE}>
+                <ProtectedRoute roles={[...ROLES_VACANTE_DETALLE, 'gh']}>
                   <VacanteDetallePage />
                 </ProtectedRoute>
               }
@@ -185,10 +189,13 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* gh (Diego/C&D) consulta las postulaciones de SUS vacantes (solo
+                lectura) y decide la terna como líder: cada página verifica que
+                sea el líder solicitante (reu Karen 16-sep, decisión 25-sep). */}
             <Route
               path="/vacantes/:id/postulaciones"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={[...ROLES_PROCESO, 'gh']}>
                   <PostulacionesPage />
                 </ProtectedRoute>
               }
@@ -196,7 +203,7 @@ export default function App() {
             <Route
               path="/vacantes/:id/terna"
               element={
-                <ProtectedRoute roles={ROLES_PROCESO}>
+                <ProtectedRoute roles={[...ROLES_PROCESO, 'gh']}>
                   <TernaPage />
                 </ProtectedRoute>
               }

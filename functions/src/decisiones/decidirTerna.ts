@@ -18,6 +18,11 @@ import { db } from '../utils/admin';
  *
  * Ahora la decisión completa vive en esta callable (Admin SDK), que:
  *  - Valida server-side que quien decide es el LÍDER de esa vacante (o coord/admin).
+ *    Reu Karen 16-sep / decisión 25-sep: un usuario con rol `gh` (Diego, Cultura y
+ *    Desarrollo) también crea vacantes como líder solicitante (vacantes.lider_uid ==
+ *    su uid). Para ESAS vacantes decide la terna igual que un líder; para las ajenas
+ *    sigue sin poder (GH no ve el pipeline de reclutamiento de otros, reu 09-jul).
+ *    El guard de dueño aplica a `lider` y a `gh` por igual.
  *  - En una transacción re-valida que la postulación siga en `en_terna` (anti
  *    doble-submit) y aplica atómicamente: decisión + transición de la postulación
  *    + transición de la vacante.
@@ -31,7 +36,13 @@ import { db } from '../utils/admin';
  * no puede escribir directo).
  */
 
-const ROLES_DECIDE = ['lider', 'coordinador', 'admin'];
+const ROLES_DECIDE = ['lider', 'gh', 'coordinador', 'admin'];
+
+// Roles que SOLO deciden la terna de su propia vacante (lider_uid == uid). `gh`
+// entra aquí (reu Karen 16-sep): Diego decide como líder solicitante de lo suyo,
+// nunca la terna de otro líder. Coordinación y admin no están: deciden en nombre
+// del líder (comportamiento de siempre).
+const ROLES_SOLO_DUENO = ['lider', 'gh'];
 
 // ── Tickets de conexión (paso 20): constantes replicadas de
 //    src/schemas/ticketConexionSchema.ts (el cliente y el server no comparten
@@ -259,7 +270,10 @@ export const decidirTerna = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
   const rol = req.auth.token.rol as string | undefined;
   if (!ROLES_DECIDE.includes(rol ?? '')) {
-    throw new HttpsError('permission-denied', 'Solo el líder de la vacante puede decidir la terna.');
+    throw new HttpsError(
+      'permission-denied',
+      'Solo el líder de la vacante, coordinación o admin pueden decidir la terna.',
+    );
   }
   const uid = req.auth.uid;
   const postId = String(req.data?.postulacion_id ?? '').trim();
@@ -286,8 +300,9 @@ export const decidirTerna = onCall({ region: 'us-central1' }, async (req) => {
     if (!vacSnap.exists) throw new HttpsError('not-found', 'La vacante no existe.');
     const vac = vacSnap.data() as Record<string, unknown>;
 
-    // El líder solo decide SU vacante. Coordinación y admin pueden en nombre de él.
-    if (rol === 'lider' && String(vac.lider_uid ?? '') !== uid) {
+    // El líder solo decide SU vacante; lo mismo un `gh` que sea el líder solicitante
+    // (reu Karen 16-sep). Coordinación y admin pueden en nombre de él.
+    if (ROLES_SOLO_DUENO.includes(rol ?? '') && String(vac.lider_uid ?? '') !== uid) {
       throw new HttpsError('permission-denied', 'Esta terna es de otro líder.');
     }
 

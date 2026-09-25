@@ -63,11 +63,21 @@ const inputClass =
 export default function PostulacionesPage() {
   const { id } = useParams<{ id: string }>();
   const { doc: vacante } = useDoc<VacanteDoc>('vacantes', id);
+  const { user, rol } = useAuth();
+  // Diego (C&D, rol gh) es el líder solicitante de algunas vacantes. Para ESAS
+  // puede consultar la lista de candidatos; para las demás sigue sin ver el
+  // pipeline (reu Karen 09-jul se mantiene; excepción del dueño: reu 16-sep,
+  // decisión 25-sep). La ruta lo deja pasar; la propiedad se valida aquí.
+  const esGhDueno = rol === 'gh' && !!vacante && vacante.lider_uid === user?.uid;
+  // Modo consulta: sin cambiar estados, importar CVs, agregar candidatos ni
+  // marcar repostulación / mov. interno / discapacidad. Solo mira y abre la ficha.
+  const soloLectura = rol === 'gh';
   const { docs: postulaciones, cargando } = useColeccion<PostulacionDoc>('postulaciones', {
     filtros: id ? [['vacante_id', '==', id]] : [],
+    // Un gh no dispara lecturas de candidatos hasta saber que es el dueño.
+    habilitado: rol !== 'gh' || esGhDueno,
   });
   const { crear, actualizar } = useMutacion();
-  const { user } = useAuth();
 
   const [form, setForm] = useState<{
     nombres: string;
@@ -355,6 +365,26 @@ export default function PostulacionesPage() {
       </div>
     );
 
+  // Mismo patrón que el Concepto: el gh solo entra a las vacantes que él solicitó.
+  if (rol === 'gh' && !esGhDueno)
+    return (
+      <div className="max-w-md mx-auto px-6 py-16 text-center space-y-2">
+        <h1 className="text-[18px] font-semibold text-text-strong">
+          Sin acceso a estas postulaciones
+        </h1>
+        <p className="text-[13px] text-text-muted leading-[1.55]">
+          Estas postulaciones pertenecen a una vacante que no solicitaste tú. Solo puedes
+          consultar los candidatos de las vacantes que tú mismo solicitaste.
+        </p>
+        <Link
+          to="/mis-vacantes"
+          className="inline-block pt-2 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+        >
+          Ir a mis vacantes →
+        </Link>
+      </div>
+    );
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
       {/* Volver */}
@@ -370,7 +400,7 @@ export default function PostulacionesPage() {
       <EncabezadoPagina
         icono={<Users size={26} strokeWidth={1.6} />}
         tono="brand"
-        eyebrow="Pasos 5 – 11 · Analista"
+        eyebrow={soloLectura ? 'Consulta · Líder solicitante' : 'Pasos 5 – 11 · Analista'}
         titulo="Postulaciones"
         descripcion={
           <span className="inline-flex items-center gap-1.5">
@@ -388,196 +418,202 @@ export default function PostulacionesPage() {
         <MiniStat label="Filtrados / desistieron" valor={stats.filtrados} tono="neutral" />
       </div>
 
-      {/* ─── Importar CVs en lote ─────────────────────────────── */}
-      <Card padding="lg">
-        <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <UploadCloud size={14} strokeWidth={1.75} className="text-text-muted" />
+      {/* Modo consulta (gh dueño): no importa CVs ni agrega candidatos a mano;
+          solo consulta la lista (reu Karen 16-sep, decisión 25-sep). */}
+      {!soloLectura && (
+        <>
+          {/* ─── Importar CVs en lote ─────────────────────────────── */}
+          <Card padding="lg">
+            <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <UploadCloud size={14} strokeWidth={1.75} className="text-text-muted" />
+                  <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                    Importar CVs en lote
+                  </p>
+                </div>
+                <p className="text-[13px] text-text-muted mt-2 max-w-2xl leading-relaxed">
+                  Selecciona varios PDFs a la vez (Magneto, Drive). Cada archivo crea un candidato
+                  provisional + una postulación con el CV adjunto. Luego editas los datos en{' '}
+                  <span className="font-semibold text-text-body">Abrir →</span>.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="brand-primary"
+                onClick={() => inputFilesRef.current?.click()}
+                disabled={subiendoCVs}
+                loading={subiendoCVs}
+                icon={<FileUp size={13} strokeWidth={1.75} />}
+              >
+                {subiendoCVs ? 'Subiendo…' : 'Subir CVs (PDF)'}
+              </Button>
+              <input
+                ref={inputFilesRef}
+                type="file"
+                accept="application/pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => e.target.files && subirMultiplesCVs(e.target.files)}
+              />
+            </div>
+            {progresoCVs && (
+              <div className="rounded-md bg-slate-50 border border-slate-200 p-3.5">
+                <div className="flex items-center justify-between text-[12px] mb-2">
+                  <span className="text-text-body font-medium tabular-nums">
+                    {progresoCVs.hechos} / {progresoCVs.total} archivos
+                  </span>
+                  {progresoCVs.hechos === progresoCVs.total && !subiendoCVs && (
+                    <Pill tono="success" dot>
+                      Listo
+                    </Pill>
+                  )}
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full bg-brand-600 transition-all duration-200 ease-out"
+                    style={{
+                      width: `${
+                        progresoCVs.total > 0 ? (progresoCVs.hechos / progresoCVs.total) * 100 : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </Card>
+
+          {/* ─── Agregar candidato manual ─────────────────────────── */}
+          <Card padding="lg">
+            <div className="flex items-center gap-2 mb-5">
+              <UserPlus size={14} strokeWidth={1.75} className="text-text-muted" />
               <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-                Importar CVs en lote
+                Agregar candidato manual
               </p>
             </div>
-            <p className="text-[13px] text-text-muted mt-2 max-w-2xl leading-relaxed">
-              Selecciona varios PDFs a la vez (Magneto, Drive). Cada archivo crea un candidato
-              provisional + una postulación con el CV adjunto. Luego editas los datos en{' '}
-              <span className="font-semibold text-text-body">Abrir →</span>.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="brand-primary"
-            onClick={() => inputFilesRef.current?.click()}
-            disabled={subiendoCVs}
-            loading={subiendoCVs}
-            icon={<FileUp size={13} strokeWidth={1.75} />}
-          >
-            {subiendoCVs ? 'Subiendo…' : 'Subir CVs (PDF)'}
-          </Button>
-          <input
-            ref={inputFilesRef}
-            type="file"
-            accept="application/pdf"
-            multiple
-            className="hidden"
-            onChange={(e) => e.target.files && subirMultiplesCVs(e.target.files)}
-          />
-        </div>
-        {progresoCVs && (
-          <div className="rounded-md bg-slate-50 border border-slate-200 p-3.5">
-            <div className="flex items-center justify-between text-[12px] mb-2">
-              <span className="text-text-body font-medium tabular-nums">
-                {progresoCVs.hechos} / {progresoCVs.total} archivos
-              </span>
-              {progresoCVs.hechos === progresoCVs.total && !subiendoCVs && (
-                <Pill tono="success" dot>
-                  Listo
-                </Pill>
+
+            <form onSubmit={agregarPostulacion} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <BrandLabel label="Nombres" requerido>
+                  <input
+                    value={form.nombres}
+                    onChange={(e) => setForm({ ...form, nombres: e.target.value })}
+                    required
+                    className={inputClass}
+                  />
+                </BrandLabel>
+                <BrandLabel label="Apellidos" requerido>
+                  <input
+                    value={form.apellidos}
+                    onChange={(e) => setForm({ ...form, apellidos: e.target.value })}
+                    required
+                    className={inputClass}
+                  />
+                </BrandLabel>
+                <BrandLabel label="Email" requerido>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    required
+                    className={inputClass}
+                  />
+                </BrandLabel>
+                <BrandLabel label="Teléfono" requerido>
+                  <input
+                    value={form.telefono}
+                    onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                    required
+                    className={inputClass}
+                  />
+                </BrandLabel>
+                <BrandLabel label="Doc. tipo">
+                  <select
+                    value={form.documento_tipo}
+                    onChange={(e) => setForm({ ...form, documento_tipo: e.target.value })}
+                    className={inputClass}
+                  >
+                    <option value="CC">CC</option>
+                    <option value="CE">CE</option>
+                    <option value="PEP">PEP</option>
+                    <option value="PA">PA</option>
+                  </select>
+                </BrandLabel>
+                <BrandLabel label="Doc. número">
+                  <input
+                    value={form.documento_numero}
+                    onChange={(e) => setForm({ ...form, documento_numero: e.target.value })}
+                    className={inputClass}
+                  />
+                </BrandLabel>
+                <BrandLabel label="Ciudad">
+                  <input
+                    value={form.ciudad_residencia}
+                    onChange={(e) => setForm({ ...form, ciudad_residencia: e.target.value })}
+                    className={inputClass}
+                  />
+                </BrandLabel>
+                <BrandLabel label="Especialidad">
+                  <input
+                    value={form.especialidad_tecnica}
+                    onChange={(e) => setForm({ ...form, especialidad_tecnica: e.target.value })}
+                    placeholder="ej. Backend Node.js"
+                    className={inputClass}
+                  />
+                </BrandLabel>
+                <BrandLabel label="Años exp.">
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    value={form.anios_experiencia}
+                    onChange={(e) => setForm({ ...form, anios_experiencia: e.target.value })}
+                    className={inputClass}
+                  />
+                </BrandLabel>
+                <BrandLabel label="Fuente">
+                  <select
+                    value={form.fuente}
+                    onChange={(e) =>
+                      setForm({ ...form, fuente: e.target.value as FuentePostulacion })
+                    }
+                    className={inputClass}
+                  >
+                    {FUENTES.map((f) => (
+                      <option key={f} value={f}>
+                        {f.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                </BrandLabel>
+                <BrandLabel label="Detalle de la fuente (opcional)">
+                  <input
+                    value={form.fuente_detalle}
+                    onChange={(e) => setForm({ ...form, fuente_detalle: e.target.value })}
+                    placeholder='ej. "aviso Promotor en Magneto" o el cargo de la publicación'
+                    className={inputClass}
+                  />
+                </BrandLabel>
+              </div>
+              {err && (
+                <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
+                  {err}
+                </div>
               )}
-            </div>
-            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-              <div
-                className="h-full bg-brand-600 transition-all duration-200 ease-out"
-                style={{
-                  width: `${
-                    progresoCVs.total > 0 ? (progresoCVs.hechos / progresoCVs.total) * 100 : 0
-                  }%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* ─── Agregar candidato manual ─────────────────────────── */}
-      <Card padding="lg">
-        <div className="flex items-center gap-2 mb-5">
-          <UserPlus size={14} strokeWidth={1.75} className="text-text-muted" />
-          <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-            Agregar candidato manual
-          </p>
-        </div>
-
-        <form onSubmit={agregarPostulacion} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <BrandLabel label="Nombres" requerido>
-              <input
-                value={form.nombres}
-                onChange={(e) => setForm({ ...form, nombres: e.target.value })}
-                required
-                className={inputClass}
-              />
-            </BrandLabel>
-            <BrandLabel label="Apellidos" requerido>
-              <input
-                value={form.apellidos}
-                onChange={(e) => setForm({ ...form, apellidos: e.target.value })}
-                required
-                className={inputClass}
-              />
-            </BrandLabel>
-            <BrandLabel label="Email" requerido>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-                className={inputClass}
-              />
-            </BrandLabel>
-            <BrandLabel label="Teléfono" requerido>
-              <input
-                value={form.telefono}
-                onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                required
-                className={inputClass}
-              />
-            </BrandLabel>
-            <BrandLabel label="Doc. tipo">
-              <select
-                value={form.documento_tipo}
-                onChange={(e) => setForm({ ...form, documento_tipo: e.target.value })}
-                className={inputClass}
-              >
-                <option value="CC">CC</option>
-                <option value="CE">CE</option>
-                <option value="PEP">PEP</option>
-                <option value="PA">PA</option>
-              </select>
-            </BrandLabel>
-            <BrandLabel label="Doc. número">
-              <input
-                value={form.documento_numero}
-                onChange={(e) => setForm({ ...form, documento_numero: e.target.value })}
-                className={inputClass}
-              />
-            </BrandLabel>
-            <BrandLabel label="Ciudad">
-              <input
-                value={form.ciudad_residencia}
-                onChange={(e) => setForm({ ...form, ciudad_residencia: e.target.value })}
-                className={inputClass}
-              />
-            </BrandLabel>
-            <BrandLabel label="Especialidad">
-              <input
-                value={form.especialidad_tecnica}
-                onChange={(e) => setForm({ ...form, especialidad_tecnica: e.target.value })}
-                placeholder="ej. Backend Node.js"
-                className={inputClass}
-              />
-            </BrandLabel>
-            <BrandLabel label="Años exp.">
-              <input
-                type="number"
-                min={0}
-                max={50}
-                value={form.anios_experiencia}
-                onChange={(e) => setForm({ ...form, anios_experiencia: e.target.value })}
-                className={inputClass}
-              />
-            </BrandLabel>
-            <BrandLabel label="Fuente">
-              <select
-                value={form.fuente}
-                onChange={(e) =>
-                  setForm({ ...form, fuente: e.target.value as FuentePostulacion })
-                }
-                className={inputClass}
-              >
-                {FUENTES.map((f) => (
-                  <option key={f} value={f}>
-                    {f.replace(/_/g, ' ')}
-                  </option>
-                ))}
-              </select>
-            </BrandLabel>
-            <BrandLabel label="Detalle de la fuente (opcional)">
-              <input
-                value={form.fuente_detalle}
-                onChange={(e) => setForm({ ...form, fuente_detalle: e.target.value })}
-                placeholder='ej. "aviso Promotor en Magneto" o el cargo de la publicación'
-                className={inputClass}
-              />
-            </BrandLabel>
-          </div>
-          {err && (
-            <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
-              {err}
-            </div>
-          )}
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              variant="brand-primary"
-              disabled={procesando}
-              loading={procesando}
-            >
-              {procesando ? 'Guardando…' : 'Agregar candidato'}
-            </Button>
-          </div>
-        </form>
-      </Card>
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  variant="brand-primary"
+                  disabled={procesando}
+                  loading={procesando}
+                >
+                  {procesando ? 'Guardando…' : 'Agregar candidato'}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </>
+      )}
 
       {/* ─── Filtros ──────────────────────────────────────────── */}
       <div className="flex gap-3 items-center flex-wrap">
@@ -710,73 +746,104 @@ export default function PostulacionesPage() {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <select
-                    value={p.estado}
-                    disabled={p.estado === 'repostulado'}
-                    onChange={(e) => cambiarEstado(p, e.target.value as EstadoPostulacion)}
-                    className="rounded-brand-input bg-white border border-slate-200 px-2 py-1 text-[12px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 disabled:opacity-60"
-                  >
-                    {/* 'contratado' se llega solo al aprobar la carpeta (paso 19);
-                        'repostulado' lo setea solo la callable. Se muestran únicamente
-                        si la postulación ya está en ese estado. */}
-                    {ESTADOS.filter(
-                      (s) =>
-                        (s !== 'contratado' || p.estado === 'contratado') &&
-                        (s !== 'repostulado' || p.estado === 'repostulado'),
-                    ).map((s) => (
-                      <option key={s} value={s}>
-                        {etiquetaEstado(s)}
-                      </option>
-                    ))}
-                  </select>
+                  {/* Consulta (gh dueño): el estado se lee, no se cambia. */}
+                  {soloLectura ? (
+                    <span className="text-[12px] text-text-body">{etiquetaEstado(p.estado)}</span>
+                  ) : (
+                    <select
+                      value={p.estado}
+                      disabled={p.estado === 'repostulado'}
+                      onChange={(e) => cambiarEstado(p, e.target.value as EstadoPostulacion)}
+                      className="rounded-brand-input bg-white border border-slate-200 px-2 py-1 text-[12px] text-text-strong focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 disabled:opacity-60"
+                    >
+                      {/* 'contratado' se llega solo al aprobar la carpeta (paso 19);
+                          'repostulado' lo setea solo la callable. Se muestran únicamente
+                          si la postulación ya está en ese estado. */}
+                      {ESTADOS.filter(
+                        (s) =>
+                          (s !== 'contratado' || p.estado === 'contratado') &&
+                          (s !== 'repostulado' || p.estado === 'repostulado'),
+                      ).map((s) => (
+                        <option key={s} value={s}>
+                          {etiquetaEstado(s)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setMarcandoDiscapacidad(p)}
-                      className={cn(
-                        'hover:underline text-[12px] font-medium',
-                        p.discapacidad
-                          ? 'text-blue-700 hover:text-blue-800'
-                          : 'text-text-muted hover:text-brand-700',
-                      )}
-                      title={
-                        p.discapacidad
-                          ? p.discapacidad_observacion || 'Persona en condición de discapacidad'
-                          : 'Marcar persona en condición de discapacidad'
-                      }
-                    >
-                      {p.discapacidad ? '♿ Discapacidad' : 'Discapacidad'}
-                    </button>
-                    {p.movimiento_interno ? (
-                      <span
-                        className="text-[12px] font-medium text-violet-700"
-                        title={`Movimiento interno · ${p.movimiento_interno.tipo}`}
-                      >
-                        ↔ Mov. interno
-                      </span>
+                    {/* Consulta (gh dueño): sin marcar discapacidad, mov. interno ni
+                        repostular; solo ve las marcas ya puestas y abre la ficha
+                        (reu Karen 16-sep, decisión 25-sep). */}
+                    {soloLectura ? (
+                      <>
+                        {p.discapacidad && (
+                          <span
+                            className="text-[12px] font-medium text-blue-700"
+                            title={p.discapacidad_observacion || 'Persona en condición de discapacidad'}
+                          >
+                            ♿ Discapacidad
+                          </span>
+                        )}
+                        {p.movimiento_interno && (
+                          <span
+                            className="text-[12px] font-medium text-violet-700"
+                            title={`Movimiento interno · ${p.movimiento_interno.tipo}`}
+                          >
+                            ↔ Mov. interno
+                          </span>
+                        )}
+                      </>
                     ) : (
-                      p.estado !== 'repostulado' &&
-                      p.estado !== 'contratado' && (
+                      <>
                         <button
                           type="button"
-                          onClick={() => setMarcandoMovimiento(p)}
-                          className="text-text-muted hover:text-brand-700 hover:underline text-[12px] font-medium"
-                          title="Marcar como movimiento interno (persona ya empleada, flujo simplificado)"
+                          onClick={() => setMarcandoDiscapacidad(p)}
+                          className={cn(
+                            'hover:underline text-[12px] font-medium',
+                            p.discapacidad
+                              ? 'text-blue-700 hover:text-blue-800'
+                              : 'text-text-muted hover:text-brand-700',
+                          )}
+                          title={
+                            p.discapacidad
+                              ? p.discapacidad_observacion || 'Persona en condición de discapacidad'
+                              : 'Marcar persona en condición de discapacidad'
+                          }
                         >
-                          Mov. interno
+                          {p.discapacidad ? '♿ Discapacidad' : 'Discapacidad'}
                         </button>
-                      )
-                    )}
-                    {p.estado !== 'repostulado' && p.estado !== 'contratado' && (
-                      <button
-                        type="button"
-                        onClick={() => setRepostulando(p)}
-                        className="text-text-muted hover:text-brand-700 hover:underline text-[12px] font-medium"
-                      >
-                        Repostular
-                      </button>
+                        {p.movimiento_interno ? (
+                          <span
+                            className="text-[12px] font-medium text-violet-700"
+                            title={`Movimiento interno · ${p.movimiento_interno.tipo}`}
+                          >
+                            ↔ Mov. interno
+                          </span>
+                        ) : (
+                          p.estado !== 'repostulado' &&
+                          p.estado !== 'contratado' && (
+                            <button
+                              type="button"
+                              onClick={() => setMarcandoMovimiento(p)}
+                              className="text-text-muted hover:text-brand-700 hover:underline text-[12px] font-medium"
+                              title="Marcar como movimiento interno (persona ya empleada, flujo simplificado)"
+                            >
+                              Mov. interno
+                            </button>
+                          )
+                        )}
+                        {p.estado !== 'repostulado' && p.estado !== 'contratado' && (
+                          <button
+                            type="button"
+                            onClick={() => setRepostulando(p)}
+                            className="text-text-muted hover:text-brand-700 hover:underline text-[12px] font-medium"
+                          >
+                            Repostular
+                          </button>
+                        )}
+                      </>
                     )}
                     <Link
                       to={`/postulaciones/${p.id}`}
@@ -801,7 +868,9 @@ export default function PostulacionesPage() {
       {/* ─── CTAs siguiente paso ──────────────────────────────── */}
       <div className="flex justify-end gap-3 flex-wrap pt-2">
         <Link to={`/vacantes/${vacante.id}/concepto-atraccion`}>
-          <Button variant="neutral-secondary">Generar concepto VIDA-F-03 →</Button>
+          <Button variant="neutral-secondary">
+            {soloLectura ? 'Ver concepto →' : 'Generar concepto VIDA-F-03 →'}
+          </Button>
         </Link>
         <Link to={`/vacantes/${vacante.id}/terna`}>
           <Button variant="brand-primary">Ir a terna →</Button>

@@ -55,6 +55,8 @@ export default function TernaPage() {
   const { doc: configReloj } = useDoc<ConfigRelojLiderDoc>('configuracion_global', 'reloj_lider');
   const { docs: postulaciones } = useColeccion<PostulacionDoc>('postulaciones', {
     filtros: id ? [['vacante_id', '==', id]] : [],
+    // gh: no leer candidatos hasta saber que la vacante es suya (mismo gate que Postulaciones).
+    habilitado: rol !== 'gh' || (!!user && vacante?.lider_uid === user.uid),
   });
   const { crear, actualizar } = useMutacion();
   const [procesando, setProcesando] = useState<string | null>(null);
@@ -88,7 +90,12 @@ export default function TernaPage() {
   const otras = postulaciones.filter((p) => ESTADOS_AUN_EN_FLUJO.includes(p.estado));
   const decisionTomada = !!seleccionado || vacante?.estado === 'seleccionado';
 
-  const esLider = rol === 'lider' || rol === 'admin';
+  // Un gh (Diego, C&D) que sea el líder solicitante de ESTA vacante decide su
+  // terna como cualquier líder; la callable decidirTerna valida lo mismo en el
+  // servidor (reu Karen 16-sep, decisión 25-sep). Coordinación/admin pueden en
+  // su nombre, como hoy.
+  const esGhDueno = rol === 'gh' && !!user && vacante?.lider_uid === user.uid;
+  const esLider = rol === 'lider' || rol === 'admin' || esGhDueno;
   const puedeReabrir = rol === 'analista' || rol === 'coordinador' || rol === 'admin';
   const puedeCerrarTerna = rol === 'analista' || rol === 'coordinador' || rol === 'admin';
 
@@ -245,6 +252,26 @@ export default function TernaPage() {
     return (
       <div className="max-w-5xl mx-auto px-6 py-12 text-text-muted text-sm">
         Cargando vacante…
+      </div>
+    );
+
+  // Mismo patrón que el Concepto: el gh solo entra a la terna de SUS vacantes;
+  // para las demás no ve el pipeline (reu Karen 09-jul). La ruta lo deja pasar;
+  // la propiedad se valida aquí, con la vacante en mano.
+  if (rol === 'gh' && !esGhDueno)
+    return (
+      <div className="max-w-md mx-auto px-6 py-16 text-center space-y-2">
+        <h1 className="text-[18px] font-semibold text-text-strong">Sin acceso a esta terna</h1>
+        <p className="text-[13px] text-text-muted leading-[1.55]">
+          Esta terna pertenece a una vacante que no solicitaste tú. Solo puedes decidir la terna
+          de las vacantes que tú mismo solicitaste.
+        </p>
+        <Link
+          to="/mis-vacantes"
+          className="inline-block pt-2 text-[12px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+        >
+          Ir a mis vacantes →
+        </Link>
       </div>
     );
 
@@ -484,8 +511,10 @@ export default function TernaPage() {
           <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
             <p className="text-[14px] font-medium text-text-strong">Aún no hay integrantes en terna</p>
             <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
-              En la lista de postulaciones, pasa al integrante al estado "En terna" para que
-              aparezca aquí.
+              {/* El líder (o el gh dueño) no arma la terna: le hablamos como a quien espera. */}
+              {puedeCerrarTerna
+                ? 'En la lista de postulaciones, pasa al integrante al estado "En terna" para que aparezca aquí.'
+                : 'El equipo de Atracción aún está armando la terna. Te avisaremos por la campana y por correo cuando esté lista para tu decisión.'}
             </p>
           </div>
         ) : (
@@ -667,12 +696,19 @@ export default function TernaPage() {
                       </Pill>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => agregarATerna(p)}
-                        className="text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
-                      >
-                        Incluir en terna
-                      </button>
+                      {/* Armar la terna es de quien la cierra (analista/coordinación).
+                          El líder solo consultaba aquí (las reglas le negaban el clic)
+                          y el gh dueño, que en reglas es staff, SÍ podría escribir: se
+                          le oculta para que su acceso a la terna sea decidir, no armar
+                          (reu Karen 16-sep, decisión 25-sep). */}
+                      {puedeCerrarTerna && (
+                        <button
+                          onClick={() => agregarATerna(p)}
+                          className="text-[12px] text-brand-700 hover:text-brand-800 hover:underline font-medium"
+                        >
+                          Incluir en terna
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

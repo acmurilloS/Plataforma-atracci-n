@@ -21,8 +21,14 @@ export const ROLES_PROCESO: RolUsuario[] = ['lider', 'analista', 'coordinador', 
 /**
  * Detalle de la VACANTE. Además del proceso entran 'talentos' (José, lectura del
  * perfilamiento — su único camino al perfilamiento es esta página) y 'apoyo'
- * (llega desde el consecutivo de sus tickets). NO entra GH: la reu Karen 09-jul
- * pidió que no vean las vacantes.
+ * (llega desde el consecutivo de sus tickets).
+ *
+ * GH NO va en esta lista a propósito: la reu Karen 09-jul pidió que no vean las
+ * vacantes ajenas, y varias pantallas usan esta lista para pintar links a
+ * vacantes de OTROS líderes. La excepción es acotada: un gh que sea el LÍDER
+ * SOLICITANTE de la vacante (lider_uid == uid) sí entra (reu Karen 16-sep,
+ * decisión 25-sep). Ese permiso va inline en la <Route> de App.tsx y se valida
+ * por dueño dentro de la página — ver `esGhDuenoDeVacante` / `puedeVerVacanteDe`.
  */
 export const ROLES_VACANTE_DETALLE: RolUsuario[] = [...ROLES_PROCESO, 'talentos', 'apoyo'];
 
@@ -88,6 +94,33 @@ function tiene(lista: RolUsuario[], rol: RolUsuario | null | undefined): boolean
 export const puedeVerVacante = (rol: RolUsuario | null | undefined) =>
   tiene(ROLES_VACANTE_DETALLE, rol);
 
+/**
+ * ¿Es un gh (Diego, C&D) que además es el LÍDER SOLICITANTE de esta vacante?
+ *
+ * Por qué: Diego tiene rol 'gh' pero también crea vacantes para su área
+ * (vacantes.lider_uid == su uid). La política de la reu 09-jul (GH no ve el
+ * pipeline de vacantes ajenas) se mantiene; para las SUYAS, Karen decidió
+ * (reu 16-sep, decisión 25-sep) que puede abrir el detalle, consultar la lista
+ * de postulaciones y decidir la terna como cualquier líder. La propiedad se
+ * valida con la vacante en mano, por eso recibe `liderUid` y `uid`.
+ */
+export const esGhDuenoDeVacante = (
+  rol: RolUsuario | null | undefined,
+  liderUid: string | null | undefined,
+  uid: string | null | undefined,
+) => rol === 'gh' && !!uid && liderUid === uid;
+
+/**
+ * ¿Puede ver ESTA vacante concreta? Es `puedeVerVacante` + la excepción del gh
+ * dueño. Úsalo cuando ya tienes la vacante (lista de aprobaciones, tarjetas)
+ * para decidir si pintas el link al detalle.
+ */
+export const puedeVerVacanteDe = (
+  rol: RolUsuario | null | undefined,
+  liderUid: string | null | undefined,
+  uid: string | null | undefined,
+) => puedeVerVacante(rol) || esGhDuenoDeVacante(rol, liderUid, uid);
+
 /** ¿Puede abrir el detalle de una postulación (/postulaciones/:id)? */
 export const puedeVerPostulacion = (rol: RolUsuario | null | undefined) =>
   tiene(ROLES_POSTULACION_DETALLE, rol);
@@ -134,8 +167,17 @@ export function puedeAbrirRuta(rol: RolUsuario | null | undefined, ruta: string)
   // Vacante
   if (/^\/vacantes\/[^/]+\/perfilamiento$/.test(r)) return tiene(ROLES_PERFILAMIENTO, rol);
   if (/^\/vacantes\/[^/]+\/sourcing$/.test(r)) return tiene(ROLES_POOL, rol);
+  // gh como líder solicitante (reu Karen 16-sep, decisión 25-sep): a nivel de
+  // RUTA puede abrir el detalle, las postulaciones (consulta), la terna (decide)
+  // y el concepto. Aquí no tenemos la vacante, así que la PROPIEDAD (lider_uid ==
+  // uid) la valida cada página con su guard "Sin acceso"; quien pinte estos links
+  // para gh debe hacerlo con la vacante en mano (`puedeVerVacanteDe`). El concepto
+  // ya lo permitía App.tsx pero aquí se negaba: inconsistencia corregida. Van
+  // ANTES del patrón genérico para NO abrirle publicación ni solicitud-integrante.
+  if (/^\/vacantes\/[^/]+\/(postulaciones|terna|concepto-atraccion)$/.test(r))
+    return tiene(ROLES_PROCESO, rol) || rol === 'gh';
   if (/^\/vacantes\/[^/]+\/.+$/.test(r)) return tiene(ROLES_PROCESO, rol);
-  if (/^\/vacantes\/[^/]+$/.test(r)) return tiene(ROLES_VACANTE_DETALLE, rol);
+  if (/^\/vacantes\/[^/]+$/.test(r)) return tiene(ROLES_VACANTE_DETALLE, rol) || rol === 'gh';
 
   // Postulación
   if (/^\/postulaciones\/[^/]+\/autorizacion-/.test(r)) return tiene(ROLES_POSTULACION_DETALLE, rol);
