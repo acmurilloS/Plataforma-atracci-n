@@ -192,7 +192,9 @@ export const registrarResultadoExamen = onCall(
             ? 'SIN novedad → apto, avanza a contratación.'
             : 'CON novedad → pendiente de la decisión de Gestión Humana (C&D).'
         }`,
-        link: '/examenes-medicos',
+        // Deep-link al examen: abre la pestaña Resultados y lo resalta (reu 16-sep:
+        // Diego llegaba a la lista general y no encontraba la novedad).
+        link: `/examenes-medicos?examen=${encodeURIComponent(examenId)}`,
       });
     }
 
@@ -216,7 +218,7 @@ export const registrarResultadoExamen = onCall(
           </p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">
             <tr><td style="border-radius:8px;background:#be1e0d;">
-              <a href="${APP_URL}/examenes-medicos" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
+              <a href="${APP_URL}/examenes-medicos?examen=${encodeURIComponent(examenId)}" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
                 Revisar y decidir en la plataforma →
               </a>
             </td></tr>
@@ -231,6 +233,13 @@ export const registrarResultadoExamen = onCall(
         // ninguno cargado, cae al correo de Diego como respaldo. Reply-to a la
         // analista del proceso (fallback coordinación), no al buzón de Steve.
         const correosGh = ghs.map((g) => g.email);
+        if (correosGh.length === 0) {
+          // Si esto sale, nadie con rol gh está activo en `usuarios`: el correo
+          // llega a Diego pero la app le negaría el acceso. Revisar cuentas.
+          logger.warn('[registrarResultadoExamen] sin usuarios gh activos; correo de respaldo a Diego', {
+            examen_id: examenId,
+          });
+        }
         const replyTo =
           (await emailAnalistaDeVacante(vacanteId)) || (await emailCoordinadorFallback());
         await enviarConGmail({

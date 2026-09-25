@@ -141,9 +141,13 @@ export default function ExamenesMedicosPage() {
   const puedeSubirResultado = esGestor || esGH;
   const puedeDecidir = esGH; // decide la novedad (Diego/Paola/coordinación)
 
-  const { docs, cargando } = useColeccion<ExamenDoc>('examenes_medicos', {
+  const { docs, cargando, error: errorExamenes } = useColeccion<ExamenDoc>('examenes_medicos', {
     orden: ['solicitada_en', 'desc'],
   });
+  // Si las reglas niegan la lectura (sesión con un rol distinto al de la ficha),
+  // antes la página quedaba en "Sin resultados pendientes" y parecía vacía. Se
+  // dice explícito para que la persona sepa que es un tema de permisos.
+  const sinPermisoLectura = !!errorExamenes && /permission|insufficient/i.test(errorExamenes);
   // El gestor SST NO debe leer todo el pipeline (PII de candidatos que no son de
   // exámenes). La página solo usa `postulaciones` como fallback del nombre, y el
   // doc `examenes_medicos` ya trae candidato_nombre denormalizado — así que para
@@ -166,6 +170,13 @@ export default function ExamenesMedicosPage() {
   const [searchParams] = useSearchParams();
   const examenFocus = searchParams.get('examen');
   const [resaltado, setResaltado] = useState<string | null>(examenFocus);
+  // Si el query cambia con la página ya abierta (clic en la campana estando en
+  // Exámenes), se vuelve a resaltar y a ubicar la pestaña del nuevo examen.
+  const focusAplicado = useRef(false);
+  useEffect(() => {
+    setResaltado(examenFocus);
+    focusAplicado.current = false;
+  }, [examenFocus]);
 
   // Panel abierto (uno a la vez): enviar orden (16), subir resultado, o decidir.
   const [accion, setAccion] = useState<{
@@ -187,7 +198,6 @@ export default function ExamenesMedicosPage() {
 
   // Deep-link desde el correo (/examenes-medicos?examen=<id>): abre la pestaña
   // correcta, hace scroll al examen y lo resalta unos segundos.
-  const focusAplicado = useRef(false);
   useEffect(() => {
     if (!examenFocus || focusAplicado.current || docs.length === 0) return;
     const ex = docs.find((d) => d.id === examenFocus);
@@ -196,14 +206,25 @@ export default function ExamenesMedicosPage() {
       focusAplicado.current = true;
     }
   }, [examenFocus, docs]);
+  // Scroll una sola vez por examen (antes se repetía al cambiar de pestaña o al
+  // llegar un snapshot, y el timer del resaltado se cancelaba a mitad).
+  const scrollHecho = useRef<string | null>(null);
+  const timerResaltado = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!examenFocus) return;
+    if (!examenFocus || scrollHecho.current === examenFocus) return;
     const el = document.getElementById(`examen-${examenFocus}`);
     if (!el) return;
+    scrollHecho.current = examenFocus;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const t = setTimeout(() => setResaltado(null), 4500);
-    return () => clearTimeout(t);
+    if (timerResaltado.current) clearTimeout(timerResaltado.current);
+    timerResaltado.current = setTimeout(() => setResaltado(null), 4500);
   }, [examenFocus, pestana, docs.length]);
+  useEffect(
+    () => () => {
+      if (timerResaltado.current) clearTimeout(timerResaltado.current);
+    },
+    [],
+  );
 
   // Subir resultado (gestor).
   const [novedad, setNovedad] = useState<'sin_novedad' | 'con_novedad' | null>(null);
@@ -437,6 +458,16 @@ export default function ExamenesMedicosPage() {
         descripcion={descripcion}
       />
 
+      {errorExamenes && (
+        <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
+          {sinPermisoLectura
+            ? `No pudimos cargar los exámenes: tu sesión no tiene permiso para verlos (rol ${
+                rol ?? 'sin rol'
+              }). Cierra sesión, vuelve a entrar con tu correo Equitel y, si sigue igual, avisa a coordinación.`
+            : `No pudimos cargar los exámenes: ${errorExamenes}`}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <MiniStat label="Total" valor={stats.total} icono={<HeartPulse size={14} strokeWidth={1.75} />} />
         <MiniStat label="Solicitadas" valor={stats.solicitadas} tono="warning" />
@@ -467,7 +498,7 @@ export default function ExamenesMedicosPage() {
         ))}
       </div>
 
-      {!cargando && docsPestana.length === 0 && (
+      {!cargando && !errorExamenes && docsPestana.length === 0 && (
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-10 text-center">
           <p className="text-[14px] font-medium text-text-strong">
             {pestana === 'solicitudes' ? 'Sin órdenes por enviar' : 'Sin resultados pendientes'}

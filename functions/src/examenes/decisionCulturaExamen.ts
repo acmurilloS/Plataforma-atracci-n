@@ -147,7 +147,7 @@ export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (re
       mensaje: `${candidatoNombre}${consecutivo ? ` (${consecutivo})` : ''}: Cultura y Desarrollo decidió ${
         continua ? 'CONTINUAR → en contratación.' : 'NO continuar → descartado.'
       }`,
-      link: '/examenes-medicos',
+      link: `/examenes-medicos?examen=${encodeURIComponent(examenId)}`,
     });
   }
 

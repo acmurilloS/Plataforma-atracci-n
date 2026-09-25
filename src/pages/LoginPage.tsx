@@ -92,7 +92,11 @@ function GoogleLogo({ size = 18 }: { size?: number }) {
 export default function LoginPage() {
   const { user, iniciarSesion, iniciarSesionGoogle, enviarResetPassword, cargando } = useAuth();
   const nav = useNavigate();
-  const loc = useLocation() as { state?: { from?: { pathname?: string } } };
+  const loc = useLocation() as { state?: { from?: { pathname?: string; search?: string } } };
+  // A dónde volver tras entrar: la ruta que pidió, CON su query string (los
+  // correos traen deep-links como /examenes-medicos?examen=<id>; antes se perdía).
+  const from = loc.state?.from;
+  const destino = from?.pathname ? `${from.pathname}${from.search ?? ''}` : '/seguimiento';
 
   const [email, setEmail] = useState('');
   const [pwd, setPwd] = useState('');
@@ -101,8 +105,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState<'pwd' | 'google' | 'reset' | null>(null);
 
   if (!cargando && user) {
-    const to = loc.state?.from?.pathname ?? '/seguimiento';
-    return <Navigate to={to} replace />;
+    return <Navigate to={destino} replace />;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -112,7 +115,7 @@ export default function LoginPage() {
     setLoading('pwd');
     try {
       await iniciarSesion(email, pwd);
-      nav(loc.state?.from?.pathname ?? '/seguimiento', { replace: true });
+      nav(destino, { replace: true });
     } catch (e) {
       setErr(mensajeAuth(e));
     } finally {
@@ -126,7 +129,7 @@ export default function LoginPage() {
     setLoading('google');
     try {
       await iniciarSesionGoogle();
-      nav(loc.state?.from?.pathname ?? '/seguimiento', { replace: true });
+      nav(destino, { replace: true });
     } catch (e) {
       setErr(mensajeAuth(e));
     } finally {

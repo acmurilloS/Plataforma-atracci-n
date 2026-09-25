@@ -213,7 +213,7 @@ export const enviarOrdenExamenCandidato = onCall(
         mensaje: `Se le envió la orden de exámenes médicos a ${
           nombreCandidato || 'el candidato'
         }${cargo && cargo !== 'tu proceso' ? ` (${cargo})` : ''} · ${email}.`,
-        link: '/examenes-medicos',
+        link: `/examenes-medicos?examen=${encodeURIComponent(examenId)}`,
         vacante_id: String(ex.vacante_id ?? ''),
         postulacion_id: postId || '',
         leida: false,

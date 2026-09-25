@@ -242,7 +242,7 @@ export async function enviarOrdenAGestores(
         mensaje: `El correo con la orden de exámenes de ${nombre || 'el candidato'}${
           cargo ? ` (${cargo})` : ''
         } no se pudo enviar a los gestores SST. Entra a Exámenes médicos y usa "Reenviar a gestores".`,
-        link: '/examenes-medicos',
+        link: `/examenes-medicos?examen=${encodeURIComponent(examenId)}`,
         conCorreo: true,
       });
     }
@@ -286,7 +286,7 @@ export async function enviarOrdenAGestores(
         mensaje: `La orden de exámenes de ${nombre || 'el candidato'}${
           cargo ? ` (${cargo})` : ''
         } se envió a ${destinatarios.length} destinatario(s) SST con los 6 datos completos.`,
-        link: '/examenes-medicos',
+        link: `/examenes-medicos?examen=${encodeURIComponent(examenId)}`,
         conCorreo: false,
       });
     } else {
@@ -299,7 +299,7 @@ export async function enviarOrdenAGestores(
         } se envió a los gestores SST, pero faltó: ${faltantes.join(
           ', ',
         )}. Complétalo(s) en los Datos Básicos del candidato y reenvía desde Exámenes médicos.`,
-        link: '/examenes-medicos',
+        link: `/examenes-medicos?examen=${encodeURIComponent(examenId)}`,
         conCorreo: true,
       });
     }
@@ -315,7 +315,7 @@ export async function enviarOrdenAGestores(
         mensaje: `Se envió a los gestores SST la orden de exámenes de ${nombre || 'el candidato'}${
           cargo ? ` (${cargo})` : ''
         }. Copia de verificación; quedaste en copia del correo.`,
-        link: '/examenes-medicos',
+        link: `/examenes-medicos?examen=${encodeURIComponent(examenId)}`,
         conCorreo: false,
       });
     }

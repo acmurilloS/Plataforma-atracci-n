@@ -115,7 +115,7 @@ async function avisarGHAutorizacionPendiente(
         mensaje: `La orden de exámenes de ${nombre}${
           cargo ? ` (${cargo})` : ''
         } requiere tu autorización antes de enviarse a los gestores SST (persona en condición de discapacidad). Revísala y autoriza el envío en Exámenes médicos.`,
-        link: '/examenes-medicos',
+        link: `/examenes-medicos?examen=${encodeURIComponent(examenId)}`,
         leida: false,
         leida_en: null,
         creado_en: FieldValue.serverTimestamp(),
