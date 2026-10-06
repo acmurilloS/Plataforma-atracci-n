@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   BellRing,
   Building2,
@@ -66,7 +67,16 @@ export default function CatalogosAdminPage() {
   const { rol } = useAuth();
   const esAdmin = rol === 'admin';
   const tabsVisibles = TABS.filter((t) => esAdmin || !t.soloAdmin);
-  const [tab, setTab] = useState<Tab>('empresas');
+  // `?tab=api` abre la pestaña directo (tarjeta "API y llaves" del Panel admin).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabUrl = searchParams.get('tab');
+  const [tab, setTabEstado] = useState<Tab>(
+    tabsVisibles.some((t) => t.key === tabUrl) ? (tabUrl as Tab) : 'empresas',
+  );
+  const setTab = (t: Tab) => {
+    setTabEstado(t);
+    setSearchParams(t === 'empresas' ? {} : { tab: t }, { replace: true });
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">

@@ -261,6 +261,13 @@ export default function PanelAdminPage() {
             badge="admin"
             tono="danger"
           />
+          <LinkCard
+            to="/admin/catalogos?tab=api"
+            titulo="API y llaves"
+            descripcion="Integraciones externas (p. ej. DOTATRACK): crear y rotar llaves, ver el registro de peticiones."
+            badge="admin"
+            tono="danger"
+          />
         </div>
       </div>
 
