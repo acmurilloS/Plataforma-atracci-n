@@ -144,3 +144,17 @@ export { enviarCondicionesLaborales } from './condiciones/enviarCondicionesLabor
 export { aceptarCondicionesLaborales } from './condiciones/aceptarCondicionesLaborales';
 // Carta de bienvenida: envío al candidato con el PDF adjunto (#4b, reu 18-ago).
 export { enviarCartaBienvenida } from './cartas/enviarCartaBienvenida';
+
+// ── API pública v1 (reu DOTATRACK 06-oct-2026) ─────────────────────────────
+// `api` atiende https://ptm-atraccion.web.app/api/v1/* (hosting reescribe /api/**).
+// Las callables api* son la administración (solo admin): integraciones, llaves y registro.
+export { api } from './api/router';
+export {
+  apiListarIntegraciones,
+  apiGuardarIntegracion,
+  apiEliminarIntegracion,
+  apiCrearLlave,
+  apiRevocarLlave,
+  apiRotarLlave,
+  apiListarRegistro,
+} from './api/admin';

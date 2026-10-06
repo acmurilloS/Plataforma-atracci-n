@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 import { unidadInputSchema, type UnidadInput } from '../../schemas';
 import { useEmpresas, useSedesDeEmpresa, useUnidadesDeSede } from '../../hooks/useCatalogos';
 import { useAdminCatalogos } from '../../hooks/useAdminCatalogos';
+import { useMutacion } from '../../hooks/useMutacion';
 import { Button, Card } from '../../components/brand';
 import { cn } from '../../utils/cn';
 
@@ -23,7 +24,23 @@ export function UnidadesTab() {
   const [sedeFiltro, setSedeFiltro] = useState('');
   const { unidades } = useUnidadesDeSede(sedeFiltro || null);
   const { crearUnidad } = useAdminCatalogos();
+  const { actualizar } = useMutacion();
   const [err, setErr] = useState<string | null>(null);
+  // Centro de costos por unidad (reu DOTATRACK 06-oct): se edita en la tabla y
+  // se guarda al salir del campo. Lo lee la API de nuevos ingresos.
+  const [ccGuardando, setCcGuardando] = useState<string | null>(null);
+  async function guardarCentroCostos(id: string, valor: string, actual: string) {
+    const v = valor.trim().slice(0, 40);
+    if (v === (actual ?? '')) return;
+    setCcGuardando(id);
+    try {
+      await actualizar('unidades', id, { centro_costos: v });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No se pudo guardar el centro de costos.');
+    } finally {
+      setCcGuardando(null);
+    }
+  }
 
   useEffect(() => setSedeFiltro(''), [empresaFiltro]);
 
@@ -36,7 +53,7 @@ export function UnidadesTab() {
     formState: { errors, isSubmitting },
   } = useForm<UnidadInput>({
     resolver: zodResolver(unidadInputSchema),
-    defaultValues: { empresa_codigo: '', sede_codigo: '', nombre: '', activo: true },
+    defaultValues: { empresa_codigo: '', sede_codigo: '', nombre: '', activo: true, centro_costos: '' },
   });
 
   const empresaForm = watch('empresa_codigo');
@@ -105,6 +122,12 @@ export function UnidadesTab() {
                   <th className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted">
                     Empresa
                   </th>
+                  <th
+                    className="px-4 py-2.5 text-left font-semibold text-[10px] uppercase tracking-[0.06em] text-text-muted"
+                    title="Centro de costos contable (lo usa la API de dotación). Se guarda al salir del campo."
+                  >
+                    Centro de costos
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -119,6 +142,19 @@ export function UnidadesTab() {
                     </td>
                     <td className="px-4 py-3 font-mono text-[12px] text-text-muted">
                       {u.empresa_codigo}
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        key={`${u.id}-${u.centro_costos ?? ''}`}
+                        defaultValue={u.centro_costos ?? ''}
+                        placeholder="—"
+                        disabled={ccGuardando === u.id}
+                        onBlur={(e) => guardarCentroCostos(u.id, e.target.value, u.centro_costos ?? '')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
+                        className="w-28 rounded-md border border-transparent bg-transparent px-2 py-1 font-mono text-[12px] text-text-strong hover:border-slate-200 focus:bg-white focus:outline-none focus:border-brand-400"
+                      />
                     </td>
                   </tr>
                 ))}
@@ -173,6 +209,13 @@ export function UnidadesTab() {
             </Field>
             <Field label="Nombre" error={errors.nombre?.message}>
               <input {...register('nombre')} className={inputClass} />
+            </Field>
+            <Field label="Centro de costos (opcional)" error={errors.centro_costos?.message}>
+              <input
+                {...register('centro_costos')}
+                placeholder="Código contable; lo usa la API de dotación"
+                className={inputClass}
+              />
             </Field>
             {err && (
               <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3 py-2 text-[12px] text-danger-700">

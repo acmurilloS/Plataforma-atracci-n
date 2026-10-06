@@ -9,6 +9,7 @@ import {
   Users2,
   Cloud,
   FileText,
+  KeyRound,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -21,6 +22,7 @@ import { ReferidosTab } from '../../components/admin/ReferidosTab';
 import { IntegracionesTab } from '../../components/admin/IntegracionesTab';
 import { CartaBienvenidaTab } from '../../components/admin/CartaBienvenidaTab';
 import { MensajesReglasTab } from '../../components/admin/MensajesReglasTab';
+import { ApiLlavesTab } from '../../components/admin/ApiLlavesTab';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 
@@ -41,6 +43,7 @@ type Tab =
   | 'cargos'
   | 'referidos'
   | 'integraciones'
+  | 'api'
   | 'carta'
   | 'mensajes'
   | 'seed';
@@ -52,6 +55,7 @@ const TABS: { key: Tab; label: string; icono: LucideIcon; soloAdmin?: boolean }[
   { key: 'cargos', label: 'Cargos', icono: Briefcase },
   { key: 'referidos', label: 'Referidos', icono: Users2, soloAdmin: true },
   { key: 'integraciones', label: 'Integraciones', icono: Cloud, soloAdmin: true },
+  { key: 'api', label: 'API y llaves', icono: KeyRound, soloAdmin: true },
   { key: 'carta', label: 'Carta bienvenida', icono: FileText, soloAdmin: true },
   // Aviso de compromiso al candidato + reloj del líder (reu Karen 09-sep).
   { key: 'mensajes', label: 'Mensajes y reglas', icono: BellRing, soloAdmin: true },
@@ -105,6 +109,7 @@ export default function CatalogosAdminPage() {
         {/* Solo admin pleno — el permiso 'catalogos' no da acceso a estas. */}
         {tab === 'referidos' && esAdmin && <ReferidosTab />}
         {tab === 'integraciones' && esAdmin && <IntegracionesTab />}
+        {tab === 'api' && esAdmin && <ApiLlavesTab />}
         {tab === 'carta' && esAdmin && <CartaBienvenidaTab />}
         {tab === 'mensajes' && esAdmin && <MensajesReglasTab />}
         {tab === 'seed' && esAdmin && <SeedTab />}

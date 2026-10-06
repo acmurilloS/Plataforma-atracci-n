@@ -169,6 +169,14 @@
         { "fieldPath": "motivo_descarte", "order": "ASCENDING" },
         { "fieldPath": "ultima_transicion_estado", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "api_registro",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "integracion_id", "order": "ASCENDING" },
+        { "fieldPath": "en", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

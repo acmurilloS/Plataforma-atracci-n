@@ -502,6 +502,24 @@ service cloud.firestore {
     // signedIn()` anterior no habilitaba nada nuestro y sí dejaba al anónimo de
     // la landing inyectar documentos en la bitácora que el staff lee como fuente
     // de verdad para auditar (auditoría 15-jul).
+    // ===== API pública v1 (reu DOTATRACK 06-oct-2026) =====
+    // Server-only, a propósito: el hash de las llaves, la lista de integraciones y
+    // el registro de peticiones no tienen por qué viajar nunca a un navegador, ni
+    // siquiera al de un admin. Todo se administra por las callables `api*`
+    // (Admin SDK). Es la excepción al patrón `interno()` del resto de colecciones.
+    match /api_integraciones/{id} {
+      allow read, write: if false;
+    }
+    match /api_llaves/{id} {
+      allow read, write: if false;
+    }
+    match /api_registro/{id} {
+      allow read, write: if false;
+    }
+    match /api_limite/{id} {
+      allow read, write: if false;
+    }
+
     match /eventos/{id} {
       allow read: if staff();
       allow create, update, delete: if false;

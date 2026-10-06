@@ -228,6 +228,15 @@ caso(G10, 'gestor NO lee la solicitud', { token: gestor, path: 'solicitudes_inte
 caso(G10, 'Carla NO lee la solicitud', { token: carla, path: 'solicitudes_integrante/si1', esperado: 'DENY' });
 caso(G10, 'anónimo NO lee la solicitud', { token: ANON, path: 'solicitudes_integrante/si1', esperado: 'DENY' });
 
+const G12 = '12. API PÚBLICA (reu DOTATRACK 06-oct · colecciones api_* server-only, ni el admin)';
+const adminTok = tok('admin', { uid: 'admin1' });
+caso(G12, 'admin NO lee api_llaves (hash)', { token: adminTok, path: 'api_llaves/k1', esperado: 'DENY', data: { key_prefix: 'pa_live_x', key_hash: 'h' } });
+caso(G12, 'admin NO lista api_llaves', { token: adminTok, path: 'api_llaves/k1', method: 'list', esperado: 'DENY', data: { key_prefix: 'pa_live_x' } });
+caso(G12, 'admin NO lee api_integraciones', { token: adminTok, path: 'api_integraciones/i1', esperado: 'DENY', data: { nombre: 'DOTATRACK' } });
+caso(G12, 'coord NO lee api_registro', { token: coord, path: 'api_registro/r1', esperado: 'DENY', data: { ruta: '/v1/me' } });
+caso(G12, 'admin NO crea llaves desde el cliente', { token: adminTok, path: 'api_llaves/k2', method: 'create', esperado: 'DENY', payload: { key_prefix: 'pa_live_y', key_hash: 'h' } });
+caso(G12, 'analista NO toca api_limite', { token: analista, path: 'api_limite/l1', method: 'update', esperado: 'DENY', data: { n: 1 }, payload: { n: 0 } });
+
 const G11 = '11. REVISIÓN AUTOMÁTICA DE CARPETA (reu 16-sep · revision_datos es server-only)';
 caso(G11, 'analista NO escribe revision_datos', { token: analista, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'DENY', payload: { postulacion_id: 'p1', estado: 'armando', revision_datos: { errores: 0 } } });
 caso(G11, 'GH NO borra revision_datos', { token: gh, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'DENY', data: { postulacion_id: 'p1', estado: 'armando', revision_datos: { errores: 1 } }, payload: { postulacion_id: 'p1', estado: 'armando' } });
