@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type DragEvent } from 'react';
 import { CheckCircle2, ExternalLink, FileText, Upload, UploadCloud } from 'lucide-react';
 import { useDriveUpload } from '../../hooks/useDriveUpload';
+import { mensajeErrorSubida } from '../../utils/archivos';
 import { cn } from '../../utils/cn';
 
 interface Props {
@@ -37,14 +38,8 @@ export function AvalUploader({ empresaCodigo, value, driveFileId, onChange, disa
         setError('Selecciona una empresa antes de adjuntar el aval.');
         return;
       }
-      if (file.type !== 'application/pdf') {
-        setError('El aval debe ser PDF.');
-        return;
-      }
-      if (file.size > 15 * 1024 * 1024) {
-        setError('El aval no puede superar 15 MB.');
-        return;
-      }
+      // Tipo (PDF por contenido) y tamaño los valida `subir` (useDriveUpload →
+      // utils/archivos): antes un PDF sin extensión se rechazaba aquí.
       setError(null);
       setNombre(file.name);
       try {
@@ -53,7 +48,7 @@ export function AvalUploader({ empresaCodigo, value, driveFileId, onChange, disa
         const archivo = await subir(file, 'Avales', nombreEnDrive);
         onChange({ url: archivo.webViewLink, driveFileId: archivo.fileId });
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'No pudimos subir el aval.');
+        setError(mensajeErrorSubida(e, 'No pudimos subir el aval.'));
         setNombre(null);
         onChange(null);
       }

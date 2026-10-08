@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { auth, db, storage } from '../lib/firebase';
+import { MB, mensajeErrorSubida, prepararArchivo } from '../utils/archivos';
 import type { VacanteDoc, VacanteInput } from '../schemas';
 
 type ProgressHandler = (pct: number) => void;
@@ -24,7 +25,7 @@ function mensajeError(e: unknown): string {
   if (typeof e === 'object' && e && 'code' in e) {
     const code = String((e as { code: unknown }).code);
     const mapa: Record<string, string> = {
-      'storage/unauthorized': 'No tienes permisos para subir el aval. Contacta al administrador.',
+      'storage/unauthorized': 'No se pudo guardar el aval: debe ser un PDF de máximo 10 MB. Recarga la página y vuelve a intentarlo.',
       'storage/canceled': 'La subida del aval fue cancelada.',
       'storage/quota-exceeded': 'Se alcanzó el límite de almacenamiento.',
       'storage/retry-limit-exceeded': 'La red está inestable. Reintenta la subida.',
@@ -53,36 +54,33 @@ export function useVacantes() {
           reject(new Error('Selecciona una empresa antes de subir el aval.'));
           return;
         }
-        if (file.type !== 'application/pdf') {
-          reject(new Error('Solo se aceptan archivos PDF.'));
-          return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          reject(new Error('El PDF no puede superar 10 MB.'));
-          return;
-        }
-        const ts = Date.now();
-        const safeName = file.name.replace(/[^\w.-]+/g, '_');
-        const path = `avales/${empresaCodigo}/${ts}_${safeName}`;
-        const task = uploadBytesResumable(ref(storage, path), file, {
-          contentType: 'application/pdf',
-        });
-        task.on(
-          'state_changed',
-          (snap) => {
-            if (snap.totalBytes > 0) {
-              onProgress?.((snap.bytesTransferred / snap.totalBytes) * 100);
-            }
+        // PDF detectado por contenido (incidente 08-oct, utils/archivos).
+        prepararArchivo(file, { permitidos: ['pdf'], maxBytes: 10 * MB }).then(
+          (listo) => {
+            const ts = Date.now();
+            const path = `avales/${empresaCodigo}/${ts}_${listo.nombreSeguro}`;
+            const task = uploadBytesResumable(ref(storage, path), listo.blob, {
+              contentType: listo.contentType,
+            });
+            task.on(
+              'state_changed',
+              (snap) => {
+                if (snap.totalBytes > 0) {
+                  onProgress?.((snap.bytesTransferred / snap.totalBytes) * 100);
+                }
+              },
+              (err) => reject(new Error(mensajeError(err))),
+              async () => {
+                try {
+                  const url = await getDownloadURL(task.snapshot.ref);
+                  resolve(url);
+                } catch (err) {
+                  reject(new Error(mensajeError(err)));
+                }
+              },
+            );
           },
-          (err) => reject(new Error(mensajeError(err))),
-          async () => {
-            try {
-              const url = await getDownloadURL(task.snapshot.ref);
-              resolve(url);
-            } catch (err) {
-              reject(new Error(mensajeError(err)));
-            }
-          },
+          (err) => reject(new Error(mensajeErrorSubida(err))),
         );
       }),
     [],

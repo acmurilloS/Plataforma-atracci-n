@@ -125,6 +125,8 @@ export { registrarConsentimientoPortal } from './portal/registrarConsentimientoP
 export { registrarDocumentoPortal } from './portal/registrarDocumentoPortal';
 // Subida del candidato a un slot de su carpeta real documentos_candidato (Portal F4, 2026-06-17).
 export { registrarDocumentoCarpetaPortal } from './portal/registrarDocumentoCarpetaPortal';
+// Diagnóstico de subidas fallidas del portal (solo Cloud Logging; incidente 08-oct).
+export { reportarFalloSubidaPortal } from './portal/reportarFalloSubidaPortal';
 // Quitar uno de los archivos de un item multiple desde el portal (reporte 09-sep).
 export { quitarArchivoCarpetaPortal } from './portal/quitarArchivoCarpetaPortal';
 // Aviso al candidato (correo con link al portal) cuando su proceso avanza (D.1, 2026-06-16).

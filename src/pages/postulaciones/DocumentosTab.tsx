@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
 import { Check, FileText, FolderOpen, Mail, Upload, X } from 'lucide-react';
 import { storage, functions } from '../../lib/firebase';
+import { MB, mensajeErrorSubida, prepararArchivo } from '../../utils/archivos';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { useAuth } from '../../hooks/useAuth';
@@ -336,18 +337,16 @@ function DocumentoRow({
   async function subirArchivo(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      onError('El archivo no puede superar 10 MB.');
-      return;
-    }
     setSubiendo(true);
     setProgreso(0);
     try {
+      // Tipo por contenido + contentType explícito (incidente portal 08-oct: un
+      // archivo sin extensión subía como "octet-stream" y la regla lo rechazaba).
+      const listo = await prepararArchivo(file, { permitidos: ['pdf', 'imagen', 'word'], maxBytes: 15 * MB });
       const ts = Date.now();
-      const safe = file.name.replace(/[^\w.-]+/g, '_');
-      const path = `documentos_candidato/${postulacion.candidato_id}/${catalogo.clave}_${ts}_${safe}`;
+      const path = `documentos_candidato/${postulacion.candidato_id}/${catalogo.clave}_${ts}_${listo.nombreSeguro}`;
       const sref = storageRef(storage, path);
-      const task = uploadBytesResumable(sref, file);
+      const task = uploadBytesResumable(sref, listo.blob, { contentType: listo.contentType });
 
       await new Promise<void>((resolve, reject) => {
         task.on(
@@ -364,8 +363,8 @@ function DocumentoRow({
       const ahora = Timestamp.now();
       const nuevo: ArchivoCarpeta = {
         url,
-        nombre: file.name,
-        tamano_bytes: file.size,
+        nombre: listo.nombre,
+        tamano_bytes: listo.tamano,
         subido_en: ahora,
       };
       // Múltiple → agrega a la lista; único → reemplaza.
@@ -397,7 +396,7 @@ function DocumentoRow({
         });
       }
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'No pudimos subir el archivo.');
+      onError(mensajeErrorSubida(err, 'No pudimos subir el archivo.'));
     } finally {
       setSubiendo(false);
       setProgreso(0);

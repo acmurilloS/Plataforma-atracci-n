@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import { storage } from '../../lib/firebase';
+import { MB, mensajeErrorSubida, prepararArchivo } from '../../utils/archivos';
 import { useAuth } from '../../hooks/useAuth';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
@@ -204,7 +205,7 @@ export default function PostulacionesPage() {
 
   async function subirMultiplesCVs(files: FileList) {
     if (!vacante) return;
-    const validos = Array.from(files).filter((f) => f.type === 'application/pdf');
+    const validos = Array.from(files);
     if (validos.length === 0) {
       setErr('Selecciona al menos un PDF.');
       return;
@@ -212,19 +213,24 @@ export default function PostulacionesPage() {
     setSubiendoCVs(true);
     setErr(null);
     setProgresoCVs({ hechos: 0, total: validos.length });
+    // Los que no son PDF o pasan de 5 MB se omiten y se informan al final (antes
+    // se descartaban en silencio, y un PDF sin extensión se tomaba por "no PDF").
+    const omitidos: string[] = [];
     try {
       for (let i = 0; i < validos.length; i++) {
         const file = validos[i];
-        if (file.size > 5 * 1024 * 1024) {
-          console.warn(`${file.name} supera 5 MB, se omite`);
+        let listo;
+        try {
+          listo = await prepararArchivo(file, { permitidos: ['pdf'], maxBytes: 5 * MB });
+        } catch (eArchivo) {
+          omitidos.push(mensajeErrorSubida(eArchivo));
           setProgresoCVs({ hechos: i + 1, total: validos.length });
           continue;
         }
         const ts = Date.now();
-        const safe = file.name.replace(/[^\w.-]+/g, '_');
-        const path = `cvs/${vacante.id}/${ts}_${safe}`;
+        const path = `cvs/${vacante.id}/${ts}_${listo.nombreSeguro}`;
         const sref = storageRef(storage, path);
-        await uploadBytes(sref, file, { contentType: 'application/pdf' });
+        await uploadBytes(sref, listo.blob, { contentType: listo.contentType });
         const url = await getDownloadURL(sref);
 
         const nombreBase = file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ');
@@ -289,11 +295,17 @@ export default function PostulacionesPage() {
         });
         setProgresoCVs({ hechos: i + 1, total: validos.length });
       }
-      if (vacante.estado === 'publicada') {
+      const subidos = validos.length - omitidos.length;
+      if (subidos > 0 && vacante.estado === 'publicada') {
         await actualizar('vacantes', vacante.id, { estado: 'en_proceso' });
       }
+      if (omitidos.length > 0) {
+        setErr(
+          `Se ${omitidos.length === 1 ? 'omitió 1 archivo' : `omitieron ${omitidos.length} archivos`}: ${omitidos.join(' · ')}`,
+        );
+      }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No pudimos subir los CVs.');
+      setErr(mensajeErrorSubida(e, 'No pudimos subir los CVs.'));
     } finally {
       setSubiendoCVs(false);
       setTimeout(() => setProgresoCVs(null), 3000);

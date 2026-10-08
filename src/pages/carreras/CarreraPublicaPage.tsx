@@ -16,6 +16,8 @@ import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Card, Pill } from '../../components/brand';
 import { TIPO_SOLICITUD_LABEL } from '../../schemas';
 import { auth, db, functions, storage } from '../../lib/firebase';
+import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
+import { MB, mensajeErrorSubida, prepararArchivo } from '../../utils/archivos';
 import { formatearCOP } from '../../utils/moneda';
 import { COMISION_TIPO_LABEL, tieneComisiones } from '../../utils/comisiones';
 import { cn } from '../../utils/cn';
@@ -256,18 +258,20 @@ export default function CarreraPublicaPage() {
     setEnviando(true);
     setErrSubmit(null);
     try {
-      if (cv.type !== 'application/pdf') throw new Error('El CV debe ser PDF.');
-      if (cv.size > 5 * 1024 * 1024) throw new Error('El CV no puede superar 5 MB.');
+      // El tipo se detecta por contenido, no por lo que diga el celular: un PDF
+      // sin extensión (Drive, correo) se rechazaba como "no es PDF" o la regla de
+      // Storage lo bloqueaba (incidente 08-oct, utils/archivos).
+      const listoCv = await prepararArchivo(cv, { permitidos: ['pdf'], maxBytes: 5 * MB });
+      await asegurarSesionAnonima();
 
       const ts = Date.now();
-      const safe = cv.name.replace(/[^\w.-]+/g, '_');
-      const path = `cvs/${vacante.id}/${ts}_${safe}`;
+      const path = `cvs/${vacante.id}/${ts}_${listoCv.nombreSeguro}`;
       const storageRef = ref(storage, path);
       // Estampa el dueño del archivo: la regla de Storage solo deja leerlo a él o
       // al staff, para que un anónimo no pueda descargar el CV de otro candidato
       // conociendo la ruta (revisión 16-jul).
-      await uploadBytes(storageRef, cv, {
-        contentType: 'application/pdf',
+      await uploadBytes(storageRef, listoCv.blob, {
+        contentType: listoCv.contentType,
         customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
       });
       const cv_url = await getDownloadURL(storageRef);
@@ -357,7 +361,7 @@ export default function CarreraPublicaPage() {
 
       setPostulado({ ok: true, id: postRef.id });
     } catch (e) {
-      setErrSubmit(e instanceof Error ? e.message : 'No pudimos enviar la postulación.');
+      setErrSubmit(mensajeErrorSubida(e, 'No pudimos enviar la postulación. Inténtalo de nuevo.'));
     } finally {
       setEnviando(false);
     }

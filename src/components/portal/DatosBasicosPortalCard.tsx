@@ -3,6 +3,8 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { Check, Plus, Trash2 } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
+import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
+import { mensajeErrorSubida } from '../../utils/archivos';
 import { Button } from '../brand';
 import { FirmaInput } from '../firma/FirmaInput';
 import { estamparDatosBasicos, type DatosBasicosEstampado } from '../../utils/estamparDatosBasicos';
@@ -189,6 +191,7 @@ export function DatosBasicosPortalCard({
       const estampado = aEstampado(f, emerg, hijos, empresaNombre);
       const blob = await estamparDatosBasicos(estampado, firma);
       const ts = Date.now();
+      await asegurarSesionAnonima();
       const rPdf = storageRef(storage, `portal_docs/${token}/datos_basicos_${ts}.pdf`);
       await uploadBytes(rPdf, blob, {
         contentType: 'application/pdf',
@@ -214,7 +217,7 @@ export function DatosBasicosPortalCard({
       await fn({ token, cedula, datos, pdf_url: pdfUrl, firma_imagen_url: firmaImgUrl });
       setEnviado(true);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No se pudo enviar. Reintenta.');
+      setErr(mensajeErrorSubida(e, 'No se pudo enviar. Reintenta.'));
     } finally {
       setEnviando(false);
     }

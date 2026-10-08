@@ -5,6 +5,7 @@ import { FileText, RotateCcw, Upload } from 'lucide-react';
 import { useDoc } from '../../hooks/useDoc';
 import { useAuth } from '../../hooks/useAuth';
 import { db, storage } from '../../lib/firebase';
+import { MB, mensajeErrorSubida, prepararArchivo } from '../../utils/archivos';
 import { Button, Card } from '../../components/brand';
 import { cn } from '../../utils/cn';
 
@@ -41,25 +42,19 @@ export function CartaBienvenidaTab() {
   async function subir(file: File) {
     if (!user) return;
     setMsg(null);
-    if (file.type !== 'application/pdf') {
-      setMsg({ tipo: 'err', texto: 'El archivo debe ser un PDF.' });
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setMsg({ tipo: 'err', texto: 'El PDF no puede superar los 10 MB.' });
-      return;
-    }
     setSubiendo(true);
     try {
+      // PDF detectado por contenido (incidente 08-oct, utils/archivos).
+      const listo = await prepararArchivo(file, { permitidos: ['pdf'], maxBytes: 10 * MB });
       const r = ref(storage, RUTA_STORAGE);
-      await uploadBytes(r, file, { contentType: 'application/pdf' });
+      await uploadBytes(r, listo.blob, { contentType: listo.contentType });
       const url = await getDownloadURL(r);
       await setDoc(
         doc(db, 'configuracion_global', 'carta_bienvenida'),
         {
           id: 'carta_bienvenida',
           pdf_url: url,
-          nombre_archivo: file.name,
+          nombre_archivo: listo.nombre,
           actualizado_en: serverTimestamp(),
           actualizado_por: user.uid,
         },
@@ -67,7 +62,7 @@ export function CartaBienvenidaTab() {
       );
       setMsg({ tipo: 'ok', texto: 'Plantilla actualizada. Ya se usa en las cartas nuevas.' });
     } catch (e) {
-      setMsg({ tipo: 'err', texto: e instanceof Error ? e.message : 'No se pudo subir el PDF.' });
+      setMsg({ tipo: 'err', texto: mensajeErrorSubida(e, 'No se pudo subir el PDF.') });
     } finally {
       setSubiendo(false);
       if (inputRef.current) inputRef.current.value = '';

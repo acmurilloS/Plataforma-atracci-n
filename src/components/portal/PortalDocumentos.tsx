@@ -3,6 +3,9 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { Check, FileText, Loader2, Plus, Upload, X } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
+import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
+import { reportarFalloSubidaPortal } from '../../lib/reportarFalloSubida';
+import { ErrorArchivo, MB, mensajeErrorSubida, prepararArchivo, type ArchivoListo } from '../../utils/archivos';
 
 /**
  * PortalDocumentos · F4 · slots pre-etiquetados que van a la carpeta REAL.
@@ -102,18 +105,34 @@ function SlotRow({
         ? [{ url: '', nombre: slot.nombre_archivo }]
         : [];
 
+  // Tipo real por contenido (no por lo que diga el celular), fotos comprimidas y
+  // sesión asegurada antes de subir: incidente 08-oct (archivos sin tipo → la
+  // regla de Storage los rechazaba con un error en inglés). Ver utils/archivos.
   async function subirUno(file: File): Promise<ArchivoSlot[] | null> {
-    if (file.size > 10 * 1024 * 1024) {
-      setErr(`"${file.name}" supera 10 MB. Comprímelo o súbelo aparte.`);
-      return null;
+    let listo: ArchivoListo | null = null;
+    try {
+      listo = await prepararArchivo(file, { permitidos: ['pdf', 'imagen', 'word'], maxBytes: 10 * MB });
+      await asegurarSesionAnonima();
+      const ts = Date.now();
+      const r = storageRef(storage, `portal_docs/${token}/${slot.clave}_${ts}_${listo.nombreSeguro}`);
+      await uploadBytes(r, listo.blob, {
+        contentType: listo.contentType,
+        customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
+      });
+      const url = await getDownloadURL(r);
+      return await registrar(url, listo);
+    } catch (e) {
+      reportarFalloSubidaPortal({ token, clave: slot.clave, file, error: e, listo });
+      // Un archivo inválido no frena los demás de la misma selección.
+      if (e instanceof ErrorArchivo) {
+        setErr(e.message);
+        return null;
+      }
+      throw e;
     }
-    const ts = Date.now();
-    const safe = file.name.replace(/[^\w.\-]+/g, '_');
-    const r = storageRef(storage, `portal_docs/${token}/${slot.clave}_${ts}_${safe}`);
-    await uploadBytes(r, file, {
-      customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
-    });
-    const url = await getDownloadURL(r);
+  }
+
+  async function registrar(url: string, listo: ArchivoListo): Promise<ArchivoSlot[]> {
     const fn = httpsCallable<
       {
         token: string;
@@ -130,8 +149,8 @@ function SlotRow({
       cedula,
       clave: slot.clave,
       url,
-      nombre_archivo: file.name,
-      tamano_bytes: file.size,
+      nombre_archivo: listo.nombre,
+      tamano_bytes: listo.tamano,
     });
     return res.data.archivos ?? [];
   }
@@ -158,7 +177,7 @@ function SlotRow({
         });
       }
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : 'No se pudo subir el archivo. Reintenta.');
+      setErr(mensajeErrorSubida(e2));
     } finally {
       setSubiendo(false);
     }
@@ -180,7 +199,7 @@ function SlotRow({
         nombre_archivo: res.data.archivos[0]?.nombre ?? '',
       });
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : 'No se pudo quitar el archivo.');
+      setErr(mensajeErrorSubida(e2, 'No se pudo quitar el archivo.'));
     } finally {
       setQuitando(null);
     }

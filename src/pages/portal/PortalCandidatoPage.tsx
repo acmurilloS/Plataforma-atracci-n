@@ -17,6 +17,9 @@ import {
   Upload,
 } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
+import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
+import { reportarFalloSubidaPortal } from '../../lib/reportarFalloSubida';
+import { MB, mensajeErrorSubida, prepararArchivo, type ArchivoListo } from '../../utils/archivos';
 import { cn } from '../../utils/cn';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Input } from '../../components/brand';
@@ -919,6 +922,7 @@ function ConsentimientoCard({
         },
         firma,
       );
+      await asegurarSesionAnonima();
       const r = storageRef(storage, `portal_docs/${token}/firma_${tipo}_${ts}.pdf`);
       await uploadBytes(r, blob, {
         contentType: 'application/pdf',
@@ -935,7 +939,7 @@ function ConsentimientoCard({
       const imgUrl = await getDownloadURL(ri);
       await onAceptar(url, imgUrl);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No se pudo registrar. Reintenta.');
+      setErr(mensajeErrorSubida(e, 'No se pudo registrar. Reintenta.'));
     } finally {
       setEnviando(false);
     }
@@ -1137,17 +1141,17 @@ function SubirDocumentos({
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !token) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setErr('El archivo supera 10 MB. Comprímelo o súbelo en partes.');
-      return;
-    }
     setSubiendo(true);
     setErr(null);
+    let listo: ArchivoListo | null = null;
     try {
+      // Tipo real por contenido + sesión asegurada (incidente 08-oct, utils/archivos).
+      listo = await prepararArchivo(file, { permitidos: ['pdf', 'imagen', 'word'], maxBytes: 10 * MB });
+      await asegurarSesionAnonima();
       const ts = Date.now();
-      const safe = file.name.replace(/[^\w.\-]+/g, '_');
-      const r = storageRef(storage, `portal_docs/${token}/${ts}_${safe}`);
-      await uploadBytes(r, file, {
+      const r = storageRef(storage, `portal_docs/${token}/${ts}_${listo.nombreSeguro}`);
+      await uploadBytes(r, listo.blob, {
+        contentType: listo.contentType,
         customMetadata: { uploaderUid: auth.currentUser?.uid ?? '' },
       });
       const url = await getDownloadURL(r);
@@ -1155,10 +1159,12 @@ function SubirDocumentos({
         { token: string; cedula: string; nombre_archivo: string; url: string },
         { ok: true }
       >(functions, 'registrarDocumentoPortal');
-      await fn({ token, cedula, nombre_archivo: file.name, url });
-      setDocs((prev) => [...prev, { nombre: file.name, url }]);
+      await fn({ token, cedula, nombre_archivo: listo.nombre, url });
+      const nombre = listo.nombre;
+      setDocs((prev) => [...prev, { nombre, url }]);
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : 'No se pudo subir el archivo. Reintenta.');
+      reportarFalloSubidaPortal({ token, clave: 'otros', file, error: e2, listo });
+      setErr(mensajeErrorSubida(e2));
     } finally {
       setSubiendo(false);
     }

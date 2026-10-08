@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { auth } from '../lib/firebase';
+import { MB, prepararArchivo } from '../utils/archivos';
 
 /**
  * useDriveUpload · sube un PDF a la Shared Drive de Equitel vía Cloud
@@ -28,9 +29,9 @@ export function useDriveUpload() {
 
   const subir = useCallback(
     async (file: File, carpeta: CarpetaDrive, nombreSugerido?: string): Promise<ArchivoDrive> => {
-      if (file.type !== 'application/pdf') {
-        throw new Error('Solo se aceptan archivos PDF.');
-      }
+      // PDF detectado por contenido: un PDF sin extensión (Drive, correo) se
+      // rechazaba como "no es PDF" (incidente 08-oct, utils/archivos).
+      const listo = await prepararArchivo(file, { permitidos: ['pdf'], maxBytes: 15 * MB });
       const user = auth.currentUser;
       if (!user) throw new Error('Necesitas iniciar sesión para subir archivos.');
 
@@ -38,11 +39,12 @@ export function useDriveUpload() {
       setProgreso(5);
       try {
         // Convertir el archivo a base64 con progress básico
-        const pdfBase64 = await fileABase64(file, (p) => setProgreso(5 + p * 0.4));
+        const pdfBase64 = await fileABase64(listo.blob, (p) => setProgreso(5 + p * 0.4));
         setProgreso(50);
 
         const idToken = await user.getIdToken();
-        const nombre = nombreSugerido ?? file.name;
+        const base = nombreSugerido ?? listo.nombre;
+        const nombre = /\.pdf$/i.test(base) ? base : `${base}.pdf`;
 
         const resp = await fetch(ENDPOINT, {
           method: 'POST',
@@ -57,8 +59,11 @@ export function useDriveUpload() {
 
         if (!resp.ok) {
           const errBody = await resp.text();
+          console.error('[useDriveUpload] Drive respondió', resp.status, errBody.slice(0, 300));
           throw new Error(
-            `Subida a Drive falló (${resp.status}): ${errBody.slice(0, 300)}`,
+            resp.status === 413
+              ? 'El PDF es demasiado grande para Drive. Comprímelo e inténtalo de nuevo.'
+              : `No se pudo guardar el PDF en Drive (error ${resp.status}). Inténtalo de nuevo.`,
           );
         }
         const data = (await resp.json()) as ArchivoDrive;
@@ -77,7 +82,7 @@ export function useDriveUpload() {
   return { subir, subiendo, progreso };
 }
 
-function fileABase64(file: File, onProgress?: (pct: number) => void): Promise<string> {
+function fileABase64(file: Blob, onProgress?: (pct: number) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {

@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { functions, storage } from '../../lib/firebase';
+import { MB, mensajeErrorSubida, prepararArchivo } from '../../utils/archivos';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -413,11 +414,10 @@ export default function PostulacionDetallePage() {
       // Sube el perfil de cargo (PDF) a Storage para adjuntarlo al correo.
       let perfilCargoUrl = '';
       if (perfilCargo) {
-        if (perfilCargo.type !== 'application/pdf') throw new Error('El perfil de cargo debe ser PDF.');
-        if (perfilCargo.size > 8 * 1024 * 1024) throw new Error('El PDF supera 8 MB.');
-        const safe = perfilCargo.name.replace(/[^\w.\-]+/g, '_');
-        const r = storageRef(storage, `perfiles_cargo/${post.id}/${Date.now()}_${safe}`);
-        await uploadBytes(r, perfilCargo, { contentType: 'application/pdf' });
+        // Tipo por contenido (un PDF sin extensión se rechazaba): utils/archivos.
+        const listo = await prepararArchivo(perfilCargo, { permitidos: ['pdf'], maxBytes: 8 * MB });
+        const r = storageRef(storage, `perfiles_cargo/${post.id}/${Date.now()}_${listo.nombreSeguro}`);
+        await uploadBytes(r, listo.blob, { contentType: listo.contentType });
         perfilCargoUrl = await getDownloadURL(r);
       }
       const fn = httpsCallable<
@@ -446,7 +446,7 @@ export default function PostulacionDetallePage() {
       window.alert(`Condiciones laborales enviadas a ${res.data.email_destinatario}.`);
       setCondicionesAbierto(false);
     } catch (e) {
-      window.alert('No se pudo enviar: ' + (e instanceof Error ? e.message : String(e)));
+      window.alert('No se pudo enviar: ' + mensajeErrorSubida(e, 'inténtalo de nuevo.'));
     } finally {
       setEnviandoCondiciones(false);
     }
@@ -488,13 +488,9 @@ export default function PostulacionDetallePage() {
       // Sube el PDF de la orden a Storage (si se adjuntó) → orden_url descargable.
       let ordenUrl = exOrdenUrl.trim();
       if (exOrdenFile) {
-        const esPdf = exOrdenFile.type === 'application/pdf';
-        const esImagen = exOrdenFile.type.startsWith('image/');
-        if (!esPdf && !esImagen) throw new Error('La orden debe ser PDF o imagen.');
-        if (exOrdenFile.size > 8 * 1024 * 1024) throw new Error('El archivo supera 8 MB.');
-        const safe = exOrdenFile.name.replace(/[^\w.\-]+/g, '_');
-        const r = storageRef(storage, `ordenes_examenes/${ex.id}/${Date.now()}_${safe}`);
-        await uploadBytes(r, exOrdenFile, { contentType: exOrdenFile.type });
+        const listo = await prepararArchivo(exOrdenFile, { permitidos: ['pdf', 'imagen'], maxBytes: 8 * MB });
+        const r = storageRef(storage, `ordenes_examenes/${ex.id}/${Date.now()}_${listo.nombreSeguro}`);
+        await uploadBytes(r, listo.blob, { contentType: listo.contentType });
         ordenUrl = await getDownloadURL(r);
       }
       const cita = exFecha ? Timestamp.fromDate(new Date(`${exFecha}T08:00:00`)) : null;
@@ -515,7 +511,7 @@ export default function PostulacionDetallePage() {
       window.alert(`Orden de exámenes enviada al integrante (${res.data.email_destinatario}).`);
       setExamenAbierto(false);
     } catch (e) {
-      window.alert('No se pudo enviar la orden: ' + (e instanceof Error ? e.message : String(e)));
+      window.alert('No se pudo enviar la orden: ' + mensajeErrorSubida(e, 'inténtalo de nuevo.'));
     } finally {
       setEnviandoExamen(false);
     }
@@ -1255,20 +1251,12 @@ function PruebasTab({
   // (con token) SÍ abre para el integrante sin cuenta, a diferencia de un Drive
   // restringido que le pedía "solicitar acceso" (reu 18-ago).
   async function subirPdf(i: number, file: File) {
-    if (file.type !== 'application/pdf') {
-      setMsg({ tipo: 'err', texto: 'El archivo debe ser un PDF.' });
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setMsg({ tipo: 'err', texto: 'El PDF supera 10 MB.' });
-      return;
-    }
     setSubiendoIdx(i);
     setMsg(null);
     try {
-      const limpio = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80);
-      const r = storageRef(storage, `pruebas_docs/${postulacion.id}/${Date.now()}_${limpio}`);
-      await uploadBytes(r, file, { contentType: 'application/pdf' });
+      const listo = await prepararArchivo(file, { permitidos: ['pdf'], maxBytes: 10 * MB });
+      const r = storageRef(storage, `pruebas_docs/${postulacion.id}/${Date.now()}_${listo.nombreSeguro}`);
+      await uploadBytes(r, listo.blob, { contentType: listo.contentType });
       const url = await getDownloadURL(r);
       setFilas((prev) =>
         prev.map((f, idx) =>
@@ -1277,7 +1265,7 @@ function PruebasTab({
       );
       setMsg({ tipo: 'ok', texto: 'PDF subido. El integrante lo abrirá desde el correo.' });
     } catch (e) {
-      setMsg({ tipo: 'err', texto: e instanceof Error ? e.message : 'No se pudo subir el PDF.' });
+      setMsg({ tipo: 'err', texto: mensajeErrorSubida(e, 'No se pudo subir el PDF.') });
     } finally {
       setSubiendoIdx(null);
     }

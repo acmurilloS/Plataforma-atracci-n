@@ -18,6 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { functions, storage } from '../../lib/firebase';
+import { MB, mensajeErrorSubida, prepararArchivo } from '../../utils/archivos';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
 import { CargandoPagina } from '../../components/ui/CargandoPagina';
@@ -114,22 +115,25 @@ const inputClass = cn(
   'focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 transition-colors',
 );
 
+// Tipo por contenido + contentType explícito: sin esto, una foto o PDF sin
+// extensión subía como "octet-stream" y la regla de Storage lo rechazaba con un
+// error en inglés (incidente portal 08-oct; mismo riesgo aquí). utils/archivos.
 async function subirArchivoResultado(
   examenId: string,
   file: File,
   sufijo: string,
 ): Promise<string> {
-  const limpio = `${Date.now()}_${sufijo}_${file.name}`.replace(/[^\w.\-]+/g, '_');
-  const r = storageRef(storage, `resultados_examenes/${examenId}/${limpio}`);
-  await uploadBytes(r, file);
+  const listo = await prepararArchivo(file, { permitidos: ['pdf', 'imagen'], maxBytes: 15 * MB });
+  const r = storageRef(storage, `resultados_examenes/${examenId}/${Date.now()}_${sufijo}_${listo.nombreSeguro}`);
+  await uploadBytes(r, listo.blob, { contentType: listo.contentType });
   return getDownloadURL(r);
 }
 
 // Orden de exámenes (PDF/imagen) que sube quien envía la orden (GH o gestor SST).
 async function subirArchivoOrden(examenId: string, file: File): Promise<string> {
-  const limpio = `${Date.now()}_orden_${file.name}`.replace(/[^\w.\-]+/g, '_');
-  const r = storageRef(storage, `ordenes_examenes/${examenId}/${limpio}`);
-  await uploadBytes(r, file);
+  const listo = await prepararArchivo(file, { permitidos: ['pdf', 'imagen'], maxBytes: 8 * MB });
+  const r = storageRef(storage, `ordenes_examenes/${examenId}/${Date.now()}_orden_${listo.nombreSeguro}`);
+  await uploadBytes(r, listo.blob, { contentType: listo.contentType });
   return getDownloadURL(r);
 }
 
@@ -345,7 +349,7 @@ export default function ExamenesMedicosPage() {
       window.alert(`Orden enviada al integrante (${res.data.email_destinatario}).`);
       setAccion(null);
     } catch (e) {
-      window.alert('No se pudo enviar la orden: ' + (e instanceof Error ? e.message : String(e)));
+      window.alert('No se pudo enviar la orden: ' + mensajeErrorSubida(e, 'inténtalo de nuevo.'));
     } finally {
       setProcesando(null);
     }
@@ -399,7 +403,7 @@ export default function ExamenesMedicosPage() {
       );
       setAccion(null);
     } catch (e) {
-      window.alert('No se pudo registrar el resultado: ' + (e instanceof Error ? e.message : String(e)));
+      window.alert('No se pudo registrar el resultado: ' + mensajeErrorSubida(e, 'inténtalo de nuevo.'));
     } finally {
       setProcesando(null);
     }
