@@ -46,6 +46,9 @@ export const onNotificacionCreate = onDocumentCreated(
     const noti = snap.data();
 
     if (noti.email_enviado_en) return;
+    // Aviso informativo solo para la campana (p. ej. coordinación: "el líder
+    // reenvió la solicitud corregida"); no se repite por correo.
+    if (noti.solo_campana === true) return;
 
     if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
       logger.info('onNotificacionCreate · GMAIL_* ausentes, email omitido', {

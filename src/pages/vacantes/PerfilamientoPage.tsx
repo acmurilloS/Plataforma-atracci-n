@@ -221,6 +221,12 @@ export default function PerfilamientoPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!vacante || !user || !perfil) return;
+    // Devuelta por GH (reu 08-oct): no se perfila hasta que el líder la corrija y
+    // GH la revise; si no, el guardado la saltaba a "lista para publicar".
+    if (vacante.estado === 'devuelta') {
+      setErr('GH devolvió esta solicitud al líder para corregirla: no se puede perfilar todavía.');
+      return;
+    }
     setEnviando(true);
     setErr(null);
     try {
@@ -349,6 +355,14 @@ export default function PerfilamientoPage() {
 
       <PoliticaCriticidadBanner criticidad={vacante.criticidad} />
 
+      {vacante.estado === 'devuelta' && (
+        <div className="rounded-md border border-danger-500/30 bg-danger-50/60 px-4 py-3 text-[13px] text-text-body">
+          <span className="font-semibold text-danger-700">Devuelta por GH para corregir.</span> No se
+          puede perfilar hasta que {vacante.lider_nombre || 'el líder'} la corrija y GH la revise de
+          nuevo.{vacante.aval_rechazo_motivo ? ` Motivo: ${vacante.aval_rechazo_motivo}` : ''}
+        </div>
+      )}
+
       {soloLectura && (
         <div className="rounded-md border border-brand-200 bg-brand-50/50 px-4 py-3 text-[13px] text-text-body">
           Vista de <strong>solo lectura</strong> (Conexión de Talentos): puedes consultar el
@@ -357,7 +371,10 @@ export default function PerfilamientoPage() {
       )}
 
       <form onSubmit={onSubmit}>
-        <fieldset disabled={soloLectura} className="space-y-6 border-0 p-0 m-0 min-w-0">
+        <fieldset
+          disabled={soloLectura || vacante.estado === 'devuelta'}
+          className="space-y-6 border-0 p-0 m-0 min-w-0"
+        >
         {/* ─── Criterios y mercado ──────────────────────────────── */}
         <Card padding="lg">
           <div className="flex items-center gap-2 mb-5">

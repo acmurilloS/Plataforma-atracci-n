@@ -18,8 +18,10 @@ import { SemaforoANS } from '../../components/ui/SemaforoANS';
 import { cn } from '../../utils/cn';
 import {
   diasTranscurridos,
-  esVacanteCerrada,
+  esVacanteActiva,
+  esVacanteSuspendida,
   etiquetaFasePipeline,
+  FASE_SUSPENDIDA,
   FASES_PIPELINE,
   pipelineReal,
   tiemposPorEtapa,
@@ -41,10 +43,15 @@ import { CargandoPagina } from '../../components/ui/CargandoPagina';
  *
  * Las fases son la fase REAL de cada vacante (reu Karen 09-sep): la más avanzada
  * entre su estado y el de sus candidatos en curso — ver `pipelineReal`.
+ *
+ * Reu Karen 08-oct: "Vacantes activas" ya NO incluye las suspendidas (la suma de
+ * las fases daba 25 contando suspendidas). Las fases suman exactamente las
+ * activas; las suspendidas se muestran aparte y tampoco cuentan en el ANS.
  */
 
 const ESTADO_TONO: Record<string, PillTono> = {
   borrador: 'neutral',
+  devuelta: 'danger',
   aprobada: 'brand',
   lista_para_publicar: 'brand',
   publicada: 'warning',
@@ -66,6 +73,7 @@ const CRITICIDAD_TONO: Record<string, PillTono> = {
 
 // Color de cada fase real (mismo en la card oscura, el donut y la leyenda).
 const FASE_COLOR: Record<FasePipeline, { bg: string; text: string }> = {
+  aprobacion: { bg: 'bg-info-700', text: 'text-info-700' },
   reclutamiento: { bg: 'bg-info-500', text: 'text-info-500' },
   entrevista_analista: { bg: 'bg-warning-500', text: 'text-warning-500' },
   entrevista_lider: { bg: 'bg-brand-300', text: 'text-brand-300' },
@@ -87,6 +95,14 @@ function fechaDe(ts: unknown): Date | null {
   return (ts as { toDate?: () => Date } | null | undefined)?.toDate?.() ?? null;
 }
 
+/** Ventana de "Días hábiles por etapa": 30/90 días o toda la historia (0). */
+type VentanaTiempos = 30 | 90 | 0;
+const VENTANAS: { valor: VentanaTiempos; etiqueta: string }[] = [
+  { valor: 30, etiqueta: '30 días' },
+  { valor: 90, etiqueta: '90 días' },
+  { valor: 0, etiqueta: 'Histórico' },
+];
+
 export default function DashboardCoordPage() {
   const { docs: vacantes, cargando } = useColeccion<VacanteDoc>('vacantes', {
     orden: ['creado_en', 'desc'],
@@ -99,11 +115,12 @@ export default function DashboardCoordPage() {
 
   const festivos = useFestivosTodos();
 
-  // Todas las activas con días hábiles transcurridos (mayor riesgo primero).
+  // Todas las activas con días hábiles transcurridos (mayor riesgo primero). Las
+  // suspendidas no corren ANS: están detenidas (reu Karen 08-oct).
   const activasFull = useMemo(() => {
     const hoy = new Date();
     return vacantes
-      .filter((v) => !esVacanteCerrada(v.estado))
+      .filter((v) => esVacanteActiva(v.estado))
       .map((v) => ({ v, dias: diasTranscurridos(v, festivos, hoy) ?? 0 }))
       .sort((a, b) => b.dias - a.dias);
   }, [vacantes, festivos]);
@@ -120,7 +137,20 @@ export default function DashboardCoordPage() {
   }, [activasFull]);
 
   const criticas = useMemo(() => activasFull.filter((a) => a.dias > 10).slice(0, 10), [activasFull]);
-  const tramos = useMemo(() => tiemposPorEtapa(vacantes, festivos), [vacantes, festivos]);
+  // Por defecto los últimos 30 días: el promedio de toda la historia arrastraba
+  // los traslados de agosto y "no bajaba nunca" (reu Karen 08-oct).
+  const [ventana, setVentana] = useState<VentanaTiempos>(30);
+  const tramos = useMemo(
+    () =>
+      tiemposPorEtapa(vacantes, festivos, {
+        desde: ventana ? new Date(Date.now() - ventana * 24 * 60 * 60 * 1000) : null,
+      }),
+    [vacantes, festivos, ventana],
+  );
+  const hayTramosHistoricos = useMemo(
+    () => tiemposPorEtapa(vacantes, festivos).some((t) => t.n > 0),
+    [vacantes, festivos],
+  );
   const maxTramo = Math.max(...tramos.map((t) => t.promedio), 1);
 
   const stats = useMemo(() => {
@@ -130,8 +160,10 @@ export default function DashboardCoordPage() {
       porCriticidad[v.criticidad] = (porCriticidad[v.criticidad] ?? 0) + 1;
       porEmpresa[v.empresa_codigo] = (porEmpresa[v.empresa_codigo] ?? 0) + 1;
     }
-    const activas = vacantes.filter((v) => !esVacanteCerrada(v.estado)).length;
-    return { porCriticidad, porEmpresa, total: vacantes.length, activas };
+    // Activas = en proceso; las suspendidas van aparte (reu Karen 08-oct).
+    const activas = vacantes.filter((v) => esVacanteActiva(v.estado)).length;
+    const suspendidas = vacantes.filter((v) => esVacanteSuspendida(v.estado)).length;
+    return { porCriticidad, porEmpresa, total: vacantes.length, activas, suspendidas };
   }, [vacantes]);
 
   // Fase real de cada vacante activa + personas en curso por fase.
@@ -186,15 +218,38 @@ export default function DashboardCoordPage() {
 
     if (drill.startsWith('fase:')) {
       const fase = drill.slice(5) as FasePipeline;
-      const label = FASES_PIPELINE.find((f) => f.clave === fase)?.etiqueta ?? fase;
+      const label = etiquetaFasePipeline(fase);
       const arr = vacantes.filter((v) => pipe.porVacante.get(v.id) === fase);
       return {
-        titulo: `Fase · ${label}`,
-        descripcion: 'según el candidato más avanzado',
+        titulo: fase === 'suspendida' ? 'Suspendidas' : `Fase · ${label}`,
+        descripcion:
+          fase === 'aprobacion'
+            ? 'esperando el visto bueno de GH o la corrección del líder'
+            : fase === 'suspendida'
+              ? 'detenidas · no suman en las activas ni en el ANS'
+              : 'según el candidato más avanzado',
         tono: 'info' as const,
         icono: <Layers size={20} strokeWidth={1.75} />,
         items: arr.map((v) => {
           const it = base(v);
+          // Aprobación: lo que importa es si la tiene GH o el líder (devuelta).
+          if (fase === 'aprobacion' && (v.estado === 'devuelta' || v.estado === 'borrador')) {
+            return {
+              ...it,
+              sub: v.estado === 'devuelta' && v.aval_rechazo_motivo
+                ? `${it.sub} · ${v.aval_rechazo_motivo.replace(/\s+/g, ' ').slice(0, 90)}`
+                : it.sub,
+              right: (
+                <Pill tono={v.estado === 'devuelta' ? 'danger' : 'warning'} dot>
+                  {v.estado === 'devuelta'
+                    ? 'Devuelta al líder'
+                    : v.reenviada_en
+                      ? 'Corregida · en GH'
+                      : 'Por aprobar GH'}
+                </Pill>
+              ),
+            };
+          }
           // Quiénes están en esta fase: así se ve, p. ej., al repostulado que ya
           // va en contratación aunque la vacante siga "publicada".
           const personas = pipe.personasPorVacante.get(v.id)?.get(fase) ?? [];
@@ -315,6 +370,7 @@ export default function DashboardCoordPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-6">
         <PipelineHeroCard
           activas={stats.activas}
+          suspendidas={stats.suspendidas}
           total={stats.total}
           pipe={pipe}
           onFase={(f) => setDrill(`fase:${f}`)}
@@ -390,6 +446,19 @@ export default function DashboardCoordPage() {
                   onClick={pipe.vacantes[f.clave] ? () => setDrill(`fase:${f.clave}`) : undefined}
                 />
               ))}
+              {/* Suspendidas: aparte, sin porcentaje (no son parte de las activas). */}
+              {stats.suspendidas > 0 && (
+                <div className="mt-1.5 pt-1.5 border-t border-slate-100">
+                  <DonutLegend
+                    colorClass={FASE_COLOR.suspendida.bg}
+                    label={`${FASE_SUSPENDIDA.etiqueta}s · aparte`}
+                    value={stats.suspendidas}
+                    total={0}
+                    sinPorcentaje
+                    onClick={() => setDrill('fase:suspendida')}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -414,17 +483,40 @@ export default function DashboardCoordPage() {
       </div>
 
       {/* ── Tiempos promedio por etapa (cuellos de botella) ────────── */}
-      {tramos.length > 0 && (
+      {hayTramosHistoricos && (
         <Card padding="lg">
-          <SectionHeader
-            dotClass="bg-warning-500"
-            eyebrow="Tiempos"
-            titulo="Días hábiles por etapa"
-            sub="Promedio por tramo del proceso · ordenado por cuello de botella"
-          />
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <SectionHeader
+              dotClass="bg-warning-500"
+              eyebrow="Tiempos"
+              titulo="Días hábiles por etapa"
+              sub={
+                ventana
+                  ? `Etapas terminadas en los últimos ${ventana} días · ordenado por cuello de botella`
+                  : 'Toda la historia · ordenado por cuello de botella'
+              }
+            />
+            <div className="inline-flex rounded-md border border-slate-200 bg-white overflow-hidden shrink-0">
+              {VENTANAS.map((w) => (
+                <button
+                  key={w.valor}
+                  type="button"
+                  onClick={() => setVentana(w.valor)}
+                  className={cn(
+                    'px-3 py-1.5 text-[12px] font-medium transition-colors',
+                    ventana === w.valor
+                      ? 'bg-slate-900 text-white'
+                      : 'text-text-muted hover:text-text-strong hover:bg-slate-50',
+                  )}
+                >
+                  {w.etiqueta}
+                </button>
+              ))}
+            </div>
+          </div>
           <ul className="space-y-3.5 mt-6">
             {tramos.map((t) => {
-              const barPct = Math.round((t.promedio / maxTramo) * 100);
+              const barPct = t.n ? Math.round((t.promedio / maxTramo) * 100) : 0;
               return (
                 <li key={t.etiqueta}>
                   <div className="flex items-center justify-between text-[12px] mb-1 gap-3">
@@ -432,8 +524,14 @@ export default function DashboardCoordPage() {
                       {t.etiqueta} <span className="text-text-subtle">· {t.actor}</span>
                     </span>
                     <span className="text-text-subtle tabular-nums shrink-0">
-                      <span className="font-semibold text-text-strong">{t.promedio}</span> días · n=
-                      {t.n}
+                      {t.n ? (
+                        <>
+                          <span className="font-semibold text-text-strong">{t.promedio}</span> días · n=
+                          {t.n}
+                        </>
+                      ) : (
+                        'sin datos en el periodo'
+                      )}
                     </span>
                   </div>
                   <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -446,9 +544,12 @@ export default function DashboardCoordPage() {
               );
             })}
           </ul>
-          <p className="text-[11px] text-text-subtle mt-4">
-            "Aprobación del aval" aproxima la aprobación de Cultura/GH (Diego responde por correo,
-            fuera del sistema). Cada tramo promedia solo las vacantes que llegaron a esa etapa (n).
+          <p className="text-[11px] text-text-subtle mt-4 leading-[1.55]">
+            Cada tramo promedia las vacantes que terminaron esa etapa en el periodo (n).
+            "Asignación de analista" va de la aprobación de GH (o, si no pasó por ella, de la llegada
+            de la solicitud) a la PRIMERA analista asignada: los traslados entre analistas ya no suman.
+            Los procesos migrados de la base anterior no cuentan en aprobación, asignación ni
+            reclutamiento.
           </p>
         </Card>
       )}
@@ -567,14 +668,19 @@ function SectionHeader({
   );
 }
 
-/** Card oscura del pipeline activo — número gigante + sub-celdas por fase real. */
+/**
+ * Card oscura del pipeline activo — número gigante + sub-celdas por fase real.
+ * Las 6 celdas suman exactamente las activas; las suspendidas van debajo, aparte.
+ */
 function PipelineHeroCard({
   activas,
+  suspendidas,
   total,
   pipe,
   onFase,
 }: {
   activas: number;
+  suspendidas: number;
   total: number;
   pipe: PipelineReal;
   onFase?: (f: FasePipeline) => void;
@@ -622,6 +728,16 @@ function PipelineHeroCard({
             />
           ))}
         </div>
+        {suspendidas > 0 && (
+          <button
+            type="button"
+            onClick={onFase ? () => onFase('suspendida') : undefined}
+            className="mt-4 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-white/50 hover:text-white/80 hover:underline"
+          >
+            <span className={cn('h-1.5 w-1.5 rounded-full', FASE_COLOR.suspendida.bg)} />
+            + {suspendidas} {suspendidas === 1 ? 'suspendida' : 'suspendidas'} · no suman en las activas
+          </button>
+        )}
       </div>
     </div>
   );
@@ -684,6 +800,7 @@ function PipeCell({
 
 const DONUT_C = 238.76; // 2π·38
 
+/** Donut de las ACTIVAS por fase (las suspendidas no entran). */
 function DonutFase({ pipe }: { pipe: PipelineReal }) {
   const totalPipe = FASES_PIPELINE.reduce((s, f) => s + pipe.vacantes[f.clave], 0);
   const total = Math.max(1, totalPipe);
@@ -717,7 +834,7 @@ function DonutFase({ pipe }: { pipe: PipelineReal }) {
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-[27px] font-light text-text-strong tabular-nums leading-none">{totalPipe}</span>
         <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.12em] text-text-subtle">
-          en curso
+          activas
         </span>
       </div>
     </div>
@@ -730,12 +847,15 @@ function DonutLegend({
   value,
   total,
   onClick,
+  sinPorcentaje,
 }: {
   colorClass: string;
   label: string;
   value: number;
   total: number;
   onClick?: () => void;
+  /** Filas aparte (suspendidas): solo el número. */
+  sinPorcentaje?: boolean;
 }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
@@ -753,7 +873,9 @@ function DonutLegend({
         <span className="text-[13px] text-text-body font-medium truncate">{label}</span>
       </div>
       <div className="flex items-baseline gap-2 shrink-0">
-        <span className="text-[11px] font-medium text-text-subtle tabular-nums">{pct}%</span>
+        {!sinPorcentaje && (
+          <span className="text-[11px] font-medium text-text-subtle tabular-nums">{pct}%</span>
+        )}
         <span className="text-[15px] font-semibold text-text-strong tabular-nums w-6 text-right">{value}</span>
       </div>
     </button>

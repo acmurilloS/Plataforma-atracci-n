@@ -10,6 +10,7 @@ import {
   construirBaseVacantes,
   construirResumenMensual,
   esVacanteCerrada,
+  esVacanteSuspendida,
   pipelineReal,
   type EntrevistaMin,
   type ExamenMin,
@@ -120,7 +121,9 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
   );
 
   const cerradas = filtradas.filter((v) => esVacanteCerrada(v.estado)).length;
-  const activas = filtradas.length - cerradas;
+  // Activas sin suspendidas, igual que el dashboard (reu Karen 08-oct).
+  const suspendidas = filtradas.filter((v) => esVacanteSuspendida(v.estado)).length;
+  const activas = filtradas.length - cerradas - suspendidas;
 
   const [generando, setGenerando] = useState<'base' | 'mensual' | null>(null);
   const [error, setError] = useState('');
@@ -280,7 +283,8 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
           <Filter size={12} strokeWidth={1.75} />
           <span className="tabular-nums">
             <span className="font-semibold text-text-strong">{filtradas.length}</span> vacantes ·{' '}
-            {activas} activas · {cerradas} cerradas
+            {activas} activas{suspendidas ? ` · ${suspendidas} suspendidas` : ''} · {cerradas}{' '}
+            cerradas
           </span>
         </p>
         <div className="flex items-center gap-2 flex-wrap">

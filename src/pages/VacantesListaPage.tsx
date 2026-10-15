@@ -29,6 +29,7 @@ import { cn } from '../utils/cn';
 
 const ESTADOS: string[] = [
   'borrador',
+  'devuelta',
   'aprobada',
   'lista_para_publicar',
   'publicada',
@@ -44,6 +45,7 @@ const ESTADOS: string[] = [
 
 const ESTADO_TONO: Record<string, PillTono> = {
   borrador: 'neutral',
+  devuelta: 'danger',
   aprobada: 'brand',
   lista_para_publicar: 'brand',
   publicada: 'warning',

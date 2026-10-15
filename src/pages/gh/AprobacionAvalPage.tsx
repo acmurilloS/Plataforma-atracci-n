@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ChevronDown, ExternalLink, FileText, ShieldCheck, X } from 'lucide-react';
-import { Timestamp } from 'firebase/firestore';
+import { Check, ChevronDown, ExternalLink, FileText, RotateCcw, ShieldCheck, X } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
-import { useMutacion } from '../../hooks/useMutacion';
 import { formatearCOP } from '../../utils/moneda';
 import { formatearFecha } from '../../utils/fechas';
 import { puedeVerVacante } from '../../utils/accesoRutas';
@@ -13,7 +13,15 @@ import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { CondicionesVacante } from '../../components/vacantes/CondicionesVacante';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
-import { TIPO_SOLICITUD_LABEL, type EstadoVacante, type VacanteDoc } from '../../schemas';
+import {
+  TIPO_NOVEDAD_LABEL,
+  TIPO_SOLICITUD_LABEL,
+  TIPOS_REVISION_GH,
+  type EstadoVacante,
+  type NovedadVacanteDoc,
+  type TipoNovedadVacante,
+  type VacanteDoc,
+} from '../../schemas';
 
 /**
  * AprobacionAvalPage · sistema brand.
@@ -32,6 +40,13 @@ import { TIPO_SOLICITUD_LABEL, type EstadoVacante, type VacanteDoc } from '../..
  * que en cuanto coordinación publicaba la vacante, a Diego "se le borraba" la
  * solicitud que acababa de aprobar. Ahora cada fila se despliega con la
  * solicitud completa (condiciones, justificación, aval, estado actual).
+ *
+ * Reu Karen + Diego 08-oct: "Rechazar" ya NO cancela la vacante (se borraba del
+ * tablero de Karen y se perdía el consecutivo). Ahora la DEVUELVE al líder
+ * (estado `devuelta`) con el motivo; el líder la corrige y la reenvía, y vuelve a
+ * Pendientes marcada como "Corregida". Aprobar y devolver pasan por la callable
+ * `decidirSolicitudVacante` (estado + bitácora + avisos en una transacción). La
+ * nota que Diego ya escribió pasa al motivo del rechazo (antes se borraba).
  */
 
 type Filtro = 'pendientes' | 'aprobadas' | 'rechazadas';
@@ -40,18 +55,20 @@ const inputClass =
   'w-full rounded-brand-input bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-text-strong placeholder:text-text-subtle transition-colors duration-150 ease-out focus:bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-300/40 resize-none leading-relaxed';
 
 /**
- * Estados que NO cuentan como "ya aprobada": el borrador sigue pendiente y la
- * cancelada incluye los rechazos de GH (razon_cierre 'GH rechazó…'), que viven
- * en su propia pestaña. Todo lo demás (aprobada, publicada, en proceso, terna,
- * contratación, cerrada, desierta, pausada) pasó por la aprobación.
+ * Estados que NO cuentan como "ya aprobada": el borrador sigue pendiente, la
+ * devuelta está con el líder y la cancelada incluye los rechazos viejos de GH
+ * (razon_cierre 'GH rechazó…', de antes del 08-oct), que viven en "Rechazadas".
+ * Todo lo demás (aprobada, publicada, en proceso, terna, contratación, cerrada,
+ * desierta, pausada) pasó por la aprobación.
  */
-const ESTADOS_SIN_APROBAR = new Set<EstadoVacante>(['borrador', 'cancelada']);
+const ESTADOS_SIN_APROBAR = new Set<EstadoVacante>(['borrador', 'devuelta', 'cancelada']);
 
 // Estado ACTUAL de la vacante en la fila histórica (mismos tonos que Mis
 // vacantes). Label corto en español para la Pill: aquí importa saber en qué
 // paso va, no el detalle de la fase.
 const ESTADO_TONO: Record<string, PillTono> = {
   borrador: 'neutral',
+  devuelta: 'danger',
   aprobada: 'brand',
   lista_para_publicar: 'brand',
   publicada: 'warning',
@@ -66,6 +83,7 @@ const ESTADO_TONO: Record<string, PillTono> = {
 };
 const ESTADO_LABEL: Record<string, string> = {
   borrador: 'Pendiente de aprobación',
+  devuelta: 'Devuelta · esperando corrección del líder',
   aprobada: 'Aprobada · en perfilamiento',
   lista_para_publicar: 'Lista para publicar',
   publicada: 'Publicada',
@@ -80,7 +98,7 @@ const ESTADO_LABEL: Record<string, string> = {
 };
 
 export default function AprobacionAvalPage() {
-  const { user, perfil, rol } = useAuth();
+  const { user, rol } = useAuth();
   // GH (Diego/Paola) NO tiene acceso al detalle de vacantes ajenas (reu Karen
   // 09-jul: no ven el pipeline de reclutamiento). La card de aprobación ya trae
   // todo lo necesario para decidir, así que a ellos se les oculta el link (si
@@ -91,9 +109,9 @@ export default function AprobacionAvalPage() {
   const puedeVerDetallePorRol = puedeVerVacante(rol);
   const puedeAbrirDetalle = (v: VacanteDoc) =>
     puedeVerDetallePorRol || (rol === 'gh' && !!user && v.lider_uid === user.uid);
-  const { actualizar, crear } = useMutacion();
   const [procesando, setProcesando] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('pendientes');
 
   // useColeccion ya hace fallback automático a orden en cliente si el
@@ -109,6 +127,12 @@ export default function AprobacionAvalPage() {
     orden: ['creado_en', 'desc'],
     limit: 300,
   });
+  // Devueltas al líder (reu 08-oct): siguen vivas hasta que el líder las corrija.
+  const { docs: devueltas, cargando: cargD } = useColeccion<VacanteDoc>('vacantes', {
+    filtros: [['estado', '==', 'devuelta']],
+    orden: ['creado_en', 'desc'],
+  });
+  // Rechazos de antes del 08-oct: quedaron canceladas con razon_cierre 'GH rechazó…'.
   const { docs: canceladas, cargando: cargC } = useColeccion<VacanteDoc>('vacantes', {
     filtros: [['estado', '==', 'cancelada']],
     orden: ['creado_en', 'desc'],
@@ -127,15 +151,23 @@ export default function AprobacionAvalPage() {
       .filter(
         (v) =>
           !ESTADOS_SIN_APROBAR.has(v.estado) &&
-          // Un borrador suspendido desde la bitácora nunca pasó por GH: no es "aprobada".
-          !(v.estado === 'pausada' && v.estado_previo_pausa === 'borrador'),
+          // Un borrador (o devuelta) suspendido desde la bitácora nunca pasó por GH:
+          // no es "aprobada".
+          !(
+            v.estado === 'pausada' &&
+            (v.estado_previo_pausa === 'borrador' || v.estado_previo_pausa === 'devuelta')
+          ),
       )
       .sort((a, b) => fechaMs(b) - fechaMs(a));
   }, [todas]);
-  const rechazadas = useMemo(
-    () => canceladas.filter((v) => (v.razon_cierre ?? '').toLowerCase().includes('gh rechazó')),
-    [canceladas],
-  );
+  // Rechazadas = devueltas vivas (las más recientes primero) + rechazos viejos.
+  const rechazadas = useMemo(() => {
+    const ms = (v: VacanteDoc) => (v.devuelta_en ?? v.creado_en)?.toMillis() ?? 0;
+    const viejas = canceladas.filter((v) =>
+      (v.razon_cierre ?? '').toLowerCase().includes('gh rechazó'),
+    );
+    return [...[...devueltas].sort((a, b) => ms(b) - ms(a)), ...viejas];
+  }, [devueltas, canceladas]);
 
   const visibles =
     filtro === 'pendientes'
@@ -145,63 +177,35 @@ export default function AprobacionAvalPage() {
         : rechazadas;
   // Cada pestaña espera a SU query: si no, "Aprobadas" mostraba el vacío un
   // instante mientras llegaba la lista amplia.
-  const cargando = filtro === 'pendientes' ? cargB : filtro === 'aprobadas' ? cargA : cargC;
+  const cargando =
+    filtro === 'pendientes' ? cargB : filtro === 'aprobadas' ? cargA : cargC || cargD;
 
-  async function aprobar(v: VacanteDoc, nota: string) {
+  /** Aprobar o devolver: la callable hace estado + bitácora + avisos juntos. */
+  async function decidir(v: VacanteDoc, decision: 'aprobar' | 'devolver', nota: string) {
     if (!user) return;
-    setProcesando(v.id);
-    setErr(null);
-    try {
-      const ahora = Timestamp.now();
-      await actualizar('vacantes', v.id, {
-        estado: 'aprobada',
-        aval_aprobado_por: user.uid,
-        aval_aprobado_en: ahora,
-        aval_observaciones: nota.trim() || null,
-      });
-      await crear('notificaciones', {
-        destinatario_uid: v.lider_uid,
-        tipo: 'aval_aprobado',
-        titulo: 'Aval aprobado · vacante lista para perfilamiento',
-        mensaje: `${v.cargo_nombre} (${v.consecutivo}) fue aprobada por ${perfil?.nombre ?? 'GH'}. ${nota ? `Nota: ${nota}` : ''}`.trim(),
-        link: `/vacantes/${v.id}`,
-        leida: false,
-        leida_en: null,
-      });
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No pudimos aprobar.');
-    } finally {
-      setProcesando(null);
-    }
-  }
-
-  async function rechazar(v: VacanteDoc, motivo: string) {
-    if (!user) return;
-    if (!motivo.trim()) {
-      setErr('El motivo es obligatorio al rechazar.');
+    if (decision === 'devolver' && nota.trim().length < 5) {
+      setErr('Escribe el motivo de la devolución: el líder lo necesita para corregir.');
       return;
     }
     setProcesando(v.id);
     setErr(null);
+    setAviso(null);
     try {
-      const ahora = Timestamp.now();
-      await actualizar('vacantes', v.id, {
-        estado: 'cancelada',
-        razon_cierre: `GH rechazó: ${motivo}`,
-        aval_rechazo_motivo: motivo,
-        cerrada_en: ahora,
-      });
-      await crear('notificaciones', {
-        destinatario_uid: v.lider_uid,
-        tipo: 'aval_rechazado',
-        titulo: 'Aval rechazado · revisa observaciones',
-        mensaje: `${v.cargo_nombre} (${v.consecutivo}) fue rechazada por ${perfil?.nombre ?? 'GH'}. Motivo: ${motivo}`,
-        link: `/vacantes/${v.id}`,
-        leida: false,
-        leida_en: null,
-      });
+      const fn = httpsCallable(functions, 'decidirSolicitudVacante');
+      await fn({ vacante_id: v.id, decision, nota: nota.trim() });
+      setAviso(
+        decision === 'aprobar'
+          ? `${v.consecutivo} aprobada. Le avisamos a ${v.lider_nombre || 'el líder'}.`
+          : `${v.consecutivo} devuelta a ${v.lider_nombre || 'el líder'} para corregir. Queda en «Rechazadas» con su consecutivo y le avisamos a coordinación.`,
+      );
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No pudimos rechazar.');
+      setErr(
+        e instanceof Error
+          ? e.message
+          : decision === 'aprobar'
+            ? 'No pudimos aprobar.'
+            : 'No pudimos devolver la solicitud.',
+      );
     } finally {
       setProcesando(null);
     }
@@ -214,12 +218,17 @@ export default function AprobacionAvalPage() {
         tono="brand"
         eyebrow="Paso 2 · GH / Coordinación"
         titulo="Aprobación de aval y condiciones"
-        descripcion="Revisa el aval firmado por Alejandro, valida la banda salarial y aprueba o rechaza cada vacante en borrador. Solo después de aprobar pasa a perfilamiento."
+        descripcion="Revisa el aval firmado por Alejandro y las condiciones de cada solicitud. Apruébala o recházala con un motivo: la rechazada vuelve al líder para corregirla, con el mismo consecutivo. Solo después de aprobar pasa a perfilamiento."
       />
 
       {err && (
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700">
           {err}
+        </div>
+      )}
+      {aviso && (
+        <div className="rounded-md border border-success-500/20 bg-success-50 px-3.5 py-2.5 text-[13px] text-success-700">
+          {aviso}
         </div>
       )}
 
@@ -251,6 +260,14 @@ export default function AprobacionAvalPage() {
           </nav>
         </div>
 
+        {/* Rechazadas: siguen vivas con su consecutivo (reu 08-oct). */}
+        {filtro === 'rechazadas' && !cargando && visibles.length > 0 && (
+          <p className="text-[12px] text-text-muted">
+            Solicitudes que devolviste al líder para corregir. No se cancelan: conservan el
+            consecutivo y el historial, y cuando el líder las corrige vuelven a{' '}
+            <span className="font-medium text-text-body">Pendientes</span> marcadas como corregidas.
+          </p>
+        )}
         {/* Aprobadas: aquí la solicitud no se "borra" al avanzar (reu Karen 25-sep). */}
         {filtro === 'aprobadas' && !cargando && visibles.length > 0 && (
           <p className="text-[12px] text-text-muted">
@@ -287,6 +304,12 @@ export default function AprobacionAvalPage() {
               para volver a consultarlas.
             </p>
           )}
+          {filtro === 'rechazadas' && (
+            <p className="text-[12px] text-text-muted mt-1 max-w-md mx-auto">
+              Cuando rechaces una solicitud, quedará aquí con su motivo hasta que el líder la
+              corrija y la reenvíe.
+            </p>
+          )}
         </div>
       )}
 
@@ -298,8 +321,8 @@ export default function AprobacionAvalPage() {
               vacante={v}
               procesando={procesando === v.id}
               puedeVerDetalle={puedeAbrirDetalle(v)}
-              onAprobar={(n) => aprobar(v, n)}
-              onRechazar={(n) => rechazar(v, n)}
+              onAprobar={(n) => decidir(v, 'aprobar', n)}
+              onRechazar={(n) => decidir(v, 'devolver', n)}
             />
           ))}
         </div>
@@ -522,6 +545,43 @@ function VacanteCardAprobacion({
         </div>
       </div>
 
+      {/* Corregida por el líder tras una devolución (reu 08-oct): motivo + qué cambió. */}
+      {vacante.reenviada_en && (
+        <div className="mt-5 rounded-md border border-warning-500/40 bg-warning-50/60 p-4">
+          <div className="flex items-center gap-2">
+            <RotateCcw size={14} strokeWidth={1.75} className="text-warning-700" />
+            <p className="text-[12px] font-semibold text-warning-700">
+              Corregida y reenviada
+              {vacante.reenviada_por_nombre ? ` por ${vacante.reenviada_por_nombre}` : ''} ·{' '}
+              {formatearFecha(vacante.reenviada_en.toDate())}
+              {(vacante.devoluciones ?? 0) > 1 ? ` · devuelta ${vacante.devoluciones} veces` : ''}
+            </p>
+          </div>
+          {vacante.aval_rechazo_motivo && (
+            <p className="mt-2 text-[12.5px] text-text-body whitespace-pre-line">
+              <span className="font-semibold">Tu motivo:</span> {vacante.aval_rechazo_motivo}
+            </p>
+          )}
+          <div className="mt-2 text-[12.5px] text-text-body">
+            <span className="font-semibold">Qué cambió:</span>{' '}
+            {vacante.reenvio_cambios?.length ? (
+              <ul className="mt-1 space-y-0.5">
+                {vacante.reenvio_cambios.map((c) => (
+                  <li key={c}>• {c}</li>
+                ))}
+              </ul>
+            ) : (
+              'no cambió las condiciones (ver la nota).'
+            )}
+          </div>
+          {vacante.reenvio_nota && (
+            <p className="mt-2 text-[12.5px] text-text-body whitespace-pre-line">
+              <span className="font-semibold">Nota del líder:</span> {vacante.reenvio_nota}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Condiciones completas: lo que Cultura y Desarrollo valida. */}
       <div className="mt-5">
         <CondicionesVacante vacante={vacante} incluirTipoSolicitud />
@@ -575,34 +635,67 @@ function VacanteCardAprobacion({
 
       {mostrarRechazo && (
         <FormularioRechazo
-          onCancelar={() => setMostrarRechazo(false)}
+          liderNombre={vacante.lider_nombre}
+          consecutivo={vacante.consecutivo}
+          // La nota que ya escribió pasa al motivo (reu 08-oct: "se eliminó la nota").
+          inicial={nota}
+          onCancelar={(motivo) => {
+            setNota(motivo);
+            setMostrarRechazo(false);
+          }}
           onConfirmar={(motivo) => onRechazar(motivo)}
           procesando={procesando}
         />
+      )}
+
+      {((vacante.devoluciones ?? 0) > 0 || (vacante.reenvios ?? 0) > 0) && (
+        <div className="mt-5">
+          <HistorialRevision vacanteId={vacante.id} />
+        </div>
       )}
     </Card>
   );
 }
 
+/**
+ * Rechazar = DEVOLVER al líder para corregir (reu 08-oct). Arranca con la nota
+ * que Diego ya había escrito: antes, al hundir "Rechazar", se borraba y tenía que
+ * escribirla otra vez.
+ */
 function FormularioRechazo({
+  liderNombre,
+  consecutivo,
+  inicial,
   onCancelar,
   onConfirmar,
   procesando,
 }: {
-  onCancelar: () => void;
+  liderNombre: string;
+  consecutivo: string;
+  inicial: string;
+  onCancelar: (motivo: string) => void;
   onConfirmar: (motivo: string) => void;
   procesando: boolean;
 }) {
-  const [motivo, setMotivo] = useState('');
+  const [motivo, setMotivo] = useState(inicial);
+  const valido = motivo.trim().length >= 5;
   return (
     <div className="mt-5 rounded-md border border-danger-500/30 bg-danger-50/40 p-4 space-y-3">
-      <p className="text-[13px] font-semibold text-danger-700">
-        Motivo del rechazo <span className="text-text-subtle font-normal">(obligatorio)</span>
-      </p>
+      <div>
+        <p className="text-[13px] font-semibold text-danger-700">
+          Rechazar y devolver al líder{' '}
+          <span className="text-text-subtle font-normal">(motivo obligatorio)</span>
+        </p>
+        <p className="mt-1 text-[12px] text-text-muted leading-[1.5]">
+          La solicitud vuelve a {liderNombre || 'el líder'} con este motivo para que la corrija. No
+          se cancela: conserva el consecutivo {consecutivo} y el historial. A coordinación también
+          le llega el aviso, y cuando el líder la reenvíe volverá aquí a Pendientes.
+        </p>
+      </div>
       <textarea
         value={motivo}
         onChange={(e) => setMotivo(e.target.value)}
-        placeholder="Ej. Salario fuera de banda y sin justificación financiera. Reabrir cuando se ajuste."
+        placeholder="Ej. El básico no corresponde: debe ser $1.750.905. Falta el aval firmado."
         rows={3}
         className={inputClass}
         autoFocus
@@ -611,7 +704,7 @@ function FormularioRechazo({
         <Button
           type="button"
           variant="neutral-secondary"
-          onClick={onCancelar}
+          onClick={() => onCancelar(motivo)}
           disabled={procesando}
         >
           Cancelar
@@ -619,13 +712,61 @@ function FormularioRechazo({
         <Button
           type="button"
           variant="destructive-primary"
-          onClick={() => motivo.trim() && onConfirmar(motivo.trim())}
-          disabled={procesando || !motivo.trim()}
+          onClick={() => valido && onConfirmar(motivo.trim())}
+          disabled={procesando || !valido}
           loading={procesando}
         >
-          {procesando ? 'Rechazando…' : 'Confirmar rechazo'}
+          {procesando ? 'Devolviendo…' : 'Devolver al líder'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Tono de cada paso del historial de revisión de GH. */
+const TONO_REVISION: Partial<Record<TipoNovedadVacante, PillTono>> = {
+  devolucion_gh: 'danger',
+  reenvio_correccion: 'warning',
+  aprobacion_gh: 'success',
+};
+
+/**
+ * Historial de la revisión de GH (devoluciones, reenvíos, aprobación) desde la
+ * bitácora `vacante_novedades`, que escriben las callables en la misma
+ * transacción que el cambio de estado.
+ */
+function HistorialRevision({ vacanteId }: { vacanteId: string }) {
+  const { docs } = useColeccion<NovedadVacanteDoc>('vacante_novedades', {
+    filtros: [['vacante_id', '==', vacanteId]],
+    orden: ['creado_en', 'desc'],
+  });
+  const items = docs.filter((n) => TIPOS_REVISION_GH.includes(n.tipo));
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-md border border-slate-200 p-4">
+      <p className="text-[10px] uppercase tracking-[0.10em] text-text-muted font-bold">
+        Historial de revisión
+      </p>
+      <ul className="mt-3 space-y-3">
+        {items.map((n) => (
+          <li key={n.id} className="flex items-start gap-3">
+            <div className="shrink-0 mt-0.5">
+              <Pill tono={TONO_REVISION[n.tipo] ?? 'neutral'} dot>
+                {TIPO_NOVEDAD_LABEL[n.tipo]}
+              </Pill>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[12.5px] text-text-body whitespace-pre-line leading-relaxed">
+                {n.motivo}
+              </p>
+              <p className="mt-0.5 text-[11px] text-text-subtle tabular-nums">
+                {n.registrado_por_nombre} ·{' '}
+                {n.creado_en ? formatearFecha(n.creado_en.toDate(), 'dd/MM/yyyy HH:mm') : '—'}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -661,9 +802,25 @@ function VacanteRowHistorica({
           <p className="text-[14px] font-medium text-text-strong truncate mt-0.5">
             {vacante.cargo_nombre} · {vacante.empresa_nombre}
           </p>
+          {rechazada && vacante.estado === 'devuelta' && (
+            <div className="mt-1 flex items-center gap-2 flex-wrap">
+              <Pill tono="danger" dot>
+                Esperando corrección del líder
+              </Pill>
+              <span className="text-[11px] text-text-subtle">
+                {vacante.devuelta_por_nombre ? `Devuelta por ${vacante.devuelta_por_nombre}` : 'Devuelta'}
+                {vacante.devuelta_en ? ` · ${formatearFecha(vacante.devuelta_en.toDate())}` : ''}
+                {vacante.lider_nombre ? ` · la tiene ${vacante.lider_nombre}` : ''}
+              </span>
+            </div>
+          )}
           <p className="text-[12px] text-text-muted mt-0.5">
             {rechazada ? (
-              <span className="italic">{vacante.razon_cierre}</span>
+              <span className="italic">
+                {vacante.estado === 'devuelta'
+                  ? `Motivo: ${vacante.aval_rechazo_motivo ?? '—'}`
+                  : vacante.razon_cierre}
+              </span>
             ) : (
               <>
                 <span className="tabular-nums">Salario {formatearCOP(vacante.salario_base)}</span>
@@ -773,6 +930,8 @@ function VacanteRowHistorica({
               </p>
             </div>
           )}
+
+          <HistorialRevision vacanteId={vacante.id} />
         </div>
       )}
     </Card>

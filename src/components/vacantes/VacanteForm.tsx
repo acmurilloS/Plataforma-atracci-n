@@ -345,6 +345,13 @@ export function VacanteForm() {
       setErrorSubmit('Propón una fecha de entrevista con el líder.');
       return;
     }
+    // Contrato temporal sin duración: Cultura y Desarrollo no puede validarlo
+    // (reu 08-oct, Diego revisando "indefinido o temporal").
+    if (data.tipo_contrato === 'temporal' && !data.tiempo_contrato.trim()) {
+      setEnviando(false);
+      setErrorSubmit('Indica el tiempo del contrato temporal (ej. 6 meses).');
+      return;
+    }
     // Comisiones (reu Karen 16-sep): si hay comisión, Cultura y Desarrollo
     // necesita saber cuál presupuesto/indicadores y cómo se mide. Sin eso no
     // se puede armar el contrato.
@@ -379,6 +386,8 @@ export function VacanteForm() {
         // Si no requiere aval, no arrastramos URL/archivo.
         aval_url: data.aval_no_requiere ? '' : data.aval_url,
         aval_drive_file_id: data.aval_no_requiere ? '' : data.aval_drive_file_id,
+        // El tiempo solo aplica al contrato temporal.
+        tiempo_contrato: data.tipo_contrato === 'temporal' ? data.tiempo_contrato.trim() : '',
         // Limpia campos que no aplican al tipo elegido (evita "basura" en Firestore).
         reemplaza_a_nombre:
           data.tipo_solicitud === 'reemplazo_indefinido' ? data.reemplaza_a_nombre.trim() : '',
@@ -760,13 +769,15 @@ export function VacanteForm() {
               </select>
             </Campo>
           </div>
-          <Campo label="Tiempo del contrato (si es temporal)">
-            <input
-              {...register('tiempo_contrato')}
-              placeholder="6 meses / 1 año — solo si el contrato es temporal"
-              className={inputClass}
-            />
-          </Campo>
+          {watch('tipo_contrato') === 'temporal' && (
+            <Campo label="Tiempo del contrato" requerido>
+              <input
+                {...register('tiempo_contrato')}
+                placeholder="6 meses / 1 año"
+                className={inputClass}
+              />
+            </Campo>
+          )}
           <Campo label="Justificación" requerido error={errors.justificacion?.message}>
             <textarea
               {...register('justificacion')}

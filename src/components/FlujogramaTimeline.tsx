@@ -22,8 +22,8 @@ const PASOS: PasoDef[] = [
     titulo: 'Solicitud de vacante',
     fase: 'A',
     rol: 'líder',
-    descripcion: 'El líder abre la solicitud desde /vacantes/nueva.',
-    estadosCubiertos: ['borrador', 'aprobada'],
+    descripcion: 'El líder abre la solicitud desde /vacantes/nueva (y la corrige si GH la devuelve).',
+    estadosCubiertos: ['borrador', 'devuelta', 'aprobada'],
   },
   {
     numero: 2,

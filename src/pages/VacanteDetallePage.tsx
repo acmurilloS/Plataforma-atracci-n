@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Building2,
@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   Layers,
+  RotateCcw,
   ShieldCheck,
   Sparkles,
   User2,
@@ -27,19 +28,19 @@ import { useVacantes } from '../hooks/useVacantes';
 import { useMutacion } from '../hooks/useMutacion';
 import { SelectorCargo } from '../components/vacantes/SelectorCargo';
 import { CondicionesVacante } from '../components/vacantes/CondicionesVacante';
+import { CamposCondiciones } from '../components/vacantes/CamposCondiciones';
+import { CorregirSolicitudModal } from '../components/vacantes/CorregirSolicitudModal';
 import { EditarIdentificacionModal } from '../components/vacantes/EditarIdentificacionModal';
 import { useFestivosTodos } from '../hooks/useCatalogos';
 import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { functions, db } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
-import { formatearCOP, soloDigitos } from '../utils/moneda';
-import { RODAMIENTO_FIJOS, RODAMIENTO_OPCIONES, tieneRodamiento } from '../utils/rodamiento';
+import { tieneRodamiento } from '../utils/rodamiento';
 import {
-  COMISION_TIPOS,
-  COMISION_TIPO_LABEL,
-  etiquetaBaseComision,
-  type ComisionTipo,
-} from '../utils/comisiones';
+  condicionesDesdeVacante,
+  validarCondiciones,
+  type CondicionesForm,
+} from '../utils/condicionesForm';
 import {
   agruparPostulaciones,
   construirBaseVacantes,
@@ -58,7 +59,7 @@ import {
 // Estados en los que aún tiene sentido corregir el cargo: antes de que arranque
 // el reclutamiento en firme. En estados avanzados no se edita para no desalinear
 // el proceso (reu 21-jul: habilitar edición del cargo para corregir errores).
-const ESTADOS_CARGO_EDITABLE = ['borrador', 'aprobada', 'lista_para_publicar'];
+const ESTADOS_CARGO_EDITABLE = ['borrador', 'devuelta', 'aprobada', 'lista_para_publicar'];
 
 /**
  * VacanteDetallePage · sistema brand.
@@ -71,6 +72,7 @@ const ESTADOS_CARGO_EDITABLE = ['borrador', 'aprobada', 'lista_para_publicar'];
 
 const ESTADO_TONO: Record<string, PillTono> = {
   borrador: 'neutral',
+  devuelta: 'danger',
   aprobada: 'brand',
   lista_para_publicar: 'brand',
   publicada: 'warning',
@@ -121,26 +123,29 @@ export default function VacanteDetallePage() {
   // consecutivo cuando cambian las condiciones (petición Karen, jul-2026).
   const esCoord = rol === 'coordinador' || rol === 'admin';
 
+  // ── Devuelta por GH (reu 08-oct) ─────────────────────────────────────────────
+  // El líder dueño la corrige y la reenvía; coordinación puede hacerlo en su
+  // nombre. `?corregir=1` (link del aviso en "Mis vacantes") abre el modal directo.
+  const puedeCorregir = !!vac && vac.estado === 'devuelta' && (esCreador || esCoord);
+  const [corregirAbierto, setCorregirAbierto] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (!puedeCorregir || searchParams.get('corregir') !== '1') return;
+    setCorregirAbierto(true);
+    const sp = new URLSearchParams(searchParams);
+    sp.delete('corregir');
+    setSearchParams(sp, { replace: true });
+  }, [puedeCorregir, searchParams, setSearchParams]);
+
   // ── Editar condiciones (salario/comisiones/rodamiento/garantizado) ──────────
   // El rodamiento se edita por VALOR (misma lista que al crear la vacante) y el
   // booleano `rodamiento` se deriva de él, igual que en VacanteForm. Antes el
   // modal solo tocaba el checkbox y dejaba `rodamiento_valor` desincronizado
   // (reu Karen 16-sep: Diego necesita ver el monto, no un "Sí").
+  // Horario y contrato también (reu 08-oct: Diego veía solicitudes "sin
+  // contrato" — las de antes del 19-ago — y nadie podía completarlas).
   const [editarCondAbierto, setEditarCondAbierto] = useState(false);
-  const [condForm, setCondForm] = useState({
-    salario_base: '',
-    // Comisiones estructuradas (reu 16-sep). '' = vacante vieja sin clasificar.
-    comision_tipo: '' as ComisionTipo | '',
-    comision_base: '',
-    comision_medicion: '',
-    comision_aplica_bolsa: false,
-    comision_bolsa_detalle: '',
-    comisiones_texto: '',
-    rodamiento_valor: '',
-    garantizado_texto: '',
-  });
-  // "Otro valor…" en el desplegable: el valor guardado no es uno de la lista.
-  const [rodOtro, setRodOtro] = useState(false);
+  const [condForm, setCondForm] = useState<CondicionesForm | null>(null);
   const [guardandoCond, setGuardandoCond] = useState(false);
   const [errCond, setErrCond] = useState<string | null>(null);
 
@@ -152,63 +157,24 @@ export default function VacanteDetallePage() {
   function abrirEditarCondiciones() {
     if (!vac) return;
     // Misma precedencia que `textoRodamiento` (el booleano manda): lo que se ve
-    // en pantalla es lo que aparece seleccionado. Si no, guardar otro campo
-    // podía voltear el rodamiento en silencio en docs desincronizados.
-    const guardado = (vac.rodamiento_valor ?? '').trim();
-    const valor = vac.rodamiento ? (tieneRodamiento(guardado) ? guardado : '') : 'No aplica';
-    setCondForm({
-      salario_base: String(vac.salario_base ?? ''),
-      comision_tipo: vac.comision_tipo ?? '',
-      comision_base: vac.comision_base ?? '',
-      comision_medicion: vac.comision_medicion ?? '',
-      comision_aplica_bolsa: Boolean(vac.comision_aplica_bolsa),
-      comision_bolsa_detalle: vac.comision_bolsa_detalle ?? '',
-      comisiones_texto: vac.comisiones_texto ?? '',
-      rodamiento_valor: valor,
-      garantizado_texto: vac.garantizado_texto ?? '',
-    });
-    setRodOtro(Boolean(vac.rodamiento) && !RODAMIENTO_FIJOS.has(valor));
+    // en pantalla es lo que aparece seleccionado (ver condicionesDesdeVacante).
+    setCondForm(condicionesDesdeVacante(vac));
     setErrCond(null);
     setEditarCondAbierto(true);
   }
   async function guardarCondiciones() {
-    if (!vac) return;
-    const salario = Number(condForm.salario_base);
-    if (!Number.isFinite(salario) || salario <= 0) {
-      setErrCond('Ingresa un salario base válido.');
-      return;
-    }
-    const rodamientoValor = condForm.rodamiento_valor.trim();
-    const otroVacio = rodOtro && !rodamientoValor;
-    if (otroVacio && !rodamientoSinValorPrevio) {
-      setErrCond('Escribe el valor del rodamiento o elige "No aplica".');
-      return;
-    }
-    // Comisiones: con tipo distinto de "ninguna" hay que decir cuál y cómo se mide.
-    const tipoComision = condForm.comision_tipo === '' ? null : condForm.comision_tipo;
-    const hayComision = tipoComision !== null && tipoComision !== 'ninguna';
-    if (hayComision && (!condForm.comision_base.trim() || !condForm.comision_medicion.trim())) {
-      setErrCond('Para la comisión indica cuál presupuesto o indicadores aplican y cómo se mide.');
+    if (!vac || !condForm) return;
+    // Mismas reglas que al corregir una devuelta (utils/condicionesForm). Aquí el
+    // contrato no es obligatorio: una vacante vieja puede seguir "sin registrar".
+    const r = validarCondiciones(condForm, { rodamientoSinValorPrevio, exigirContrato: false });
+    if (!r.ok) {
+      setErrCond(r.error);
       return;
     }
     setGuardandoCond(true);
     setErrCond(null);
     try {
-      await actualizar('vacantes', vac.id, {
-        salario_base: salario,
-        comision_tipo: tipoComision,
-        comision_base: hayComision ? condForm.comision_base.trim() : '',
-        comision_medicion: hayComision ? condForm.comision_medicion.trim() : '',
-        comision_aplica_bolsa: hayComision ? condForm.comision_aplica_bolsa : false,
-        comision_bolsa_detalle:
-          hayComision && condForm.comision_aplica_bolsa ? condForm.comision_bolsa_detalle.trim() : '',
-        // Sin comisión ("ninguna") el concepto no aplica; sin clasificar (null) se conserva.
-        comisiones_texto: tipoComision === 'ninguna' ? '' : condForm.comisiones_texto.trim(),
-        rodamiento_valor: rodamientoValor,
-        // "Otro valor…" vacío en un doc que ya venía sin valor: se conserva el sí.
-        rodamiento: otroVacio ? Boolean(vac.rodamiento) : tieneRodamiento(rodamientoValor),
-        garantizado_texto: condForm.garantizado_texto.trim(),
-      });
+      await actualizar('vacantes', vac.id, r.patch);
       setEditarCondAbierto(false);
     } catch (e) {
       setErrCond(e instanceof Error ? e.message : 'No se pudieron guardar las condiciones.');
@@ -394,12 +360,13 @@ export default function VacanteDetallePage() {
         </div>
         <div className="self-start flex flex-col items-end gap-1">
           <Pill tono={tono} dot>
-            {vac.estado.replace(/_/g, ' ')}
+            {vac.estado === 'devuelta' ? 'devuelta por GH' : vac.estado.replace(/_/g, ' ')}
           </Pill>
-          {/* Fase real cuando los candidatos van por delante del estado (reu Karen 10-sep). */}
+          {/* Fase real cuando los candidatos van por delante del estado (reu Karen 10-sep).
+              La devuelta tiene su propio aviso abajo. */}
           {(() => {
             const f = faseTarjeta(vac, resumenVacante.get(vac.id));
-            return f.secundario ? (
+            return f.secundario && vac.estado !== 'devuelta' ? (
               <span className="text-[11px] text-text-muted text-right">
                 {f.letra ? `Fase ${f.letra} · ` : ''}
                 {f.texto}
@@ -408,6 +375,63 @@ export default function VacanteDetallePage() {
           })()}
         </div>
       </div>
+
+      {/* ─── Devuelta por GH (reu 08-oct): sigue viva con su consecutivo ─── */}
+      {vac.estado === 'devuelta' && (
+        <div className="rounded-md border border-danger-500/30 bg-danger-50/60 p-5 flex items-start justify-between gap-4 flex-wrap print:hidden">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-md bg-danger-500/10 text-danger-700 flex items-center justify-center shrink-0">
+              <RotateCcw size={18} strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-danger-700">
+                Devuelta por GH para corregir
+                {vac.devuelta_por_nombre ? ` · ${vac.devuelta_por_nombre}` : ''}
+                {vac.devuelta_en ? ` · ${formatearFecha(vac.devuelta_en.toDate())}` : ''}
+              </p>
+              <p className="mt-1 text-[14px] text-text-strong whitespace-pre-line leading-relaxed">
+                {vac.aval_rechazo_motivo?.trim() || 'Sin motivo registrado.'}
+              </p>
+              <p className="mt-1.5 text-[12px] text-text-muted leading-[1.5]">
+                {esCreador
+                  ? 'Corrige lo que te piden y reenvíala a GH: conserva el mismo consecutivo, no hace falta crear otra vacante.'
+                  : `La tiene ${vac.lider_nombre || 'el líder'}: cuando la corrija y la reenvíe vuelve a revisión de GH con el mismo consecutivo.${
+                      puedeCorregir ? ' Coordinación también puede corregirla en su nombre.' : ''
+                    }`}
+              </p>
+            </div>
+          </div>
+          {puedeCorregir && (
+            <Button
+              variant="brand-primary"
+              onClick={() => setCorregirAbierto(true)}
+              icon={<RotateCcw size={13} strokeWidth={1.75} />}
+            >
+              Corregir y reenviar
+            </Button>
+          )}
+        </div>
+      )}
+      {vac.estado === 'borrador' && vac.reenviada_en && (
+        <div className="rounded-md border border-warning-500/30 bg-warning-50/60 px-4 py-3 print:hidden">
+          <p className="text-[12px] text-text-body leading-[1.5]">
+            <span className="font-semibold text-warning-700">Corregida y reenviada a GH</span> el{' '}
+            {formatearFecha(vac.reenviada_en.toDate())}
+            {vac.reenviada_por_nombre ? ` por ${vac.reenviada_por_nombre}` : ''}. Esperando la
+            revisión de Cultura y Desarrollo.
+          </p>
+          {!!vac.reenvio_cambios?.length && (
+            <ul className="mt-1.5 text-[12px] text-text-muted space-y-0.5">
+              {vac.reenvio_cambios.map((c) => (
+                <li key={c}>• {c}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {corregirAbierto && (
+        <CorregirSolicitudModal vacante={vac} onClose={() => setCorregirAbierto(false)} />
+      )}
 
       <div className="flex flex-wrap gap-2 print:hidden">
         {/* Talentos (José) y apoyo (IT/compras) entran a la vacante pero NO al
@@ -527,7 +551,7 @@ export default function VacanteDetallePage() {
           onClick={() => !guardandoCond && setEditarCondAbierto(false)}
         >
           <div
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-[16px] font-semibold text-text-strong">Editar condiciones</h2>
@@ -535,171 +559,15 @@ export default function VacanteDetallePage() {
               Actualiza las condiciones de la vacante{' '}
               <span className="font-mono">{vac.consecutivo}</span> cuando cambien.
             </p>
-            <div className="mt-4 space-y-3.5">
-              <label className="block">
-                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
-                  Salario base
-                </span>
-                <input
-                  inputMode="numeric"
-                  value={condForm.salario_base ? formatearCOP(Number(condForm.salario_base)) : ''}
-                  onChange={(e) =>
-                    setCondForm((p) => ({ ...p, salario_base: soloDigitos(e.target.value) }))
-                  }
+            {condForm && (
+              <div className="mt-4">
+                <CamposCondiciones
+                  form={condForm}
+                  onChange={(c) => setCondForm((p) => (p ? { ...p, ...c } : p))}
                   disabled={guardandoCond}
-                  placeholder="$ 0"
-                  className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
                 />
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
-                  Comisiones
-                </span>
-                <select
-                  value={condForm.comision_tipo}
-                  onChange={(e) =>
-                    setCondForm((p) => ({ ...p, comision_tipo: e.target.value as ComisionTipo | '' }))
-                  }
-                  disabled={guardandoCond}
-                  className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
-                >
-                  {condForm.comision_tipo === '' && (
-                    <option value="">Sin clasificar (vacante anterior)</option>
-                  )}
-                  {COMISION_TIPOS.map((t) => (
-                    <option key={t} value={t}>
-                      {COMISION_TIPO_LABEL[t]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {condForm.comision_tipo !== 'ninguna' && (
-                <>
-                  {condForm.comision_tipo !== '' && (
-                    <>
-                      <label className="block">
-                        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
-                          {etiquetaBaseComision(condForm.comision_tipo)}
-                        </span>
-                        <textarea
-                          value={condForm.comision_base}
-                          onChange={(e) => setCondForm((p) => ({ ...p, comision_base: e.target.value }))}
-                          disabled={guardandoCond}
-                          rows={2}
-                          placeholder="Cuál presupuesto o cuáles indicadores"
-                          className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500 resize-none"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
-                          Cómo se mide y se paga
-                        </span>
-                        <textarea
-                          value={condForm.comision_medicion}
-                          onChange={(e) =>
-                            setCondForm((p) => ({ ...p, comision_medicion: e.target.value }))
-                          }
-                          disabled={guardandoCond}
-                          rows={2}
-                          placeholder="% sobre lo vendido, periodicidad, tabla por rangos…"
-                          className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500 resize-none"
-                        />
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={condForm.comision_aplica_bolsa}
-                          onChange={(e) =>
-                            setCondForm((p) => ({ ...p, comision_aplica_bolsa: e.target.checked }))
-                          }
-                          disabled={guardandoCond}
-                          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
-                        />
-                        <span className="text-[13px] text-text-strong">Aplica bolsa</span>
-                      </label>
-                      {condForm.comision_aplica_bolsa && (
-                        <input
-                          value={condForm.comision_bolsa_detalle}
-                          onChange={(e) =>
-                            setCondForm((p) => ({ ...p, comision_bolsa_detalle: e.target.value }))
-                          }
-                          disabled={guardandoCond}
-                          placeholder="Detalle de la bolsa"
-                          className="w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
-                        />
-                      )}
-                    </>
-                  )}
-                  <label className="block">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
-                      Concepto para el candidato
-                    </span>
-                    <input
-                      value={condForm.comisiones_texto}
-                      onChange={(e) => setCondForm((p) => ({ ...p, comisiones_texto: e.target.value }))}
-                      disabled={guardandoCond}
-                      placeholder="Ej.: 3% sobre ventas · vacío = No aplica"
-                      className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
-                    />
-                  </label>
-                </>
-              )}
-              <label className="block">
-                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
-                  Garantizado
-                </span>
-                <input
-                  value={condForm.garantizado_texto}
-                  onChange={(e) => setCondForm((p) => ({ ...p, garantizado_texto: e.target.value }))}
-                  disabled={guardandoCond}
-                  placeholder="Ej.: $1.500.000 x 3 meses · vacío = No aplica"
-                  className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
-                />
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
-                  Auxilio de rodamiento
-                </span>
-                <select
-                  value={
-                    rodOtro
-                      ? '__otro__'
-                      : RODAMIENTO_FIJOS.has(condForm.rodamiento_valor)
-                        ? condForm.rodamiento_valor
-                        : ''
-                  }
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === '__otro__') {
-                      setRodOtro(true);
-                      setCondForm((p) => ({ ...p, rodamiento_valor: '' }));
-                    } else {
-                      setRodOtro(false);
-                      setCondForm((p) => ({ ...p, rodamiento_valor: v }));
-                    }
-                  }}
-                  disabled={guardandoCond}
-                  className="mt-1 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
-                >
-                  <option value="">Selecciona…</option>
-                  {RODAMIENTO_OPCIONES.map((o) => (
-                    <option key={o.valor} value={o.valor}>
-                      {o.label}
-                    </option>
-                  ))}
-                  <option value="__otro__">Otro valor…</option>
-                </select>
-                {rodOtro && (
-                  <input
-                    value={condForm.rodamiento_valor}
-                    onChange={(e) => setCondForm((p) => ({ ...p, rodamiento_valor: e.target.value }))}
-                    disabled={guardandoCond}
-                    placeholder="Escribe el valor del rodamiento"
-                    className="mt-2 w-full rounded-brand-input border border-slate-300 bg-white px-3 py-2 text-[13px] text-text-strong focus:outline-none focus:border-brand-500"
-                  />
-                )}
-              </label>
-            </div>
+              </div>
+            )}
             {errCond && <p className="mt-3 text-[12px] text-danger-700">{errCond}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <Button

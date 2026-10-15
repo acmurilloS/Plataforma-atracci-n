@@ -23,6 +23,11 @@ export const tipoNovedadVacante = z.enum([
   'reactivacion',      // se retoma una vacante suspendida
   'observacion',       // nota general de trazabilidad
   'asignacion_analista', // staff asignó/reasignó la analista (lo crea la callable, no el form)
+  // Revisión de GH de la solicitud (reu 08-oct). Las crean las callables
+  // decidirSolicitudVacante / reenviarSolicitudVacante, nunca el formulario.
+  'devolucion_gh',       // GH devolvió la solicitud al líder para corregir
+  'reenvio_correccion',  // el líder (o coordinación) corrigió y la reenvió a GH
+  'aprobacion_gh',       // GH aprobó las condiciones
 ]);
 export type TipoNovedadVacante = z.infer<typeof tipoNovedadVacante>;
 
@@ -34,7 +39,17 @@ export const TIPO_NOVEDAD_LABEL: Record<TipoNovedadVacante, string> = {
   reactivacion: 'Reactivación',
   observacion: 'Observación general',
   asignacion_analista: 'Asignación de analista',
+  devolucion_gh: 'Devuelta por GH',
+  reenvio_correccion: 'Corregida y reenviada',
+  aprobacion_gh: 'Aprobada por GH',
 };
+
+/** Tipos que forman el historial de revisión de GH de una solicitud. */
+export const TIPOS_REVISION_GH: TipoNovedadVacante[] = [
+  'devolucion_gh',
+  'reenvio_correccion',
+  'aprobacion_gh',
+];
 
 /** Orden en que se ofrecen los tipos en el formulario. */
 export const TIPOS_NOVEDAD_VACANTE: TipoNovedadVacante[] = [

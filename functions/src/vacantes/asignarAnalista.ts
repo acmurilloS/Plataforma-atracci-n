@@ -74,11 +74,19 @@ export const asignarAnalista = onCall({ region: 'us-central1' }, async (req) => 
   // vacante nunca queda reasignada sin su entrada en la bitácora ni el aviso.
   const batch = db.batch();
 
+  // PRIMERA asignación (reu 08-oct): `analista_asignado_en` se pisa en cada
+  // reasignación y el indicador "Asignación de analista" terminaba midiendo hasta
+  // el traslado (38 días en vez de 8). Esta fecha no se vuelve a tocar. En una
+  // vacante vieja reasignada sin el campo, la mejor pista es la asignación previa.
+  const primeraPrevia = vac.analista_primera_asignacion_en ?? null;
+  const primera = primeraPrevia ?? (anteriorUid ? (vac.analista_asignado_en ?? ahora) : ahora);
+
   batch.update(vacRef, {
     analista_uid: analistaUid,
     analista_nombre: analistaNombre,
     analista_asignado_por: req.auth.uid,
     analista_asignado_en: ahora,
+    ...(primeraPrevia ? {} : { analista_primera_asignacion_en: primera }),
     actualizado_por: req.auth.uid,
     actualizado_en: ahora,
   });

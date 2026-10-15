@@ -12,6 +12,7 @@ import {
   FOOTER_EMPRESAS_DEFAULT,
 } from '../notificaciones/plantillasMensajes';
 import { textoComisiones } from '../utils/comisiones';
+import { textoContrato } from './condicionesSolicitud';
 
 const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
@@ -59,9 +60,21 @@ export type ResultadoAvisoCultura = {
  *  - Si el correo falla, deja rastro en la vacante y avisa a coordinación
  *    (no es un fallo silencioso).
  */
+/**
+ * Datos del REENVÍO (reu 08-oct): el líder corrigió una solicitud que Diego
+ * devolvió. El correo cambia de asunto e incluye el motivo de la devolución, qué
+ * cambió y la nota del líder, para que Diego no compare a ojo.
+ */
+export type ReenvioCultura = {
+  motivo: string;
+  nota: string;
+  cambios: string[];
+  por: string;
+};
+
 export async function avisarCondicionesCultura(
   vacanteId: string,
-  opts: { forzar?: boolean } = {},
+  opts: { forzar?: boolean; reenvio?: ReenvioCultura } = {},
 ): Promise<ResultadoAvisoCultura> {
   const ref = db.collection('vacantes').doc(vacanteId);
   const snap = await ref.get();
@@ -130,13 +143,15 @@ export async function avisarCondicionesCultura(
   }
   const ccCopia = coordinadores.map((c) => c.email).filter((e) => e);
 
-  // Tabla de condiciones (escapeHtml a todo lo que viene del líder).
+  // Tabla de condiciones (escapeHtml a todo lo que viene del líder). El contrato
+  // se agregó en la reu 08-oct (Diego veía solicitudes "sin contrato").
   const condiciones: [string, string][] = [
     ['Tipo de solicitud', tipoSolicitud || '—'],
     ['Salario base', formatearCOP(salario)],
     ['Comisiones', comisiones],
     ['Rodamiento', rodamiento],
     ['Garantizado', garantizado || 'No aplica'],
+    ['Contrato', textoContrato(v)],
   ];
   // Los saltos de línea se respetan (comisiones y garantizado son textareas: una
   // tabla por rangos pegada en una sola tira era ilegible para Diego).
@@ -150,8 +165,40 @@ export async function avisarCondicionesCultura(
     .join('');
 
   const empresaSede = [empresa, sede].filter(Boolean).join(' · ');
-  const cuerpo = `
-    <p style="margin:0 0 14px;">Hola Diego,</p>
+  const reenvio = opts.reenvio;
+  const htmlTexto = (s: string) => escapeHtml(s).replace(/\n/g, '<br>');
+  // Reenvío tras una devolución: motivo + qué cambió + nota, ANTES de la tabla.
+  const bloqueReenvio = reenvio
+    ? `
+    <div style="margin:0 0 18px;padding:14px 16px;border-left:3px solid #be1e0d;background:#fef2f2;border-radius:6px;font-size:14px;">
+      ${
+        reenvio.motivo
+          ? `<p style="margin:0 0 10px;"><strong>Tu motivo de devolución:</strong><br>${htmlTexto(reenvio.motivo)}</p>`
+          : ''
+      }
+      <p style="margin:0 0 6px;"><strong>Lo que cambió:</strong></p>
+      ${
+        reenvio.cambios.length
+          ? `<ul style="margin:0 0 10px;padding-left:18px;">${reenvio.cambios
+              .map((c) => `<li style="margin:0 0 3px;">${escapeHtml(c)}</li>`)
+              .join('')}</ul>`
+          : '<p style="margin:0 0 10px;">No cambió las condiciones (ver la nota).</p>'
+      }
+      ${reenvio.nota ? `<p style="margin:0;"><strong>Nota para GH:</strong><br>${htmlTexto(reenvio.nota)}</p>` : ''}
+    </div>`
+    : '';
+  const intro = reenvio
+    ? `
+    <p style="margin:0 0 14px;">
+      <strong>${escapeHtml(reenvio.por)}</strong> corrigió la solicitud que devolviste para el cargo de
+      <strong>${escapeHtml(cargo || 'sin especificar')}</strong>${
+        empresaSede ? ` (${escapeHtml(empresaSede)})` : ''
+      }${consecutivo ? `, consecutivo <strong>${escapeHtml(consecutivo)}</strong>` : ''}, y te la
+      reenvía para revisión.
+    </p>
+    ${bloqueReenvio}
+    <p style="margin:0 0 8px;">Así quedaron las condiciones:</p>`
+    : `
     <p style="margin:0 0 14px;">
       Ha llegado una solicitud de vacante a <strong>Cultura y Desarrollo</strong> para el cargo de
       <strong>${escapeHtml(cargo || 'sin especificar')}</strong>${
@@ -160,7 +207,10 @@ export async function avisarCondicionesCultura(
         consecutivo ? `. Consecutivo <strong>${escapeHtml(consecutivo)}</strong>` : ''
       }.
     </p>
-    <p style="margin:0 0 8px;">El líder registró las siguientes condiciones:</p>
+    <p style="margin:0 0 8px;">El líder registró las siguientes condiciones:</p>`;
+  const cuerpo = `
+    <p style="margin:0 0 14px;">Hola Diego,</p>
+    ${intro}
     <table style="border-collapse:collapse;font-size:14px;margin:0 0 18px;">${filasHtml}</table>
     <p style="margin:0 0 18px;">
       Revisa y <strong>aprueba o rechaza</strong> las condiciones directamente en la plataforma.
@@ -182,10 +232,12 @@ export async function avisarCondicionesCultura(
 
   const html = envolverMarca(cuerpo, {
     footerEmpresas: FOOTER_EMPRESAS_DEFAULT,
-    preheader: `Nueva solicitud de vacante — ${cargo}${empresa ? ` en ${empresa}` : ''}`,
+    preheader: reenvio
+      ? `Solicitud corregida por el líder — ${cargo}${empresa ? ` en ${empresa}` : ''}`
+      : `Nueva solicitud de vacante — ${cargo}${empresa ? ` en ${empresa}` : ''}`,
   });
 
-  const subject = `Nueva solicitud de vacante — ${cargo || 'cargo'}${
+  const subject = `${reenvio ? 'Solicitud corregida' : 'Nueva solicitud de vacante'} — ${cargo || 'cargo'}${
     consecutivo ? ` (${consecutivo})` : ''
   }`;
 
@@ -245,7 +297,7 @@ export async function avisarCondicionesCultura(
       cc: ccCopia,
       autor_uid: 'system',
       autor_rol: 'system',
-      payload: { consecutivo, cargo },
+      payload: { consecutivo, cargo, reenvio: !!reenvio },
       creado_en: FieldValue.serverTimestamp(),
       creado_por: 'system',
     });

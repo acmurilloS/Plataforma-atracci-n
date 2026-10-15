@@ -144,10 +144,36 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
    */
   aval_observaciones?: string | null;
   /**
-   * Motivo del rechazo en campo propio y consultable (además de embeberlo en
-   * `razon_cierre` por retrocompat con el filtro de "Rechazadas"). Opcional.
+   * Motivo de la ÚLTIMA devolución de GH (reu 08-oct: el rechazo ya no cierra la
+   * vacante, la devuelve al líder). Se conserva después de reenviar/aprobar como
+   * historia; la UI solo lo resalta mientras la vacante está `devuelta` o recién
+   * corregida. Las vacantes viejas lo tienen junto a `razon_cierre: 'GH rechazó…'`.
    */
   aval_rechazo_motivo?: string | null;
+  /**
+   * Devolución de GH (callable `decidirSolicitudVacante`, decisión 'devolver').
+   * Quién y cuándo devolvió por última vez, y cuántas veces se ha devuelto.
+   */
+  devuelta_en?: Timestamp | null;
+  devuelta_por?: string | null;
+  devuelta_por_nombre?: string | null;
+  devoluciones?: number;
+  /**
+   * Foto de las condiciones al momento de devolver: al reenviar se compara
+   * contra ella para decirle a GH qué cambió (aunque el líder haya editado la
+   * identificación por aparte). Solo datos que ya están en la vacante.
+   */
+  devolucion_snapshot?: Record<string, unknown> | null;
+  /**
+   * Reenvío del líder tras corregir (callable `reenviarSolicitudVacante`):
+   * cuándo, quién, su nota para GH y la lista legible de cambios.
+   */
+  reenviada_en?: Timestamp | null;
+  reenviada_por?: string | null;
+  reenviada_por_nombre?: string | null;
+  reenvio_nota?: string | null;
+  reenvio_cambios?: string[] | null;
+  reenvios?: number;
   proceso_activo_id: string | null;
   analista_uid: string | null;
   analista_nombre: string | null;
@@ -160,6 +186,13 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
    */
   analista_asignado_por?: string | null;
   analista_asignado_en?: Timestamp | null;
+  /**
+   * PRIMERA asignación de analista (reu 08-oct). `analista_asignado_en` se pisa
+   * en cada reasignación (p. ej. el traslado de las vacantes de Génesis), y el
+   * indicador "Asignación de analista" medía hasta la reasignación: 38 días en
+   * vez de 8. Este campo no se pisa nunca; lo pone `asignarAnalista`.
+   */
+  analista_primera_asignacion_en?: Timestamp | null;
   /**
    * Fecha REAL de activación del proceso (reu Karen 19-ago). Para procesos viejos
    * migrados de la base anterior, `creado_en` es la fecha de carga, no la de inicio

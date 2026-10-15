@@ -107,8 +107,16 @@ export const TIPO_MOVIMIENTO_LABEL: Record<TipoMovimiento, string> = {
   transversal: 'Transversal (otra área)',
 };
 
+/**
+ * `devuelta` (reu Karen + Diego 08-oct): GH revisó la solicitud y la devolvió al
+ * líder para corregirla (salario, aval…). NO es un cierre: conserva el
+ * consecutivo y el historial, y cuando el líder la corrige y reenvía vuelve a
+ * `borrador` (pendiente de GH). Antes el rechazo la dejaba `cancelada` y
+ * desaparecía del tablero de coordinación.
+ */
 export const estadoVacante = z.enum([
   'borrador',
+  'devuelta',
   'aprobada',
   'lista_para_publicar',
   'publicada',

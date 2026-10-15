@@ -32,6 +32,9 @@ const TIPO_TONO: Record<TipoNovedadVacante, PillTono> = {
   suspension: 'danger',
   reactivacion: 'success',
   asignacion_analista: 'info',
+  devolucion_gh: 'danger',
+  reenvio_correccion: 'warning',
+  aprobacion_gh: 'success',
 };
 
 /** Roles del equipo de Atracción que ven y gestionan la bitácora (no líderes).

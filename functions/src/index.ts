@@ -24,6 +24,9 @@ export { asignarAnalista } from './vacantes/asignarAnalista';
 export { eliminarVacante } from './vacantes/eliminarVacante';
 // Editar la identificación de la vacante (empresa/sede/unidad/tipo) — líder creador o staff.
 export { editarDatosVacante } from './vacantes/editarDatosVacante';
+// Revisión de GH (reu 08-oct): aprobar / DEVOLVER al líder (ya no cancela) y
+// reenviar la solicitud corregida con el mismo consecutivo.
+export { decidirSolicitudVacante, reenviarSolicitudVacante } from './vacantes/revisionSolicitud';
 // Resumen de postulaciones EN CURSO por vacante -> fase real en Seguimiento (reu Karen 10-sep).
 export { onPostulacionResumen } from './vacantes/onPostulacionResumen';
 // Reconciliación del resumen: callable admin (dry_run por defecto) + programada diaria 03:00.

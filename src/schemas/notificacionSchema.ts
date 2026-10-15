@@ -44,4 +44,10 @@ export interface NotificacionDoc extends CamposAuditoria {
   link: string | null;
   leida: boolean;
   leida_en: Timestamp | null;
+  /**
+   * true = aviso informativo solo para la campana: onNotificacionCreate NO manda
+   * correo (p. ej. "el líder reenvió la solicitud corregida" a coordinación, que
+   * ya la ve en el tablero). Opcional; ausente = también va por correo.
+   */
+  solo_campana?: boolean;
 }

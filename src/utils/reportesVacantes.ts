@@ -27,6 +27,20 @@ export function esVacanteCerrada(estado: string): boolean {
   return (ESTADOS_CERRADOS as readonly string[]).includes(estado);
 }
 
+/** Suspendida (`pausada`): sigue abierta pero NO está en proceso. */
+export function esVacanteSuspendida(estado: string): boolean {
+  return estado === 'pausada';
+}
+
+/**
+ * ACTIVA = en proceso: ni terminada ni suspendida (reu Karen 08-oct: "si está
+ * suspendida no debería sumarla, debería sumarnos solo las activas"). Las
+ * suspendidas se muestran aparte en todos los tableros.
+ */
+export function esVacanteActiva(estado: string): boolean {
+  return !esVacanteCerrada(estado) && !esVacanteSuspendida(estado);
+}
+
 /** Convierte un Timestamp de Firestore (o nulo/pendiente) a Date o null seguro. */
 function aDate(ts: unknown): Date | null {
   if (!ts) return null;
@@ -165,6 +179,7 @@ export function agruparPostulaciones(postulaciones: PostulacionDoc[]): Map<strin
  * de sus candidatos en curso.
  */
 export type FasePipeline =
+  | 'aprobacion'
   | 'reclutamiento'
   | 'entrevista_analista'
   | 'entrevista_lider'
@@ -174,22 +189,30 @@ export type FasePipeline =
 
 type FaseAvance = Exclude<FasePipeline, 'suspendida'>;
 
-/** En orden del proceso; `suspendida` va aparte (no es un avance). */
-export const FASES_PIPELINE: ReadonlyArray<{ clave: FasePipeline; etiqueta: string }> = [
+/**
+ * Fases de las vacantes ACTIVAS, en orden del proceso: suman el total de activas
+ * (reu Karen 08-oct). `aprobacion` = esperando el visto bueno de GH o devuelta al
+ * líder para corregir (antes caían en "Reclutamiento" sin estarlo).
+ */
+export const FASES_PIPELINE: ReadonlyArray<{ clave: FaseAvance; etiqueta: string }> = [
+  { clave: 'aprobacion', etiqueta: 'Aprobación GH' },
   { clave: 'reclutamiento', etiqueta: 'Reclutamiento' },
   { clave: 'entrevista_analista', etiqueta: 'Entrevista analista' },
   { clave: 'entrevista_lider', etiqueta: 'Entrevista líder' },
   { clave: 'examenes', etiqueta: 'Exámenes médicos' },
   { clave: 'contratacion', etiqueta: 'Contratación' },
-  { clave: 'suspendida', etiqueta: 'Suspendida' },
 ];
 
+/** Las suspendidas van APARTE: no son un avance ni suman en las activas. */
+export const FASE_SUSPENDIDA = { clave: 'suspendida' as const, etiqueta: 'Suspendida' };
+
 const RANGO_FASE: Record<FaseAvance, number> = {
-  reclutamiento: 0,
-  entrevista_analista: 1,
-  entrevista_lider: 2,
-  examenes: 3,
-  contratacion: 4,
+  aprobacion: 0,
+  reclutamiento: 1,
+  entrevista_analista: 2,
+  entrevista_lider: 3,
+  examenes: 4,
+  contratacion: 5,
 };
 
 /**
@@ -224,15 +247,19 @@ export function faseDeCandidato(estado: string): FaseAvance | null {
 
 /** Fase que ya indica el estado de la vacante por sí solo. */
 function faseBaseVacante(estado: string): FaseAvance {
+  if (estado === 'borrador' || estado === 'devuelta') return 'aprobacion';
   if (estado === 'terna_enviada' || estado === 'seleccionado') return 'entrevista_lider';
   if (estado === 'en_contratacion') return 'contratacion';
   return 'reclutamiento';
 }
 
 export interface PipelineReal {
-  /** Fase real de cada vacante ACTIVA (id → fase). Las cerradas no aparecen. */
+  /** Fase real de cada vacante abierta (id → fase). Las cerradas no aparecen. */
   porVacante: Map<string, FasePipeline>;
-  /** Vacantes activas por fase real (suman el total de activas). */
+  /**
+   * Vacantes por fase real. Las de FASES_PIPELINE suman el total de ACTIVAS; las
+   * suspendidas van en `suspendida`, aparte.
+   */
   vacantes: Record<FasePipeline, number>;
   /**
    * Personas en curso por la fase de SU postulación (solo vacantes activas; las
@@ -254,6 +281,7 @@ export function pipelineReal(vacantes: VacanteDoc[], postulaciones: PostulacionD
   }
 
   const cero = (): Record<FasePipeline, number> => ({
+    aprobacion: 0,
     reclutamiento: 0,
     entrevista_analista: 0,
     entrevista_lider: 0,
@@ -294,6 +322,7 @@ export function pipelineReal(vacantes: VacanteDoc[], postulaciones: PostulacionD
 }
 
 export function etiquetaFasePipeline(fase: FasePipeline): string {
+  if (fase === FASE_SUSPENDIDA.clave) return FASE_SUSPENDIDA.etiqueta;
   return FASES_PIPELINE.find((f) => f.clave === fase)?.etiqueta ?? fase;
 }
 
@@ -316,6 +345,7 @@ export const FASES_TARJETA: ReadonlyArray<{ letra: LetraFase; etiqueta: string }
 /** Texto legible del estado de la VACANTE (lo que antes pintaba la tarjeta sola). */
 export const ESTADO_VACANTE_LABEL: Record<string, string> = {
   borrador: 'Esperando validación de GH',
+  devuelta: 'Devuelta por GH · en corrección del líder',
   aprobada: 'Aval aprobado · lista para perfilar',
   lista_para_publicar: 'Perfilamiento listo · lista para publicar',
   publicada: 'Publicada · recibiendo HV',
@@ -331,6 +361,7 @@ export const ESTADO_VACANTE_LABEL: Record<string, string> = {
 
 const LETRA_POR_ESTADO_VACANTE: Record<string, LetraFase> = {
   borrador: 'A',
+  devuelta: 'A',
   aprobada: 'A',
   lista_para_publicar: 'B',
   publicada: 'B',
@@ -342,6 +373,7 @@ const LETRA_POR_ESTADO_VACANTE: Record<string, LetraFase> = {
 };
 
 const LETRA_POR_FASE_CANDIDATO: Record<FaseAvance, LetraFase> = {
+  aprobacion: 'A',
   reclutamiento: 'B',
   entrevista_analista: 'C',
   entrevista_lider: 'D',
@@ -378,6 +410,8 @@ function personasPorFase(resumen?: ResumenVacanteDoc | null): Map<FaseAvance, nu
 function textoPersonas(fase: FaseAvance, n: number): string {
   const personas = n === 1 ? '1 persona' : `${n} personas`;
   switch (fase) {
+    case 'aprobacion':
+      return `${personas} en espera de la aprobación de GH`;
     case 'examenes':
       return `${personas} en exámenes médicos`;
     case 'contratacion':
@@ -398,6 +432,8 @@ function responsablePorEstado(v: VacanteDoc): { rol: string; nombre: string } {
   switch (v.estado) {
     case 'borrador':
       return GH;
+    case 'devuelta':
+      return { rol: 'Líder', nombre: v.lider_nombre ?? '—' };
     case 'aprobada':
     case 'lista_para_publicar':
     case 'publicada':
@@ -427,7 +463,11 @@ function responsablePorEstado(v: VacanteDoc): { rol: string; nombre: string } {
  * pausa (si no quedó guardado: D cuando la pausó el reloj de la terna).
  */
 export function faseTarjeta(v: VacanteDoc, resumen?: ResumenVacanteDoc | null): FaseTarjeta {
-  const labelEstado = ESTADO_VACANTE_LABEL[v.estado] ?? v.estado.replace(/_/g, ' ');
+  // Reenviada tras una devolución de GH: que se note que ya viene corregida.
+  const labelEstado =
+    v.estado === 'borrador' && v.reenviada_en
+      ? 'Corregida por el líder · esperando validación de GH'
+      : (ESTADO_VACANTE_LABEL[v.estado] ?? v.estado.replace(/_/g, ' '));
 
   if (v.estado === 'desierta' || v.estado === 'cancelada') {
     return {
@@ -449,6 +489,20 @@ export function faseTarjeta(v: VacanteDoc, resumen?: ResumenVacanteDoc | null): 
       responsable: responsablePorEstado(v),
       suspendida: false,
       terminada: true,
+    };
+  }
+
+  // Devuelta por GH (reu 08-oct): sigue viva en Inicio y la tiene el líder.
+  if (v.estado === 'devuelta') {
+    const motivo = (v.aval_rechazo_motivo ?? '').replace(/\s+/g, ' ').trim();
+    return {
+      letra: 'A',
+      etiquetaFase: 'Inicio',
+      texto: 'Devuelta por GH · el líder debe corregirla',
+      secundario: motivo ? `Motivo: ${motivo.length > 110 ? `${motivo.slice(0, 109)}…` : motivo}` : null,
+      responsable: { rol: 'Líder', nombre: v.lider_nombre ?? '—' },
+      suspendida: false,
+      terminada: false,
     };
   }
 
@@ -540,10 +594,43 @@ export function diasHabilesATerna(v: VacanteDoc, festivos: Set<string>): number 
 }
 
 /**
+ * Proceso MIGRADO de la base anterior: su inicio real (`fecha_activacion`) es de
+ * un día anterior a cuando se cargó en el aplicativo (`creado_en`). Sus fechas de
+ * aprobación/asignación en la plataforma son de la carga, no del proceso real.
+ * (En las vacantes nuevas, coordinación pone la activación el mismo día o después.)
+ */
+export function esVacanteMigrada(v: VacanteDoc): boolean {
+  const activacion = aDate(v.fecha_activacion);
+  const creada = aDate(v.creado_en);
+  if (!activacion || !creada) return false;
+  return formatearFecha(activacion, 'yyyy-MM-dd') < formatearFecha(creada, 'yyyy-MM-dd');
+}
+
+/**
+ * Fecha de la PRIMERA asignación de analista. `analista_asignado_en` se pisa en
+ * cada reasignación (traslado de vacantes entre analistas), así que no sirve para
+ * medir cuánto tardó coordinación en asignar (reu Karen 08-oct).
+ */
+export function primeraAsignacionAnalista(v: VacanteDoc): Date | null {
+  return aDate(v.analista_primera_asignacion_en) ?? aDate(v.analista_asignado_en);
+}
+
+/**
  * Tiempo PROMEDIO (días hábiles) por etapa/actor del proceso, para ver cuellos de
  * botella (reu 18-ago). Cada tramo promedia solo las vacantes que tienen los DOS
- * timestamps (excluye las que no llegaron a esa etapa). Ordenado de mayor a menor
- * para resaltar dónde se demora más.
+ * extremos (las que no llegaron a esa etapa no cuentan).
+ *
+ * Reu Karen 08-oct ("¿cuándo baja el 11.5 de asignación de analista?"): el número
+ * no bajaba nunca porque (1) solo contaba 4 vacantes —las que GH aprobó en la
+ * plataforma—, (2) medía hasta la ÚLTIMA asignación, así que un traslado de
+ * analista sumaba semanas, y (3) era el promedio de toda la historia. Ahora:
+ *  - la asignación cuenta desde la aprobación de GH o, si no pasó por ella, desde
+ *    que la solicitud entró al aplicativo, hasta la PRIMERA asignación;
+ *  - los procesos migrados no cuentan en los tramos que se registraron al cargarlos;
+ *  - `desde` limita a los tramos que TERMINARON en la ventana (p. ej. 30 días),
+ *    para que el indicador refleje cómo se está trabajando hoy.
+ * Devuelve todos los tramos (también con n = 0): primero los que tienen datos, de
+ * mayor a menor promedio.
  */
 export interface TramoTiempo {
   etiqueta: string;
@@ -551,33 +638,83 @@ export interface TramoTiempo {
   promedio: number;
   n: number;
 }
-export function tiemposPorEtapa(vacantes: VacanteDoc[], festivos: Set<string>): TramoTiempo[] {
-  const promedioTramo = (ini: (v: VacanteDoc) => unknown, fin: (v: VacanteDoc) => unknown) => {
-    const dias: number[] = [];
-    for (const v of vacantes) {
-      const a = aDate(ini(v));
-      const b = aDate(fin(v));
-      if (a && b && b.getTime() >= a.getTime()) dias.push(diasHabilesEntre(a, b, festivos));
-    }
-    const n = dias.length;
-    return { promedio: n ? Math.round((dias.reduce((s, d) => s + d, 0) / n) * 10) / 10 : 0, n };
-  };
-  const defs: Array<{
+export interface OpcionesTiempos {
+  /** Solo tramos que terminaron desde esta fecha. null/undefined = toda la historia. */
+  desde?: Date | null;
+}
+export function tiemposPorEtapa(
+  vacantes: VacanteDoc[],
+  festivos: Set<string>,
+  opts: OpcionesTiempos = {},
+): TramoTiempo[] {
+  const desde = opts.desde ?? null;
+  type Def = {
     etiqueta: string;
     actor: string;
-    ini: (v: VacanteDoc) => unknown;
-    fin: (v: VacanteDoc) => unknown;
-  }> = [
-    { etiqueta: 'Aprobación del aval', actor: 'GH / Cultura', ini: (v) => v.creado_en, fin: (v) => v.aval_aprobado_en },
-    { etiqueta: 'Asignación de analista', actor: 'Coordinación', ini: (v) => v.aval_aprobado_en, fin: (v) => v.analista_asignado_en },
-    { etiqueta: 'Reclutamiento → terna', actor: 'Analista', ini: (v) => v.analista_asignado_en, fin: (v) => v.terna_enviada_en },
-    { etiqueta: 'Decisión de la terna', actor: 'Líder', ini: (v) => v.terna_enviada_en, fin: (v) => v.terna_respondida_en },
-    { etiqueta: 'Proceso completo', actor: 'Extremo a extremo', ini: (v) => v.creado_en, fin: (v) => v.cerrada_en },
+    ini: (v: VacanteDoc) => Date | null;
+    fin: (v: VacanteDoc) => Date | null;
+    /** Los procesos migrados registraron este tramo al cargarse: no cuentan. */
+    sinMigradas?: boolean;
+    /** Si el fin quedó ANTES del inicio, el tramo vale 0 (no se descarta). */
+    antesEsCero?: boolean;
+  };
+  const defs: Def[] = [
+    {
+      etiqueta: 'Aprobación GH',
+      actor: 'GH / Cultura',
+      ini: (v) => aDate(v.creado_en),
+      fin: (v) => aDate(v.aval_aprobado_en),
+      sinMigradas: true,
+    },
+    {
+      etiqueta: 'Asignación de analista',
+      actor: 'Coordinación',
+      ini: (v) => aDate(v.aval_aprobado_en) ?? aDate(v.creado_en),
+      fin: primeraAsignacionAnalista,
+      sinMigradas: true,
+      // Asignada antes de que GH aprobara: coordinación no hizo esperar a nadie.
+      antesEsCero: true,
+    },
+    {
+      etiqueta: 'Reclutamiento → terna',
+      actor: 'Analista',
+      ini: primeraAsignacionAnalista,
+      fin: (v) => aDate(v.terna_enviada_en),
+      sinMigradas: true,
+    },
+    {
+      etiqueta: 'Decisión de la terna',
+      actor: 'Líder',
+      ini: (v) => aDate(v.terna_enviada_en),
+      fin: (v) => aDate(v.terna_respondida_en),
+    },
+    {
+      etiqueta: 'Proceso completo',
+      actor: 'Extremo a extremo',
+      ini: aperturaVacante,
+      fin: (v) => aDate(v.cerrada_en),
+    },
   ];
-  return defs
-    .map((d) => ({ etiqueta: d.etiqueta, actor: d.actor, ...promedioTramo(d.ini, d.fin) }))
-    .filter((t) => t.n > 0)
-    .sort((a, b) => b.promedio - a.promedio);
+
+  const tramos = defs.map((d) => {
+    const dias: number[] = [];
+    for (const v of vacantes) {
+      if (d.sinMigradas && esVacanteMigrada(v)) continue;
+      const a = d.ini(v);
+      const b = d.fin(v);
+      if (!a || !b) continue;
+      if (desde && b.getTime() < desde.getTime()) continue;
+      if (b.getTime() < a.getTime()) {
+        if (d.antesEsCero) dias.push(0);
+        continue;
+      }
+      dias.push(diasHabilesEntre(a, b, festivos));
+    }
+    const n = dias.length;
+    const promedio = n ? Math.round((dias.reduce((s, x) => s + x, 0) / n) * 10) / 10 : 0;
+    return { etiqueta: d.etiqueta, actor: d.actor, promedio, n };
+  });
+  return tramos.sort((a, b) => (b.n > 0 ? 1 : 0) - (a.n > 0 ? 1 : 0) || b.promedio - a.promedio);
 }
 
 /** Texto de cumplimiento del ANS de terna para la base. */

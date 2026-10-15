@@ -8,6 +8,11 @@ import type { VacanteDoc } from '../../schemas';
 import { Card, Pill } from '../../components/brand';
 import { VacanteCard } from '../../components/VacanteCard';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
+import {
+  esVacanteActiva,
+  esVacanteCerrada,
+  esVacanteSuspendida,
+} from '../../utils/reportesVacantes';
 
 /**
  * MisUnidadesPage · /mis-unidades (rol 'gerente', reu Karen jul-2026).
@@ -49,12 +54,11 @@ export default function MisUnidadesPage() {
   const ids = useMemo(() => ordenadas.map((v) => v.id), [ordenadas]);
   const { porVacante: resumenes } = useResumenesVacantes(ids);
 
-  const activas = ordenadas.filter(
-    (v) => !['cerrada', 'desierta', 'cancelada'].includes(v.estado),
-  );
-  const cerradas = ordenadas.filter((v) =>
-    ['cerrada', 'desierta', 'cancelada'].includes(v.estado),
-  );
+  // En curso = activas (ni cerradas ni suspendidas, reu Karen 08-oct); las
+  // suspendidas van en su propio grupo.
+  const activas = ordenadas.filter((v) => esVacanteActiva(v.estado));
+  const suspendidas = ordenadas.filter((v) => esVacanteSuspendida(v.estado));
+  const cerradas = ordenadas.filter((v) => esVacanteCerrada(v.estado));
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
@@ -110,6 +114,24 @@ export default function MisUnidadesPage() {
           </p>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activas.map((v) => (
+              <VacanteCard
+                key={v.id}
+                vacante={v}
+                festivos={festivos}
+                resumen={resumenes.get(v.id) ?? null}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {suspendidas.length > 0 && (
+        <section className="space-y-3">
+          <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+            Suspendidas · <span className="tabular-nums text-text-strong">{suspendidas.length}</span>
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {suspendidas.map((v) => (
               <VacanteCard
                 key={v.id}
                 vacante={v}

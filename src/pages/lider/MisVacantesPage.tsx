@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Briefcase, Plus } from 'lucide-react';
+import { AlertTriangle, Briefcase, Plus, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useDoc } from '../../hooks/useDoc';
@@ -22,10 +22,15 @@ import { cn } from '../../utils/cn';
  * Concepto de Atracción tiene un plazo para dar la fecha de la entrevista. La
  * alerta es el corazón de la pantalla: si hay plazo corriendo, ese bloque se ve
  * antes que nada. Sin la regla encendida no se muestra ninguna cuenta regresiva.
+ *
+ * Reu 08-oct: las solicitudes que GH DEVOLVIÓ para corregir salen arriba de todo,
+ * con el motivo y el botón para corregirlas y reenviarlas (antes el rechazo la
+ * cancelaba y el líder tenía que crear otra vacante).
  */
 
 const ESTADO_TONO: Record<string, PillTono> = {
   borrador: 'neutral',
+  devuelta: 'danger',
   aprobada: 'brand',
   lista_para_publicar: 'brand',
   publicada: 'warning',
@@ -56,6 +61,8 @@ export default function MisVacantesPage() {
   const plazosPendientes = relojEfectivo
     ? vacantes.filter((v) => v.reloj_lider?.estado === 'corriendo' && v.estado !== 'pausada')
     : [];
+  // Devueltas por GH: el líder tiene que corregirlas y reenviarlas.
+  const devueltas = vacantes.filter((v) => v.estado === 'devuelta');
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
@@ -90,6 +97,46 @@ export default function MisVacantesPage() {
           </Link>
         }
       />
+
+      {/* Devueltas por GH para corregir (reu 08-oct) */}
+      {devueltas.length > 0 && (
+        <div className="space-y-3">
+          {devueltas.map((v) => (
+            <Card key={v.id} padding="md" className="border border-danger-500/30 bg-danger-50/60">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className="w-11 h-11 rounded-md flex items-center justify-center shrink-0 bg-danger-500/10 text-danger-700">
+                    <RotateCcw size={18} strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+                      Devuelta por GH para corregir
+                    </p>
+                    <p className="mt-1 text-[15px] font-semibold text-text-strong">
+                      <span className="text-brand-700">{v.cargo_nombre}</span> ·{' '}
+                      <span className="font-mono text-[13px]">{v.consecutivo}</span>
+                    </p>
+                    <p className="text-[12.5px] text-text-body mt-1 whitespace-pre-line">
+                      <span className="font-semibold">Motivo:</span>{' '}
+                      {v.aval_rechazo_motivo?.trim() || 'Sin motivo registrado.'}
+                    </p>
+                    <p className="text-[11px] text-text-subtle mt-1">
+                      {v.devuelta_por_nombre ? `${v.devuelta_por_nombre} · ` : ''}
+                      {v.devuelta_en ? formatearFecha(v.devuelta_en.toDate()) : ''} · Conserva el
+                      mismo consecutivo: no hace falta crear otra vacante.
+                    </p>
+                  </div>
+                </div>
+                <Link to={`/vacantes/${v.id}?corregir=1`}>
+                  <Button variant="brand-primary" size="medium">
+                    Corregir y reenviar →
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Alertas del reloj del líder · fecha de entrevista pendiente */}
       {plazosPendientes.length > 0 && (
@@ -245,7 +292,7 @@ export default function MisVacantesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <Pill tono={ESTADO_TONO[v.estado] ?? 'neutral'} dot>
-                        {v.estado.replace(/_/g, ' ')}
+                        {v.estado === 'devuelta' ? 'devuelta por GH' : v.estado.replace(/_/g, ' ')}
                       </Pill>
                       {/* Fase real cuando los candidatos van por delante del estado. */}
                       {(() => {

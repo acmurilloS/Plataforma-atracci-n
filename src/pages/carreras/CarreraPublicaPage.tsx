@@ -54,7 +54,7 @@ const CONSENT_DEFAULT = {
 
 // Estados en los que la vacante ya NO recibe postulaciones (la landing sigue
 // mostrando la oferta, pero el formulario de postular se deshabilita).
-const ESTADOS_SIN_POSTULACION: string[] = ['cerrada', 'desierta', 'cancelada', 'pausada'];
+const ESTADOS_SIN_POSTULACION: string[] = ['cerrada', 'desierta', 'cancelada', 'pausada', 'devuelta'];
 
 export default function CarreraPublicaPage() {
   const { id } = useParams<{ id: string }>();

@@ -64,10 +64,16 @@ export const enviarCondicionesLaborales = onCall(
     let sede = '';
     let salarioVacante = '';
     let analistaEmail = '';
+    // Vacante vieja (antes del 19-ago) sin tipo de contrato / horario: se completa
+    // con lo que la analista envía aquí (reu 08-oct: Diego las veía "sin contrato").
+    let vacanteSinContrato = false;
+    let vacanteSinHorario = false;
     try {
       if (post.vacante_id) {
         const v = await db.collection('vacantes').doc(String(post.vacante_id)).get();
         const vd = v.data() ?? {};
+        vacanteSinContrato = v.exists && !String(vd.tipo_contrato ?? '').trim();
+        vacanteSinHorario = v.exists && !String(vd.horario_laboral ?? '').trim();
         empresa = String(vd.empresa_nombre ?? '').trim();
         unidad = String(vd.unidad_nombre ?? '').trim();
         sede = String(vd.sede_nombre ?? '').trim();
@@ -182,6 +188,27 @@ export const enviarCondicionesLaborales = onCall(
       perfil_cargo_url: perfilCargoUrl || null,
       condiciones_enviadas_en: FieldValue.serverTimestamp(),
     });
+    // Autocompletar la vacante vieja (best-effort: un fallo aquí no tumba el envío).
+    if (post.vacante_id && vacanteSinContrato && (tipoContratoRaw === 'indefinido' || esTemporal)) {
+      try {
+        await db
+          .collection('vacantes')
+          .doc(String(post.vacante_id))
+          .update({
+            tipo_contrato: esTemporal ? 'temporal' : 'indefinido',
+            tiempo_contrato: esTemporal ? tiempoContrato : '',
+            ...(vacanteSinHorario && horario ? { horario_laboral: horario } : {}),
+            actualizado_en: FieldValue.serverTimestamp(),
+            actualizado_por: req.auth.uid,
+          });
+      } catch (e) {
+        logger.warn('[condiciones] no se pudo completar el contrato de la vacante', {
+          postulacionId,
+          e: String(e),
+        });
+      }
+    }
+
     await db.collection('eventos').add({
       tipo: 'condiciones_laborales_enviadas',
       postulacion_id: postulacionId,

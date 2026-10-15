@@ -18,6 +18,9 @@ import { useFestivosTodos } from '../hooks/useCatalogos';
 import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { cn } from '../utils/cn';
 import {
+  esVacanteActiva,
+  esVacanteCerrada,
+  esVacanteSuspendida,
   FASES_TARJETA,
   faseTarjeta,
   type FaseTarjeta,
@@ -42,7 +45,9 @@ import { EncabezadoPagina } from '../components/ui/EncabezadoPagina';
  * más avanzada entre su estado y sus candidatos en curso, con el resumen que
  * mantiene el servidor (`vacantes_resumen`). Aquí no se leen postulaciones:
  * apoyo, talentos y gerente no pueden (reu Karen 10-sep: ET-MOS-1018 salía en
- * reclutamiento con una persona en exámenes). Las suspendidas se cuentan aparte.
+ * reclutamiento con una persona en exámenes). Las suspendidas se cuentan aparte:
+ * desde la reu Karen 08-oct tampoco suman en "Activas" ni en críticas/no críticas,
+ * y tienen su propio filtro.
  */
 
 type TonoFase = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -57,9 +62,7 @@ const TONO_FASE: Record<LetraFase, TonoFase> = {
   F: 'neutral',
 };
 
-const TERMINADAS = ['cerrada', 'desierta', 'cancelada'];
-
-type Filtro = 'activas' | 'mias' | 'cerradas' | 'todas';
+type Filtro = 'activas' | 'suspendidas' | 'mias' | 'cerradas' | 'todas';
 
 export default function SeguimientoPage() {
   const { rol, user } = useAuth();
@@ -100,8 +103,9 @@ export default function SeguimientoPage() {
 
   const filtradas = useMemo(() => {
     return vacantes.filter((v) => {
-      if (filtro === 'activas' && TERMINADAS.includes(v.estado)) return false;
-      if (filtro === 'cerradas' && !TERMINADAS.includes(v.estado)) return false;
+      if (filtro === 'activas' && !esVacanteActiva(v.estado)) return false;
+      if (filtro === 'suspendidas' && !esVacanteSuspendida(v.estado)) return false;
+      if (filtro === 'cerradas' && !esVacanteCerrada(v.estado)) return false;
       if (filtro === 'mias' && user) {
         if (v.lider_uid !== user.uid && v.analista_uid !== user.uid) return false;
       }
@@ -151,22 +155,21 @@ export default function SeguimientoPage() {
   );
 
   const stats = useMemo(() => {
-    const activas = vacantes.filter((v) => !TERMINADAS.includes(v.estado));
+    // Activas = en proceso: sin terminadas NI suspendidas (reu Karen 08-oct).
+    const activas = vacantes.filter((v) => esVacanteActiva(v.estado));
     const porFase: Record<LetraFase, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
-    let suspendidas = 0;
     activas.forEach((v) => {
       const f = fasePorVacante.get(v.id);
-      if (!f) return;
-      if (f.suspendida) suspendidas += 1;
-      else if (f.letra) porFase[f.letra] += 1;
+      if (f?.letra) porFase[f.letra] += 1;
     });
+    const suspendidas = vacantes.filter((v) => esVacanteSuspendida(v.estado)).length;
     // Segmentación crítico vs no crítico (pedido por Cristina).
     const criticasActivas = activas.filter((v) => v.criticidad === 'Alta').length;
     const noCriticasActivas = activas.filter((v) => v.criticidad !== 'Alta').length;
     return {
       total: vacantes.length,
       activas: activas.length,
-      cerradas: vacantes.filter((v) => TERMINADAS.includes(v.estado)).length,
+      cerradas: vacantes.filter((v) => esVacanteCerrada(v.estado)).length,
       criticasActivas,
       noCriticasActivas,
       porFase,
@@ -175,8 +178,12 @@ export default function SeguimientoPage() {
   }, [vacantes, fasePorVacante]);
 
   // Listas por grupo (para el pop-up de cada card).
-  const activasList = useMemo(() => vacantes.filter((v) => !TERMINADAS.includes(v.estado)), [vacantes]);
-  const cerradasList = useMemo(() => vacantes.filter((v) => TERMINADAS.includes(v.estado)), [vacantes]);
+  const activasList = useMemo(() => vacantes.filter((v) => esVacanteActiva(v.estado)), [vacantes]);
+  const suspendidasList = useMemo(
+    () => vacantes.filter((v) => esVacanteSuspendida(v.estado)),
+    [vacantes],
+  );
+  const cerradasList = useMemo(() => vacantes.filter((v) => esVacanteCerrada(v.estado)), [vacantes]);
 
   if (cargando && vacantes.length === 0) return <CargandoPagina />;
 
@@ -215,7 +222,13 @@ export default function SeguimientoPage() {
         <KpiCard
           eyebrow="Activas"
           valor={stats.activas}
-          caption="En cualquier etapa del flujograma."
+          caption={
+            stats.suspendidas
+              ? `En proceso, en cualquier etapa. Sin contar ${stats.suspendidas} ${
+                  stats.suspendidas === 1 ? 'suspendida' : 'suspendidas'
+                }.`
+              : 'En proceso, en cualquier etapa del flujograma.'
+          }
           icono={<Activity size={18} strokeWidth={1.75} />}
           tono="brand"
           onClick={() => setDrill({ titulo: 'Activas', lista: activasList })}
@@ -288,10 +301,7 @@ export default function SeguimientoPage() {
               onClick={() =>
                 setDrill({
                   titulo: `Fase ${f.letra} · ${f.etiqueta}`,
-                  lista: activasList.filter((v) => {
-                    const fase = fasePorVacante.get(v.id);
-                    return !!fase && !fase.suspendida && fase.letra === f.letra;
-                  }),
+                  lista: activasList.filter((v) => fasePorVacante.get(v.id)?.letra === f.letra),
                 })
               }
             />
@@ -300,17 +310,12 @@ export default function SeguimientoPage() {
         {stats.suspendidas > 0 && (
           <button
             type="button"
-            onClick={() =>
-              setDrill({
-                titulo: 'Suspendidas',
-                lista: activasList.filter((v) => fasePorVacante.get(v.id)?.suspendida),
-              })
-            }
+            onClick={() => setDrill({ titulo: 'Suspendidas', lista: suspendidasList })}
             className="mt-3 text-[12px] font-medium text-text-muted hover:text-text-strong hover:underline"
           >
             + {stats.suspendidas}{' '}
             {stats.suspendidas === 1 ? 'vacante suspendida' : 'vacantes suspendidas'} (no cuentan en
-            las fases)
+            las activas ni en las fases)
           </button>
         )}
       </div>
@@ -321,6 +326,11 @@ export default function SeguimientoPage() {
           <FiltroBtn activo={filtro === 'activas'} onClick={() => setFiltro('activas')}>
             Activas
           </FiltroBtn>
+          {(stats.suspendidas > 0 || filtro === 'suspendidas') && (
+            <FiltroBtn activo={filtro === 'suspendidas'} onClick={() => setFiltro('suspendidas')}>
+              Suspendidas
+            </FiltroBtn>
+          )}
           {puedeVerMias && (
             <FiltroBtn activo={filtro === 'mias'} onClick={() => setFiltro('mias')}>
               Mías

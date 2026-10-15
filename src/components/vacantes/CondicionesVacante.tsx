@@ -32,11 +32,21 @@ export function CondicionesVacante({ vacante: v, variante = 'tarjeta', incluirTi
   const bandaLabel =
     v.en_banda === null ? 'Sin banda definida' : v.en_banda ? 'En banda' : 'Fuera de banda';
 
-  const contrato = v.tipo_contrato
-    ? `${v.tipo_contrato === 'temporal' ? 'Temporal' : 'Indefinido'}${
-        v.tiempo_contrato?.trim() ? ` · ${v.tiempo_contrato.trim()}` : ''
-      }`
-    : '—';
+  // Sin tipo de contrato = solicitud de antes del 19-ago, cuando el formulario no
+  // lo pedía (reu 08-oct: Diego las veía "sin contrato"). Coordinación lo completa
+  // desde "Editar condiciones".
+  const contrato = v.tipo_contrato ? (
+    `${v.tipo_contrato === 'temporal' ? 'Temporal' : 'Indefinido'}${
+      v.tiempo_contrato?.trim() ? ` · ${v.tiempo_contrato.trim()}` : ''
+    }`
+  ) : (
+    <span
+      className="text-warning-700"
+      title="Solicitud anterior al 19-ago, cuando el formulario aún no pedía el tipo de contrato. Coordinación puede completarlo en «Editar condiciones»."
+    >
+      Sin registrar
+    </span>
+  );
 
   return (
     <div
