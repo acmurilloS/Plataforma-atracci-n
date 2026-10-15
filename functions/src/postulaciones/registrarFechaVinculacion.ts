@@ -2,6 +2,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { bloqueoPorExamen } from '../examenes/bloqueoContratacionExamen';
 
 /**
  * registrarFechaVinculacion · reu Karen 27-ago. Al registrar la FECHA DE
@@ -17,7 +18,9 @@ import { db } from '../utils/admin';
  *
  * Las reglas de Firestore impiden setear `contratado` desde el cliente, así que
  * esta callable (Admin SDK) es el único camino; el trigger `onCandidatoContratado`
- * (conexión/dotación) se dispara igual al detectar `contratado`.
+ * (conexión/dotación) se dispara igual al detectar `contratado`. Igual que
+ * `aprobarCarpeta`, no contrata si el examen médico espera la decisión de C&D o
+ * C&D decidió que no continúa (`bloqueoPorExamen`, incidente ET-MOS-1017).
  */
 
 const ROLES = ['analista', 'coordinador', 'gh', 'admin'];
@@ -70,6 +73,9 @@ export const registrarFechaVinculacion = onCall({ region: 'us-central1' }, async
       );
       hayOtroContratado = otras.docs.some((d) => d.id !== postId);
     }
+    const examenesSnap = await tx.get(
+      db.collection('examenes_medicos').where('postulacion_id', '==', postId),
+    );
 
     const ahora = FieldValue.serverTimestamp();
     const patchPost: Record<string, unknown> = {
@@ -96,6 +102,11 @@ export const registrarFechaVinculacion = onCall({ region: 'us-central1' }, async
         'Ya hay un candidato contratado en esta vacante. Solo puede quedar uno.',
       );
     }
+    const bloqueo = bloqueoPorExamen(
+      examenesSnap.docs.map((d) => d.data()),
+      String(post.candidato_nombre ?? ''),
+    );
+    if (bloqueo) throw new HttpsError('failed-precondition', bloqueo);
     tx.update(postRef, {
       ...patchPost,
       estado: 'contratado',

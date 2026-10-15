@@ -314,6 +314,19 @@ export default function PostulacionesPage() {
   }
 
   async function cambiarEstado(p: PostulacionDoc, nuevo: EstadoPostulacion) {
+    // Sacar a la persona contratada reabre la vacante (trigger
+    // onContratacionRevertida, incidente ET-MOS-1017): se avisa antes.
+    if (
+      p.estado === 'contratado' &&
+      nuevo !== 'contratado' &&
+      !window.confirm(
+        `${p.candidato_nombre} está CONTRATADO y la vacante está cerrada.\n\n` +
+          `Si lo pasas a «${etiquetaEstado(nuevo)}», la vacante se REABRE sola (vuelve a contratación o a proceso) ` +
+          'y deja de contar como cerrada. ¿Continuar?',
+      )
+    ) {
+      return;
+    }
     try {
       const marcaCampo = marcaParaEstado(nuevo);
       const ahora = Timestamp.now();

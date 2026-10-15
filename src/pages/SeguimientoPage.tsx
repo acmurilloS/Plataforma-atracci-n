@@ -19,7 +19,8 @@ import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { cn } from '../utils/cn';
 import {
   esVacanteActiva,
-  esVacanteCerrada,
+  esVacanteContratada,
+  esVacanteSinContratacion,
   esVacanteSuspendida,
   FASES_TARJETA,
   faseTarjeta,
@@ -47,7 +48,8 @@ import { EncabezadoPagina } from '../components/ui/EncabezadoPagina';
  * apoyo, talentos y gerente no pueden (reu Karen 10-sep: ET-MOS-1018 salía en
  * reclutamiento con una persona en exámenes). Las suspendidas se cuentan aparte:
  * desde la reu Karen 08-oct tampoco suman en "Activas" ni en críticas/no críticas,
- * y tienen su propio filtro.
+ * y tienen su propio filtro. "Cerradas" son SOLO las contratadas (reu Karen
+ * 15-oct); las desiertas o canceladas van aparte, como las suspendidas.
  */
 
 type TonoFase = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -62,7 +64,7 @@ const TONO_FASE: Record<LetraFase, TonoFase> = {
   F: 'neutral',
 };
 
-type Filtro = 'activas' | 'suspendidas' | 'mias' | 'cerradas' | 'todas';
+type Filtro = 'activas' | 'suspendidas' | 'mias' | 'cerradas' | 'sin_contratacion' | 'todas';
 
 export default function SeguimientoPage() {
   const { rol, user } = useAuth();
@@ -105,7 +107,8 @@ export default function SeguimientoPage() {
     return vacantes.filter((v) => {
       if (filtro === 'activas' && !esVacanteActiva(v.estado)) return false;
       if (filtro === 'suspendidas' && !esVacanteSuspendida(v.estado)) return false;
-      if (filtro === 'cerradas' && !esVacanteCerrada(v.estado)) return false;
+      if (filtro === 'cerradas' && !esVacanteContratada(v.estado)) return false;
+      if (filtro === 'sin_contratacion' && !esVacanteSinContratacion(v.estado)) return false;
       if (filtro === 'mias' && user) {
         if (v.lider_uid !== user.uid && v.analista_uid !== user.uid) return false;
       }
@@ -169,7 +172,9 @@ export default function SeguimientoPage() {
     return {
       total: vacantes.length,
       activas: activas.length,
-      cerradas: vacantes.filter((v) => esVacanteCerrada(v.estado)).length,
+      // Cerradas = solo contratadas (reu Karen 15-oct).
+      cerradas: vacantes.filter((v) => esVacanteContratada(v.estado)).length,
+      sinContratacion: vacantes.filter((v) => esVacanteSinContratacion(v.estado)).length,
       criticasActivas,
       noCriticasActivas,
       porFase,
@@ -183,7 +188,14 @@ export default function SeguimientoPage() {
     () => vacantes.filter((v) => esVacanteSuspendida(v.estado)),
     [vacantes],
   );
-  const cerradasList = useMemo(() => vacantes.filter((v) => esVacanteCerrada(v.estado)), [vacantes]);
+  const cerradasList = useMemo(
+    () => vacantes.filter((v) => esVacanteContratada(v.estado)),
+    [vacantes],
+  );
+  const sinContratacionList = useMemo(
+    () => vacantes.filter((v) => esVacanteSinContratacion(v.estado)),
+    [vacantes],
+  );
 
   if (cargando && vacantes.length === 0) return <CargandoPagina />;
 
@@ -236,10 +248,16 @@ export default function SeguimientoPage() {
         <KpiCard
           eyebrow="Cerradas"
           valor={stats.cerradas}
-          caption="Contratadas, desiertas o canceladas."
+          caption={
+            stats.sinContratacion
+              ? `Solo contratadas. Sin contar ${stats.sinContratacion} ${
+                  stats.sinContratacion === 1 ? 'desierta o cancelada' : 'desiertas o canceladas'
+                }.`
+              : 'Solo contratadas: el proceso cerró con la persona contratada.'
+          }
           icono={<CheckCircle2 size={18} strokeWidth={1.75} />}
           tono="success"
-          onClick={() => setDrill({ titulo: 'Cerradas', lista: cerradasList })}
+          onClick={() => setDrill({ titulo: 'Cerradas · contratadas', lista: cerradasList })}
         />
       </div>
 
@@ -307,16 +325,36 @@ export default function SeguimientoPage() {
             />
           ))}
         </div>
-        {stats.suspendidas > 0 && (
-          <button
-            type="button"
-            onClick={() => setDrill({ titulo: 'Suspendidas', lista: suspendidasList })}
-            className="mt-3 text-[12px] font-medium text-text-muted hover:text-text-strong hover:underline"
-          >
-            + {stats.suspendidas}{' '}
-            {stats.suspendidas === 1 ? 'vacante suspendida' : 'vacantes suspendidas'} (no cuentan en
-            las activas ni en las fases)
-          </button>
+        {(stats.suspendidas > 0 || stats.sinContratacion > 0) && (
+          <div className="mt-3 flex flex-col items-start gap-1">
+            {stats.suspendidas > 0 && (
+              <button
+                type="button"
+                onClick={() => setDrill({ titulo: 'Suspendidas', lista: suspendidasList })}
+                className="text-[12px] font-medium text-text-muted hover:text-text-strong hover:underline"
+              >
+                + {stats.suspendidas}{' '}
+                {stats.suspendidas === 1 ? 'vacante suspendida' : 'vacantes suspendidas'} (no
+                cuentan en las activas ni en las fases)
+              </button>
+            )}
+            {/* Terminaron sin contratación: aparte de las cerradas (reu Karen 15-oct). */}
+            {stats.sinContratacion > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setDrill({ titulo: 'Desiertas o canceladas', lista: sinContratacionList })
+                }
+                className="text-[12px] font-medium text-text-muted hover:text-text-strong hover:underline"
+              >
+                + {stats.sinContratacion}{' '}
+                {stats.sinContratacion === 1
+                  ? 'vacante desierta o cancelada'
+                  : 'vacantes desiertas o canceladas'}{' '}
+                (terminaron sin contratación: no cuentan en las cerradas)
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -339,6 +377,14 @@ export default function SeguimientoPage() {
           <FiltroBtn activo={filtro === 'cerradas'} onClick={() => setFiltro('cerradas')}>
             Cerradas
           </FiltroBtn>
+          {(stats.sinContratacion > 0 || filtro === 'sin_contratacion') && (
+            <FiltroBtn
+              activo={filtro === 'sin_contratacion'}
+              onClick={() => setFiltro('sin_contratacion')}
+            >
+              Desiertas / canceladas
+            </FiltroBtn>
+          )}
           <FiltroBtn activo={filtro === 'todas'} onClick={() => setFiltro('todas')}>
             Todas
           </FiltroBtn>

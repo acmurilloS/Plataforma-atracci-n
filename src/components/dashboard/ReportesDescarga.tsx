@@ -9,7 +9,9 @@ import {
   agruparPostulaciones,
   construirBaseVacantes,
   construirResumenMensual,
-  esVacanteCerrada,
+  esVacanteActiva,
+  esVacanteContratada,
+  esVacanteSinContratacion,
   esVacanteSuspendida,
   pipelineReal,
   type EntrevistaMin,
@@ -120,10 +122,12 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
     [postulaciones, idsFiltrados],
   );
 
-  const cerradas = filtradas.filter((v) => esVacanteCerrada(v.estado)).length;
-  // Activas sin suspendidas, igual que el dashboard (reu Karen 08-oct).
+  // Activas sin suspendidas, igual que el dashboard (reu Karen 08-oct); cerradas =
+  // solo contratadas, las desiertas o canceladas aparte (reu Karen 15-oct).
+  const activas = filtradas.filter((v) => esVacanteActiva(v.estado)).length;
   const suspendidas = filtradas.filter((v) => esVacanteSuspendida(v.estado)).length;
-  const activas = filtradas.length - cerradas - suspendidas;
+  const cerradas = filtradas.filter((v) => esVacanteContratada(v.estado)).length;
+  const sinContratacion = filtradas.filter((v) => esVacanteSinContratacion(v.estado)).length;
 
   const [generando, setGenerando] = useState<'base' | 'mensual' | null>(null);
   const [error, setError] = useState('');
@@ -284,7 +288,8 @@ export function ReportesDescarga({ vacantes, postulaciones, festivos }: Props) {
           <span className="tabular-nums">
             <span className="font-semibold text-text-strong">{filtradas.length}</span> vacantes ·{' '}
             {activas} activas{suspendidas ? ` · ${suspendidas} suspendidas` : ''} · {cerradas}{' '}
-            cerradas
+            cerradas (contratadas)
+            {sinContratacion ? ` · ${sinContratacion} desiertas o canceladas` : ''}
           </span>
         </p>
         <div className="flex items-center gap-2 flex-wrap">

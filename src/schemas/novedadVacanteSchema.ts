@@ -28,6 +28,9 @@ export const tipoNovedadVacante = z.enum([
   'devolucion_gh',       // GH devolvió la solicitud al líder para corregir
   'reenvio_correccion',  // el líder (o coordinación) corrigió y la reenvió a GH
   'aprobacion_gh',       // GH aprobó las condiciones
+  // La persona contratada salió del proceso y la vacante se reabrió sola (trigger
+  // onContratacionRevertida, incidente ET-MOS-1017 15-oct). Nunca el formulario.
+  'reapertura',
 ]);
 export type TipoNovedadVacante = z.infer<typeof tipoNovedadVacante>;
 
@@ -42,6 +45,7 @@ export const TIPO_NOVEDAD_LABEL: Record<TipoNovedadVacante, string> = {
   devolucion_gh: 'Devuelta por GH',
   reenvio_correccion: 'Corregida y reenviada',
   aprobacion_gh: 'Aprobada por GH',
+  reapertura: 'Reabierta: sin contratado',
 };
 
 /** Tipos que forman el historial de revisión de GH de una solicitud. */

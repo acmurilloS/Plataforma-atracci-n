@@ -29,6 +29,7 @@ export { editarDatosVacante } from './vacantes/editarDatosVacante';
 export { decidirSolicitudVacante, reenviarSolicitudVacante } from './vacantes/revisionSolicitud';
 // Resumen de postulaciones EN CURSO por vacante -> fase real en Seguimiento (reu Karen 10-sep).
 export { onPostulacionResumen } from './vacantes/onPostulacionResumen';
+export { onContratacionRevertida } from './vacantes/reaperturaSinContratado';
 // Reconciliación del resumen: callable admin (dry_run por defecto) + programada diaria 03:00.
 export {
   recalcularResumenesVacantes,

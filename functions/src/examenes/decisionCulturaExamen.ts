@@ -16,7 +16,10 @@ const ROLES_DECIDE = ['gh', 'coordinador', 'admin'];
  *
  *  - continua   → estado 'apto', postulación a `en_contratacion`, vacante igual.
  *  - no_continua→ estado 'no_apto', postulación a `descartado_examenes_medicos`
- *    + denormaliza `no_apto_medico` al candidato (fuera del pool).
+ *    + denormaliza `no_apto_medico` al candidato (fuera del pool). También si la
+ *    analista ya la había pasado a contratación desde el desplegable mientras
+ *    esperaba la decisión (incidente ET-MOS-1017, 15-oct): antes quedaba "en
+ *    contratación" con el examen no apto.
  */
 export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
@@ -52,7 +55,8 @@ export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (re
 
   // Transacción: re-valida que el examen siga 'en_revision_cd' (anti doble-submit)
   // y solo transiciona la postulación/vacante si la postulación sigue en
-  // 'en_examenes_medicos' (no resucita una que ya desistió). Examen + postulación
+  // 'en_examenes_medicos' (no resucita una que ya desistió) o, si NO continúa, la
+  // adelantaron a 'en_contratacion' sin esperar la decisión. Examen + postulación
   // + vacante quedan atómicos.
   await db.runTransaction(async (tx) => {
     const exFresh = await tx.get(exRef);
@@ -61,15 +65,16 @@ export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (re
     }
     const postRef = postId ? db.collection('postulaciones').doc(postId) : null;
     const postSnap = postRef ? await tx.get(postRef) : null;
-    const postEnExamenes =
-      !!postSnap && String(postSnap.data()?.estado ?? '') === 'en_examenes_medicos';
+    const estadoPost = String(postSnap?.data()?.estado ?? '');
+    const postSeMueve =
+      estadoPost === 'en_examenes_medicos' || (!continua && estadoPost === 'en_contratacion');
 
     // Leer la vacante ANTES de escribir (reads primero en una transacción). Evita
     // reabrir una vacante ya cerrada por otro contratado si el examen de un
     // candidato del pool / reintegro se resuelve después del cierre (bug "cerrado
     // sale activo", reu 18-ago).
     const vacRef = continua && vacanteId ? db.collection('vacantes').doc(vacanteId) : null;
-    const vacSnap = vacRef && postEnExamenes ? await tx.get(vacRef) : null;
+    const vacSnap = vacRef && postSeMueve ? await tx.get(vacRef) : null;
 
     tx.update(exRef, {
       estado: continua ? 'apto' : 'no_apto',
@@ -81,7 +86,7 @@ export const decisionCulturaExamen = onCall({ region: 'us-central1' }, async (re
       actualizado_en: ahora,
       actualizado_por: uid,
     });
-    if (postRef && postEnExamenes) {
+    if (postRef && postSeMueve) {
       tx.update(postRef, {
         estado: continua ? 'en_contratacion' : 'descartado_examenes_medicos',
         ultima_transicion_estado: ahora,

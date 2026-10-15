@@ -10,7 +10,8 @@ import { VacanteCard } from '../../components/VacanteCard';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import {
   esVacanteActiva,
-  esVacanteCerrada,
+  esVacanteContratada,
+  esVacanteSinContratacion,
   esVacanteSuspendida,
 } from '../../utils/reportesVacantes';
 
@@ -58,7 +59,9 @@ export default function MisUnidadesPage() {
   // suspendidas van en su propio grupo.
   const activas = ordenadas.filter((v) => esVacanteActiva(v.estado));
   const suspendidas = ordenadas.filter((v) => esVacanteSuspendida(v.estado));
-  const cerradas = ordenadas.filter((v) => esVacanteCerrada(v.estado));
+  // Cerradas = solo contratadas; las desiertas o canceladas, aparte (reu Karen 15-oct).
+  const cerradas = ordenadas.filter((v) => esVacanteContratada(v.estado));
+  const sinContratacion = ordenadas.filter((v) => esVacanteSinContratacion(v.estado));
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-10">
@@ -146,10 +149,25 @@ export default function MisUnidadesPage() {
       {cerradas.length > 0 && (
         <section className="space-y-3">
           <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
-            Cerradas · <span className="tabular-nums text-text-strong">{cerradas.length}</span>
+            Cerradas · contratadas ·{' '}
+            <span className="tabular-nums text-text-strong">{cerradas.length}</span>
           </p>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {cerradas.map((v) => (
+              <VacanteCard key={v.id} vacante={v} festivos={festivos} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {sinContratacion.length > 0 && (
+        <section className="space-y-3">
+          <p className="text-[10px] font-bold tracking-[0.10em] uppercase text-text-muted">
+            Desiertas o canceladas ·{' '}
+            <span className="tabular-nums text-text-strong">{sinContratacion.length}</span>
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {sinContratacion.map((v) => (
               <VacanteCard key={v.id} vacante={v} festivos={festivos} />
             ))}
           </div>

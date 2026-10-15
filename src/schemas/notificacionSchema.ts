@@ -31,6 +31,8 @@ export const tipoNotificacion = z.enum([
   'reloj_lider_pausa',
   'reloj_lider_pausa_equipo',
   'reloj_lider_bloqueado',
+  // La persona contratada salió del proceso y la vacante se reabrió (15-oct).
+  'vacante_reabierta',
 ]);
 export type TipoNotificacion = z.infer<typeof tipoNotificacion>;
 

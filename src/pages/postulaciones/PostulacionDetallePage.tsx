@@ -41,6 +41,7 @@ import { TIPO_MOVIMIENTO_LABEL } from '../../schemas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { esSoloCarpeta } from '../../utils/accesoRutas';
 import { cn } from '../../utils/cn';
+import { mensajeErrorFuncion } from '../../utils/errores';
 import type { PostulacionDoc, VacanteDoc, Criticidad, CargoDoc } from '../../schemas';
 
 /**
@@ -1129,7 +1130,7 @@ function FechaVinculacionInline({ postulacion }: SubProps) {
       await fn({ postulacion_id: postulacion.id, fecha });
       setOk(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo registrar la fecha.');
+      setError(mensajeErrorFuncion(e, 'No se pudo registrar la fecha.'));
     } finally {
       setGuardando(false);
     }

@@ -22,11 +22,33 @@ import type { PostulacionDoc, ResumenVacanteDoc, VacanteDoc } from '../schemas';
 export const ANS_TERNA_META = 10;
 export const ANS_TERNA_LIMITE = 15;
 
-/** Estados que representan una vacante ya terminada (sale de "activas"). */
+/**
+ * Estados que representan una vacante ya terminada (sale de "activas"; fin de
+ * los tiempos del proceso). Terminada no es lo mismo que contratada: el conteo
+ * de "Cerradas" de los tableros usa `esVacanteContratada`.
+ */
 export const ESTADOS_CERRADOS = ['cerrada', 'desierta', 'cancelada'] as const;
 
 export function esVacanteCerrada(estado: string): boolean {
   return (ESTADOS_CERRADOS as readonly string[]).includes(estado);
+}
+
+/**
+ * CONTRATADA = `cerrada`: solo aprobar la carpeta o registrar la fecha de
+ * vinculación cierran una vacante, y si la persona contratada sale del proceso la
+ * vacante se reabre sola (trigger onContratacionRevertida). Reu Karen 15-oct: en
+ * "Cerradas" solo van las contratadas.
+ */
+export function esVacanteContratada(estado: string): boolean {
+  return estado === 'cerrada';
+}
+
+/**
+ * Terminada SIN contratación (desierta o cancelada). Reu Karen 15-oct: no van
+ * con las contratadas; se muestran aparte, como las suspendidas.
+ */
+export function esVacanteSinContratacion(estado: string): boolean {
+  return estado === 'desierta' || estado === 'cancelada';
 }
 
 /** Suspendida (`pausada`): sigue abierta pero NO está en proceso. */

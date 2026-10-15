@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { bloqueoPorExamen } from '../examenes/bloqueoContratacionExamen';
 
 /**
  * aprobarCarpeta · BUG 3 + 4 (2026-06-24).
@@ -23,6 +24,8 @@ import { db } from '../utils/admin';
  *    'en_contratacion' (o 'contratado', para reconciliar): aprobarla contrataría a
  *    alguien que ya salió de ese proceso y cerraría la vacante equivocada. Ambos
  *    chequeos van ANTES de la idempotencia y de cualquier escritura.
+ *  - No contrata (incidente ET-MOS-1017, 15-oct) si el examen médico espera la
+ *    decisión de C&D o C&D ya decidió que no continúa (`bloqueoPorExamen`).
  *
  * Los tickets de conexión (paso 20) NO se crean aquí: ya se crean en el paso 14
  * (terna) con `crearTicketsConexion`, con el esquema CANÓNICO (tipo, criticidad,
@@ -99,6 +102,12 @@ export const aprobarCarpeta = onCall({ region: 'us-central1' }, async (req) => {
     );
     const hayOtroContratado = otrasSnap.docs.some((d) => d.id !== postId);
 
+    // Examen médico: con novedad decide C&D antes de contratar (no aplica a la
+    // reconciliación de alguien que ya está contratado).
+    const examenesSnap = await tx.get(
+      db.collection('examenes_medicos').where('postulacion_id', '==', postId),
+    );
+
     // ── Idempotencia: si esta postulación YA está contratada, solo reconcilia ──
     if (post.estado === 'contratado') {
       if (carpeta.estado !== 'aprobada') {
@@ -127,6 +136,12 @@ export const aprobarCarpeta = onCall({ region: 'us-central1' }, async (req) => {
         'Ya hay un candidato contratado en esta vacante. Solo puede quedar uno; descarta este o reabre el proceso.',
       );
     }
+
+    const bloqueo = bloqueoPorExamen(
+      examenesSnap.docs.map((d) => d.data()),
+      String(post.candidato_nombre ?? ''),
+    );
+    if (bloqueo) throw new HttpsError('failed-precondition', bloqueo);
 
     const ahora = FieldValue.serverTimestamp();
     tx.update(postRef, {

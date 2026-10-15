@@ -29,6 +29,7 @@ import { SaludoInicio } from '../../components/SaludoInicio';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { FolderCheck } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { mensajeErrorFuncion } from '../../utils/errores';
 import {
   CATALOGO_DOCUMENTOS_CARPETA,
   ESTADOS_TERMINALES_SIN_CONTRATO,
@@ -371,9 +372,8 @@ export default function CarpetasPage() {
       >(functions, 'aprobarCarpeta');
       await fn({ carpeta_id: c.id });
     } catch (e) {
-      window.alert(
-        e instanceof Error ? e.message : 'No se pudo aprobar la carpeta. Intenta de nuevo.',
-      );
+      // El servidor explica por qué no (otro contratado, examen esperando a C&D…).
+      window.alert(mensajeErrorFuncion(e, 'No se pudo aprobar la carpeta.'));
     } finally {
       setProcesando(null);
     }

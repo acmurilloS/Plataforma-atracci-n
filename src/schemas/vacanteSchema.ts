@@ -221,6 +221,16 @@ export interface VacanteDoc extends Omit<VacanteInput, 'fecha_entrevista_propues
   cerrada_en: Timestamp | null;
   razon_cierre: string | null;
   /**
+   * Reapertura automática (incidente ET-MOS-1017, 15-oct): la persona contratada
+   * salió del proceso y la vacante quedó sin contratado. Lo escribe el trigger
+   * `onContratacionRevertida`; `cierre_revertido` guarda el cierre que se deshizo
+   * (sin nombre ni estado de la persona: este doc es de lectura pública).
+   */
+  reabierta_en?: Timestamp | null;
+  reabierta_por?: string | null;
+  reaperturas?: number;
+  cierre_revertido?: { cerrada_en: Timestamp | null; postulacion_id: string } | null;
+  /**
    * Reloj de 48h del líder (paso 13).
    * `terna_enviada_en` arranca cuando la analista cierra la terna y la envía al líder.
    * Los `recordatorio_*_enviado_en` se setean por la scheduled function para evitar
