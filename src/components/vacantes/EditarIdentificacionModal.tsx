@@ -4,6 +4,7 @@ import { Layers, X } from 'lucide-react';
 import { functions } from '../../lib/firebase';
 import { useEmpresas, useSedesDeEmpresa, useUnidadesDeSede } from '../../hooks/useCatalogos';
 import { motivosAval, textoMotivoAval } from '../../utils/avalSolicitud';
+import { mensajeErrorFuncion } from '../../utils/errores';
 import { cn } from '../../utils/cn';
 import type { VacanteDoc } from '../../schemas';
 import { AvalUploader } from './AvalUploader';
@@ -87,6 +88,13 @@ export function EditarIdentificacionModal({ vacante, onClose, onGuardado }: Prop
       setError('Indica la duración estimada en meses.');
       return;
     }
+    // Antes del visto bueno de GH, el reemplazo debe decir el cargo de quien sale y
+    // si cambian las condiciones (Diego lo revisa, reu 08-oct). Después es opcional.
+    const preAprobacion = vacante.estado === 'borrador' || vacante.estado === 'devuelta';
+    if (preAprobacion && tipoSolicitud === 'reemplazo_indefinido' && (!cargoAnterior.id || mismas === null)) {
+      setError('Indica el cargo que tenía la persona que sale y si el nuevo entra con sus mismas condiciones.');
+      return;
+    }
     if (pideAval && !aval?.url) {
       setError(`${textoMotivoAval(motivos)}: adjunta el aval firmado para guardar el cambio.`);
       return;
@@ -122,7 +130,7 @@ export function EditarIdentificacionModal({ vacante, onClose, onGuardado }: Prop
       onGuardado?.();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo guardar. Reintenta.');
+      setError(mensajeErrorFuncion(e, 'No se pudo guardar el cambio.'));
     } finally {
       setGuardando(false);
     }

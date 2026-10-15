@@ -8,6 +8,7 @@ import { CamposCondiciones } from './CamposCondiciones';
 import { formatearFecha } from '../../utils/fechas';
 import { tieneRodamiento } from '../../utils/rodamiento';
 import { motivosAval, textoMotivoAval } from '../../utils/avalSolicitud';
+import { mensajeErrorFuncion } from '../../utils/errores';
 import {
   condicionesDesdeVacante,
   validarCondiciones,
@@ -89,7 +90,7 @@ export function CorregirSolicitudModal({ vacante: v, onClose }: Props) {
       });
       setListo(res.data);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No pudimos reenviar la solicitud. Vuelve a intentarlo.');
+      setErr(mensajeErrorFuncion(e, 'No pudimos reenviar la solicitud.'));
     } finally {
       setEnviando(false);
     }

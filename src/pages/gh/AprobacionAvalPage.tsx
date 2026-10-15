@@ -10,6 +10,7 @@ import { formatearFecha } from '../../utils/fechas';
 import { puedeVerVacante } from '../../utils/accesoRutas';
 import { textoRodamiento } from '../../utils/rodamiento';
 import { motivosAval, textoMotivoAval } from '../../utils/avalSolicitud';
+import { mensajeErrorFuncion } from '../../utils/errores';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { CondicionesVacante } from '../../components/vacantes/CondicionesVacante';
 import { VisorSolicitudOficial } from '../../components/vacantes/VisorSolicitudOficial';
@@ -202,11 +203,7 @@ export default function AprobacionAvalPage() {
       );
     } catch (e) {
       setErr(
-        e instanceof Error
-          ? e.message
-          : decision === 'aprobar'
-            ? 'No pudimos aprobar.'
-            : 'No pudimos devolver la solicitud.',
+        mensajeErrorFuncion(e, decision === 'aprobar' ? 'No pudimos aprobar.' : 'No pudimos devolver la solicitud.'),
       );
     } finally {
       setProcesando(null);

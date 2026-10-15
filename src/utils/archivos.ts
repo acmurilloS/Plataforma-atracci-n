@@ -313,7 +313,9 @@ export function mensajeErrorSubida(e: unknown, porDefecto = 'No se pudo subir el
       break;
   }
   const msg = e instanceof Error ? e.message : '';
-  if (code.startsWith('functions/') && msg && !/^internal$/i.test(msg)) return msg;
+  // "internal" genérico del SDK (p. ej. función sin permiso de invocación): no se muestra.
+  if (/^internal$/i.test(msg.trim())) return porDefecto;
+  if (code.startsWith('functions/') && msg) return msg;
   if (/network|failed to fetch|load failed|internet/i.test(msg)) {
     return 'Se cortó la conexión. Revisa tu internet y vuelve a intentarlo.';
   }

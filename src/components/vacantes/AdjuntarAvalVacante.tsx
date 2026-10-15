@@ -4,6 +4,7 @@ import { functions } from '../../lib/firebase';
 import { Button } from '../brand';
 import { AvalUploader } from './AvalUploader';
 import { motivosAval, textoMotivoAval } from '../../utils/avalSolicitud';
+import { mensajeErrorFuncion } from '../../utils/errores';
 import type { VacanteDoc } from '../../schemas';
 
 /**
@@ -28,7 +29,7 @@ export function AdjuntarAvalVacante({ vacante }: { vacante: VacanteDoc }) {
       await fn({ vacante_id: vacante.id, cambios: { aval_url: aval.url, aval_drive_file_id: aval.driveFileId } });
       setMsg({ tono: 'ok', texto: 'Aval adjuntado a la solicitud.' });
     } catch (e) {
-      setMsg({ tono: 'error', texto: e instanceof Error ? e.message : 'No se pudo guardar el aval.' });
+      setMsg({ tono: 'error', texto: mensajeErrorFuncion(e, 'No se pudo guardar el aval.') });
     } finally {
       setGuardando(false);
     }
