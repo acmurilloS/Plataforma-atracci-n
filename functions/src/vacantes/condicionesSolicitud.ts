@@ -67,6 +67,44 @@ export function formatearCOP(n: unknown): string {
   return '$ ' + Math.round(x).toLocaleString('es-CO');
 }
 
+// ── Aval obligatorio (reu 08-oct) · espejo de src/utils/avalSolicitud.ts ──
+export type MotivoAval = 'aumento_planta' | 'cambio_cargo' | 'cambio_condiciones';
+
+export function motivosAval(v: Record<string, unknown>): MotivoAval[] {
+  const tipo = String(v.tipo_solicitud ?? '');
+  if (tipo === 'aumento_planta' || tipo === 'aumento') return ['aumento_planta'];
+  if (tipo !== 'reemplazo_indefinido' && tipo !== 'reemplazo') return [];
+  const out: MotivoAval[] = [];
+  const anterior = String(v.reemplaza_a_cargo_id ?? '').trim();
+  if (anterior && anterior !== String(v.cargo_id ?? '').trim()) out.push('cambio_cargo');
+  if (v.reemplazo_mismas_condiciones === false) out.push('cambio_condiciones');
+  return out;
+}
+
+export function textoMotivoAval(motivos: MotivoAval[]): string {
+  if (motivos.includes('aumento_planta')) return 'Es un aumento de planta';
+  const partes: string[] = [];
+  if (motivos.includes('cambio_cargo')) partes.push('el cargo es distinto al de la persona que sale');
+  if (motivos.includes('cambio_condiciones')) partes.push('las condiciones cambian respecto a la persona que sale');
+  const t = partes.join(' y ');
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
+}
+
+// ── Garantizado desglosado (reu 08-oct) · espejo de src/utils/garantizado.ts ──
+export function textoGarantizado(v: Record<string, unknown>): string {
+  const total = Number(v.garantizado_total_mes);
+  const basico = Number(v.salario_base);
+  const obs = String(v.garantizado_texto ?? '').trim();
+  if (v.garantizado_total_mes != null && Number.isFinite(total) && total > 0 && Number.isFinite(basico) && basico > 0) {
+    const duracion = String(v.garantizado_duracion ?? '').trim();
+    const linea = `Total mes ${formatearCOP(total)} = básico ${formatearCOP(basico)} + ${formatearCOP(
+      Math.max(0, total - basico),
+    )} no prestacional${duracion ? ` · ${duracion}` : ''}`;
+    return obs ? `${linea}\n${obs}` : linea;
+  }
+  return obs || 'No aplica';
+}
+
 /**
  * Valida y normaliza las condiciones que llegan al reenviar. Solo se aceptan los
  * campos de esta lista; lo demás se ignora (la identificación se corrige por
@@ -116,6 +154,22 @@ export function normalizarCambios(c: Record<string, unknown>): Record<string, un
   }
 
   if ('garantizado_texto' in c) out.garantizado_texto = texto(c.garantizado_texto, 500, 'Garantizado');
+  if ('garantizado_total_mes' in c) {
+    const raw = c.garantizado_total_mes;
+    if (raw === null || raw === '' || raw === undefined) {
+      out.garantizado_total_mes = null;
+      out.garantizado_duracion = '';
+    } else {
+      const total = Number(raw);
+      if (!Number.isFinite(total) || total <= 0 || total > 100_000_000) {
+        throw new ErrorValidacion('El garantizado total mensual no es válido.');
+      }
+      const duracion = texto(c.garantizado_duracion, 80, 'Duración del garantizado');
+      if (!duracion) throw new ErrorValidacion('Indica por cuánto tiempo aplica el garantizado (ej. 3 meses).');
+      out.garantizado_total_mes = Math.round(total);
+      out.garantizado_duracion = duracion;
+    }
+  }
   if ('horario_laboral' in c) out.horario_laboral = texto(c.horario_laboral, 200, 'Horario');
 
   if ('tipo_contrato' in c) {
@@ -159,6 +213,9 @@ const CAMPOS_SNAPSHOT = [
   'criticidad',
   'tipo_solicitud',
   'reemplaza_a_nombre',
+  'reemplaza_a_cargo_id',
+  'reemplaza_a_cargo_nombre',
+  'reemplazo_mismas_condiciones',
   'temporalidad_meses',
   'salario_base',
   'comision_tipo',
@@ -170,6 +227,8 @@ const CAMPOS_SNAPSHOT = [
   'rodamiento',
   'rodamiento_valor',
   'garantizado_texto',
+  'garantizado_total_mes',
+  'garantizado_duracion',
   'horario_laboral',
   'tipo_contrato',
   'tiempo_contrato',
@@ -219,6 +278,13 @@ export function describirCambios(
   const tipo = (x: unknown) => TIPO_SOLICITUD_LABEL[String(x ?? '')] ?? valorTexto(x);
   cambio('Tipo de solicitud', tipo(antes.tipo_solicitud), tipo(despues.tipo_solicitud));
   cambio('Reemplaza a', valorTexto(antes.reemplaza_a_nombre), valorTexto(despues.reemplaza_a_nombre));
+  cambio(
+    'Cargo de quien sale',
+    valorTexto(antes.reemplaza_a_cargo_nombre),
+    valorTexto(despues.reemplaza_a_cargo_nombre),
+  );
+  const mismas = (x: unknown) => (x === true ? 'Mismas condiciones' : x === false ? 'Cambian las condiciones' : '—');
+  cambio('Condiciones frente a quien sale', mismas(antes.reemplazo_mismas_condiciones), mismas(despues.reemplazo_mismas_condiciones));
   const meses = (x: unknown) => {
     const n = Number(x);
     return x !== null && x !== undefined && Number.isFinite(n) && n > 0
@@ -229,11 +295,7 @@ export function describirCambios(
   cambio('Salario base', formatearCOP(antes.salario_base), formatearCOP(despues.salario_base));
   cambio('Comisiones', textoComisiones(antes), textoComisiones(despues));
   cambio('Rodamiento', textoRodamiento(antes), textoRodamiento(despues));
-  cambio(
-    'Garantizado',
-    String(antes.garantizado_texto ?? '').trim() || 'No aplica',
-    String(despues.garantizado_texto ?? '').trim() || 'No aplica',
-  );
+  cambio('Garantizado', textoGarantizado(antes), textoGarantizado(despues));
   cambio('Horario', valorTexto(antes.horario_laboral), valorTexto(despues.horario_laboral));
   cambio('Contrato', textoContrato(antes), textoContrato(despues));
   if (String(antes.justificacion ?? '').trim() !== String(despues.justificacion ?? '').trim()) {

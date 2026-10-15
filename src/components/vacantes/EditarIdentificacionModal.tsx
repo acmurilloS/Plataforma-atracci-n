@@ -3,7 +3,11 @@ import { httpsCallable } from 'firebase/functions';
 import { Layers, X } from 'lucide-react';
 import { functions } from '../../lib/firebase';
 import { useEmpresas, useSedesDeEmpresa, useUnidadesDeSede } from '../../hooks/useCatalogos';
+import { motivosAval, textoMotivoAval } from '../../utils/avalSolicitud';
+import { cn } from '../../utils/cn';
 import type { VacanteDoc } from '../../schemas';
+import { AvalUploader } from './AvalUploader';
+import { SelectorCargo } from './SelectorCargo';
 
 interface Props {
   vacante: VacanteDoc;
@@ -42,6 +46,25 @@ export function EditarIdentificacionModal({ vacante, onClose, onGuardado }: Prop
     vacante.temporalidad_meses != null ? String(vacante.temporalidad_meses) : '',
   );
   const [reemplazaA, setReemplazaA] = useState(vacante.reemplaza_a_nombre ?? '');
+  // Cargo de quien sale + si entra con sus condiciones (reu 08-oct).
+  const [cargoAnterior, setCargoAnterior] = useState({
+    id: vacante.reemplaza_a_cargo_id ?? '',
+    nombre: vacante.reemplaza_a_cargo_nombre ?? '',
+  });
+  const [mismas, setMismas] = useState<boolean | null>(vacante.reemplazo_mismas_condiciones ?? null);
+  const [aval, setAval] = useState<{ url: string; driveFileId: string } | null>(null);
+  // Si el cambio vuelve obligatorio el aval y la vacante aún no lo tiene (antes
+  // del visto bueno de GH), se pide aquí mismo: la callable no deja guardar sin él.
+  const motivos = motivosAval({
+    tipo_solicitud: tipoSolicitud,
+    cargo_id: vacante.cargo_id,
+    reemplaza_a_cargo_id: tipoSolicitud === 'reemplazo_indefinido' ? cargoAnterior.id : '',
+    reemplazo_mismas_condiciones: tipoSolicitud === 'reemplazo_indefinido' ? mismas : null,
+  });
+  const pideAval =
+    motivos.length > 0 &&
+    !vacante.aval_url &&
+    (vacante.estado === 'borrador' || vacante.estado === 'devuelta');
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +85,10 @@ export function EditarIdentificacionModal({ vacante, onClose, onGuardado }: Prop
     }
     if (tipoSolicitud === 'necesidad_temporal' && (!meses || Number(meses) <= 0)) {
       setError('Indica la duración estimada en meses.');
+      return;
+    }
+    if (pideAval && !aval?.url) {
+      setError(`${textoMotivoAval(motivos)}: adjunta el aval firmado para guardar el cambio.`);
       return;
     }
     const sedeNombre = sedes.find((x) => x.codigo === sedeCodigo)?.nombre ?? vacante.sede_nombre ?? '';
@@ -86,6 +113,10 @@ export function EditarIdentificacionModal({ vacante, onClose, onGuardado }: Prop
           tipo_solicitud: tipoSolicitud,
           temporalidad_meses: tipoSolicitud === 'necesidad_temporal' ? Number(meses) : null,
           reemplaza_a_nombre: tipoSolicitud === 'reemplazo_indefinido' ? reemplazaA.trim() : '',
+          reemplaza_a_cargo_id: tipoSolicitud === 'reemplazo_indefinido' ? cargoAnterior.id : '',
+          reemplaza_a_cargo_nombre: tipoSolicitud === 'reemplazo_indefinido' ? cargoAnterior.nombre : '',
+          reemplazo_mismas_condiciones: tipoSolicitud === 'reemplazo_indefinido' ? mismas : null,
+          ...(aval?.url ? { aval_url: aval.url, aval_drive_file_id: aval.driveFileId } : {}),
         },
       });
       onGuardado?.();
@@ -232,16 +263,70 @@ export function EditarIdentificacionModal({ vacante, onClose, onGuardado }: Prop
             </label>
           )}
           {tipoSolicitud === 'reemplazo_indefinido' && (
-            <label className="block">
-              <span className="text-[12px] font-medium text-text-body">
-                Reemplaza a <span className="text-text-subtle">(opcional)</span>
-              </span>
-              <input
-                value={reemplazaA}
-                onChange={(e) => setReemplazaA(e.target.value)}
-                className={selectClass}
+            <>
+              <label className="block">
+                <span className="text-[12px] font-medium text-text-body">
+                  Reemplaza a <span className="text-text-subtle">(opcional)</span>
+                </span>
+                <input
+                  value={reemplazaA}
+                  onChange={(e) => setReemplazaA(e.target.value)}
+                  className={selectClass}
+                />
+              </label>
+              <div>
+                <span className="text-[12px] font-medium text-text-body">
+                  Cargo que tenía la persona que sale
+                </span>
+                <div className="mt-1">
+                  <SelectorCargo
+                    value={cargoAnterior.id || undefined}
+                    onChange={(c) => setCargoAnterior({ id: c?.id ?? '', nombre: c?.nombre ?? '' })}
+                  />
+                </div>
+              </div>
+              <div>
+                <span className="text-[12px] font-medium text-text-body">
+                  ¿Entra con las mismas condiciones que tenía esa persona?
+                </span>
+                <div className="mt-1 flex flex-col sm:flex-row gap-2">
+                  {[
+                    { valor: true, texto: 'Sí, mismas condiciones' },
+                    { valor: false, texto: 'No, cambian' },
+                  ].map((op) => (
+                    <button
+                      key={String(op.valor)}
+                      type="button"
+                      onClick={() => setMismas(op.valor)}
+                      className={cn(
+                        'rounded-md border px-3 py-1.5 text-[12px] text-left transition-colors',
+                        mismas === op.valor
+                          ? 'border-brand-600 bg-brand-50 text-brand-800 font-medium'
+                          : 'border-slate-200 bg-white text-text-body hover:border-slate-300',
+                      )}
+                    >
+                      {op.texto}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {pideAval && (
+            <div className="space-y-2 rounded-md border border-danger-500/30 bg-danger-50/60 p-3">
+              <p className="text-[12px] text-danger-700 leading-[1.5]">
+                <span className="font-semibold">{textoMotivoAval(motivos)}:</span> con este cambio la
+                solicitud exige el aval firmado. Adjúntalo para guardar.
+              </p>
+              <AvalUploader
+                empresaCodigo={empresaCodigo}
+                value={aval?.url || undefined}
+                driveFileId={aval?.driveFileId || undefined}
+                onChange={(info) => setAval(info)}
+                disabled={guardando}
               />
-            </label>
+            </div>
           )}
 
           {error && (

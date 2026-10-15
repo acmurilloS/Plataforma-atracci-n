@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
 import { formatearConsecutivo } from './onVacanteCreate';
+import { motivosAval, textoMotivoAval } from './condicionesSolicitud';
 
 /**
  * editarDatosVacante · reu líder Juan Sebastián Cañón (19-ago). Un líder creó su
@@ -101,10 +102,46 @@ export const editarDatosVacante = onCall({ region: 'us-central1' }, async (req) 
       patch.reemplaza_a_nombre = s(c.reemplaza_a_nombre);
       patch.temporalidad_meses = null;
       patch.temporalidad_descripcion = '';
+      // Cargo de quien sale y si entra con sus condiciones (reu 08-oct).
+      if ('reemplaza_a_cargo_id' in c) {
+        patch.reemplaza_a_cargo_id = s(c.reemplaza_a_cargo_id, 120);
+        patch.reemplaza_a_cargo_nombre = s(c.reemplaza_a_cargo_nombre, 160);
+      }
+      if ('reemplazo_mismas_condiciones' in c) {
+        const m = c.reemplazo_mismas_condiciones;
+        patch.reemplazo_mismas_condiciones = m === true ? true : m === false ? false : null;
+      }
     } else {
       patch.reemplaza_a_nombre = '';
       patch.temporalidad_meses = null;
       patch.temporalidad_descripcion = '';
+    }
+    if (tipo !== 'reemplazo_indefinido') {
+      patch.reemplaza_a_cargo_id = '';
+      patch.reemplaza_a_cargo_nombre = '';
+      patch.reemplazo_mismas_condiciones = null;
+    }
+  }
+
+  // Aval que llega con la edición (cuando el cambio lo vuelve obligatorio).
+  const avalUrl = s(c.aval_url, 1000);
+  if (avalUrl) {
+    if (!/^https:\/\//i.test(avalUrl)) throw new HttpsError('invalid-argument', 'El enlace del aval no es válido.');
+    patch.aval_url = avalUrl;
+    patch.aval_drive_file_id = s(c.aval_drive_file_id, 200);
+    patch.aval_pendiente = false;
+    patch.aval_no_requiere = false;
+  }
+  // Antes del visto bueno de GH, una edición no puede dejar sin aval una
+  // solicitud que lo exige (aumento de planta o reemplazo con cambio, reu 08-oct).
+  if (estado === 'borrador' || estado === 'devuelta') {
+    const final = { ...vac, ...patch };
+    const motivos = motivosAval(final);
+    if (motivos.length && !String(final.aval_url ?? '').trim()) {
+      throw new HttpsError(
+        'failed-precondition',
+        `${textoMotivoAval(motivos)}: adjunta el aval firmado para guardar el cambio.`,
+      );
     }
   }
 

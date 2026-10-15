@@ -2,6 +2,8 @@ import { Pill, type PillTono } from '../brand';
 import { formatearCOP } from '../../utils/moneda';
 import { textoRodamiento } from '../../utils/rodamiento';
 import { textoComisiones } from '../../utils/comisiones';
+import { desgloseGarantizado } from '../../utils/garantizado';
+import { motivosAval } from '../../utils/avalSolicitud';
 import { cn } from '../../utils/cn';
 import { TIPO_SOLICITUD_LABEL, type VacanteDoc } from '../../schemas';
 
@@ -48,6 +50,37 @@ export function CondicionesVacante({ vacante: v, variante = 'tarjeta', incluirTi
     </span>
   );
 
+  // Garantizado desglosado (reu 08-oct): total = básico + no prestacional.
+  const desglose = desgloseGarantizado(v);
+  const obsGarantizado = v.garantizado_texto?.trim() ?? '';
+  const garantizado = desglose ? (
+    <div className="space-y-0.5">
+      <p>
+        Total mes <span className="tabular-nums">{formatearCOP(desglose.total)}</span>
+        {desglose.duracion ? ` · ${desglose.duracion}` : ''}
+      </p>
+      <p className="text-[12px] font-normal text-text-muted">
+        Básico <span className="tabular-nums">{formatearCOP(desglose.basico)}</span> + no
+        prestacional{' '}
+        <span className="tabular-nums font-medium text-text-strong">
+          {formatearCOP(desglose.diferencia)}
+        </span>
+      </p>
+      {obsGarantizado && <p className="text-[12px] font-normal text-text-body">{obsGarantizado}</p>}
+    </div>
+  ) : (
+    obsGarantizado || 'No aplica'
+  );
+
+  // Reemplazo (reu 08-oct): cargo de quien sale y si cambia algo frente a él.
+  const motivos = motivosAval(v);
+  const cambiaCargo = motivos.includes('cambio_cargo');
+  const cambianCondiciones = motivos.includes('cambio_condiciones');
+  const tieneDatosReemplazo = !!v.reemplaza_a_cargo_id || v.reemplazo_mismas_condiciones != null;
+  const reemplazaA = [v.reemplaza_a_nombre?.trim() || 'Sin registrar', v.reemplaza_a_cargo_nombre?.trim()]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <div
       className={cn(
@@ -78,7 +111,7 @@ export function CondicionesVacante({ vacante: v, variante = 'tarjeta', incluirTi
       <Dato
         variante={variante}
         label="Garantizado"
-        valor={v.garantizado_texto?.trim() || 'No aplica'}
+        valor={garantizado}
         ancho="md:col-span-2"
         preserveBreaks
       />
@@ -91,10 +124,25 @@ export function CondicionesVacante({ vacante: v, variante = 'tarjeta', incluirTi
             valor={TIPO_SOLICITUD_LABEL[v.tipo_solicitud] ?? v.tipo_solicitud}
           />
           {v.tipo_solicitud === 'reemplazo_indefinido' && (
+            <Dato variante={variante} label="Reemplaza a" valor={reemplazaA} />
+          )}
+          {v.tipo_solicitud === 'reemplazo_indefinido' && tieneDatosReemplazo && (
             <Dato
               variante={variante}
-              label="Reemplaza a"
-              valor={v.reemplaza_a_nombre?.trim() || 'Sin registrar'}
+              label="Frente a quien sale"
+              valor={
+                cambiaCargo || cambianCondiciones ? (
+                  <Pill tono="warning" dot>
+                    <span className="whitespace-nowrap">
+                      {[cambiaCargo && 'Cambia el cargo', cambianCondiciones && 'Cambian condiciones']
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </Pill>
+                ) : (
+                  'Mismo cargo y condiciones'
+                )
+              }
             />
           )}
           {v.tipo_solicitud === 'necesidad_temporal' && (

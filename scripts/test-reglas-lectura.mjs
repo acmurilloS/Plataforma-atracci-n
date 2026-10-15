@@ -9,7 +9,12 @@ import { fileURLToPath } from 'url';
 
 const PROJECT = 'ptm-atraccion';
 const RULES = fileURLToPath(new URL('../firestore.rules', import.meta.url));
-const TOKEN = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+// RULES_TOKEN permite correrla con otra credencial del usuario (p. ej. la del
+// CLI de Firebase, que también tiene el scope cloud-platform) cuando gcloud pide
+// reautenticarse.
+const TOKEN =
+  process.env.RULES_TOKEN?.trim() ||
+  execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
 const source = readFileSync(RULES, 'utf8');
 
 const D = (p) => `/databases/(default)/documents/${p}`;
@@ -241,6 +246,35 @@ const G11 = '11. REVISIÓN AUTOMÁTICA DE CARPETA (reu 16-sep · revision_datos 
 caso(G11, 'analista NO escribe revision_datos', { token: analista, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'DENY', payload: { postulacion_id: 'p1', estado: 'armando', revision_datos: { errores: 0 } } });
 caso(G11, 'GH NO borra revision_datos', { token: gh, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'DENY', data: { postulacion_id: 'p1', estado: 'armando', revision_datos: { errores: 1 } }, payload: { postulacion_id: 'p1', estado: 'armando' } });
 caso(G11, 'GH actualiza sin tocar revision_datos', { token: gh, path: 'carpetas_digitales/carpeta_p1', method: 'update', esperado: 'ALLOW', data: { postulacion_id: 'p1', estado: 'armando', revision_datos: { errores: 1 } }, payload: { postulacion_id: 'p1', estado: 'lista', revision_datos: { errores: 1 } } });
+
+const G13 = '13. AVAL OBLIGATORIO Y VISTO BUENO DE GH (reu Karen + Diego 08-oct)';
+// Vacante nueva mínima que cumple el resto de la regla de create (líder dueño,
+// auditoría, borrador, aval_url string). Solo cambia lo que cada caso prueba.
+const nueva = (extra) => ({
+  lider_uid: 'lider1', creado_por: 'lider1', actualizado_por: 'lider1', estado: 'borrador',
+  cargo_id: 'cg_tecnico', aval_url: '', tipo_solicitud: 'reemplazo_indefinido', ...extra,
+});
+const AVAL = 'https://drive.google.com/file/d/aval/view';
+caso(G13, 'aumento de planta SIN aval → no se crea', { token: lider, path: 'vacantes/vNueva', method: 'create', esperado: 'DENY', payload: nueva({ tipo_solicitud: 'aumento_planta' }) });
+caso(G13, 'aumento de planta CON aval → se crea', { token: lider, path: 'vacantes/vNueva', method: 'create', esperado: 'ALLOW', payload: nueva({ tipo_solicitud: 'aumento_planta', aval_url: AVAL }) });
+caso(G13, 'reemplazo mismo cargo y condiciones, sin aval → se crea', { token: lider, path: 'vacantes/vNueva', method: 'create', esperado: 'ALLOW', payload: nueva({ reemplaza_a_cargo_id: 'cg_tecnico', reemplazo_mismas_condiciones: true }) });
+caso(G13, 'reemplazo con OTRO cargo, sin aval → no se crea', { token: lider, path: 'vacantes/vNueva', method: 'create', esperado: 'DENY', payload: nueva({ reemplaza_a_cargo_id: 'cg_ayudante', reemplazo_mismas_condiciones: true }) });
+caso(G13, 'reemplazo con otro cargo CON aval → se crea', { token: lider, path: 'vacantes/vNueva', method: 'create', esperado: 'ALLOW', payload: nueva({ reemplaza_a_cargo_id: 'cg_ayudante', reemplazo_mismas_condiciones: true, aval_url: AVAL }) });
+caso(G13, 'reemplazo que CAMBIA condiciones, sin aval → no se crea', { token: lider, path: 'vacantes/vNueva', method: 'create', esperado: 'DENY', payload: nueva({ reemplaza_a_cargo_id: 'cg_tecnico', reemplazo_mismas_condiciones: false }) });
+caso(G13, 'formulario viejo (sin campos de reemplazo) → se crea', { token: lider, path: 'vacantes/vNueva', method: 'create', esperado: 'ALLOW', payload: nueva({}) });
+caso(G13, 'necesidad temporal sin aval → se crea', { token: lider, path: 'vacantes/vNueva', method: 'create', esperado: 'ALLOW', payload: nueva({ tipo_solicitud: 'necesidad_temporal' }) });
+caso(G13, 'coord: aumento SIN aval tampoco', { token: tok('coordinador', { uid: 'coord1' }), path: 'vacantes/vNueva', method: 'create', esperado: 'DENY', payload: nueva({ tipo_solicitud: 'aumento_planta', lider_uid: 'lider1', creado_por: 'coord1', actualizado_por: 'coord1' }) });
+// Visto bueno de GH: desde borrador/devuelta el cliente solo suspende.
+const vBor = { lider_uid: 'lider1', estado: 'borrador', creado_por: 'lider1', creado_en: 'T0', analista_uid: 'analista1', analista_nombre: 'Ana' };
+const upd = (estado, extra = {}) => ({ ...vBor, estado, actualizado_por: 'admin1', ...extra });
+caso(G13, 'admin NO pasa un borrador a aprobada desde el cliente', { token: adminTok, path: 'vacantes/vBor', method: 'update', esperado: 'DENY', data: vBor, payload: upd('aprobada') });
+caso(G13, 'analista NO perfila un borrador (lista_para_publicar)', { token: analista, path: 'vacantes/vBor', method: 'update', esperado: 'DENY', data: vBor, payload: { ...upd('lista_para_publicar'), actualizado_por: 'analista1' } });
+caso(G13, 'GH NO cancela un borrador desde el cliente (ahora se devuelve)', { token: tok('gh', { uid: 'gh1' }), path: 'vacantes/vBor', method: 'update', esperado: 'DENY', data: vBor, payload: { ...upd('cancelada'), actualizado_por: 'gh1' } });
+caso(G13, 'admin suspende un borrador (pausada)', { token: adminTok, path: 'vacantes/vBor', method: 'update', esperado: 'ALLOW', data: vBor, payload: upd('pausada') });
+caso(G13, 'admin edita condiciones de un borrador (mismo estado)', { token: adminTok, path: 'vacantes/vBor', method: 'update', esperado: 'ALLOW', data: vBor, payload: upd('borrador', { salario_base: 1750905 }) });
+caso(G13, 'admin NO reenvía una devuelta desde el cliente', { token: adminTok, path: 'vacantes/vBor', method: 'update', esperado: 'DENY', data: { ...vBor, estado: 'devuelta' }, payload: upd('borrador') });
+caso(G13, 'una publicada sigue avanzando normal (en_proceso)', { token: adminTok, path: 'vacantes/vBor', method: 'update', esperado: 'ALLOW', data: { ...vBor, estado: 'publicada' }, payload: upd('en_proceso') });
+caso(G13, 'aprobada → lista_para_publicar (perfilamiento) sigue igual', { token: analista, path: 'vacantes/vBor', method: 'update', esperado: 'ALLOW', data: { ...vBor, estado: 'aprobada' }, payload: { ...upd('lista_para_publicar'), actualizado_por: 'analista1' } });
 
 // ── Ejecutar ────────────────────────────────────────────────────────────
 const res = await fetch(`https://firebaserules.googleapis.com/v1/projects/${PROJECT}:test`, {

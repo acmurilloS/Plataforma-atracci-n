@@ -3,6 +3,8 @@ import { fromZonedTime } from 'date-fns-tz';
 import { aZonaBogota, diasHabilesEntre, formatearFecha, TZ_BOGOTA } from './fechas';
 import { COMISION_TIPO_LABEL, lineasComisiones } from './comisiones';
 import { textoRodamiento } from './rodamiento';
+import { desgloseGarantizado } from './garantizado';
+import { motivosAval, textoMotivoAval } from './avalSolicitud';
 import type { PostulacionDoc, ResumenVacanteDoc, VacanteDoc } from '../schemas';
 
 /**
@@ -756,6 +758,8 @@ export function construirBaseVacantes(
 ): FilaExcel[] {
   return vacantes.map((v) => {
     const c = conteos.get(v.id) ?? { postulados: 0, enTerna: 0, contratado: false, fechaVinculacion: '' };
+    const garantizado = desgloseGarantizado(v);
+    const motivosDeAval = motivosAval(v);
     const fp = fechasProceso?.get(v.id);
     const faseReal = fasesReales?.get(v.id);
     const transcurridos = diasTranscurridos(v, festivos, hoy);
@@ -772,6 +776,23 @@ export function construirBaseVacantes(
       'Fase real': faseReal ? etiquetaFasePipeline(faseReal) : '',
       'Tipo de solicitud': TIPO_SOLICITUD_TXT[v.tipo_solicitud] ?? v.tipo_solicitud ?? '',
       'Movimiento interno': v.es_movimiento_interno ? (v.tipo_movimiento ?? 'Sí') : '',
+      // Reemplazo (reu 08-oct): cargo de quien sale y si cambia algo frente a él.
+      'Reemplaza a': v.reemplaza_a_nombre ?? '',
+      'Cargo de quien sale': v.reemplaza_a_cargo_nombre ?? '',
+      'Frente a quien sale':
+        v.tipo_solicitud === 'reemplazo_indefinido' &&
+        (v.reemplaza_a_cargo_id || v.reemplazo_mismas_condiciones != null)
+          ? motivosDeAval.length
+            ? textoMotivoAval(motivosDeAval)
+            : 'Mismo cargo y condiciones'
+          : '',
+      Aval: v.aval_url
+        ? 'Adjunto'
+        : motivosDeAval.length
+          ? 'Falta (obligatorio)'
+          : v.aval_no_requiere
+            ? 'No requiere'
+            : 'Pendiente',
       'Fecha de apertura': formatearFecha(aperturaVacante(v)),
       'Terna enviada': formatearFecha(aDate(v.terna_enviada_en)),
       // Pedido Karen 09-sep: trazabilidad de las 3 fechas del tramo de decisión/ingreso.
@@ -800,6 +821,10 @@ export function construirBaseVacantes(
       Comisiones: lineasComisiones(v).join(' · '),
       'Aplica bolsa': v.comision_aplica_bolsa ? 'Sí' : 'No',
       Rodamiento: textoRodamiento(v),
+      // Garantizado desglosado (reu 08-oct): total = básico + no prestacional.
+      'Garantizado total mes': garantizado ? garantizado.total : '',
+      'Garantizado no prestacional': garantizado ? garantizado.diferencia : '',
+      'Duración garantizado': garantizado?.duracion ?? '',
       Garantizado: v.garantizado_texto ?? '',
     };
   });

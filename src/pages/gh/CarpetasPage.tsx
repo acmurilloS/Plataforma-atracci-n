@@ -24,6 +24,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { DotacionModal } from '../../components/gh/DotacionModal';
+import { DescargarCarpetaBoton } from '../../components/gh/DescargarCarpetaBoton';
 import { SaludoInicio } from '../../components/SaludoInicio';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { FolderCheck } from 'lucide-react';
@@ -756,17 +757,34 @@ export default function CarpetasPage() {
                                     </p>
                                   )}
                                 </div>
-                                {doc?.archivo_url && (
-                                  <a
-                                    href={doc.archivo_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
-                                  >
-                                    <ExternalLink size={10} strokeWidth={1.75} />
-                                    Ver PDF
-                                  </a>
-                                )}
+                                {/* TODOS los archivos del ítem: en los de varios archivos
+                                    antes solo se veía el primero (reu 08-oct). */}
+                                {(() => {
+                                  const lista =
+                                    doc?.archivos && doc.archivos.length
+                                      ? doc.archivos
+                                      : doc?.archivo_url
+                                        ? [{ url: doc.archivo_url, nombre: doc.nombre_archivo ?? '' }]
+                                        : [];
+                                  if (lista.length === 0) return null;
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 shrink-0">
+                                      {lista.map((a, i) => (
+                                        <a
+                                          key={`${a.url}-${i}`}
+                                          href={a.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          title={a.nombre || undefined}
+                                          className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 hover:text-brand-800 hover:underline"
+                                        >
+                                          {i === 0 && <ExternalLink size={10} strokeWidth={1.75} />}
+                                          {lista.length === 1 ? 'Ver PDF' : i === 0 ? 'Ver 1' : i + 1}
+                                        </a>
+                                      ))}
+                                    </span>
+                                  );
+                                })()}
                                 {estado === 'entregado' && doc && (
                                   <button
                                     onClick={() => verificarDoc(doc.id)}
@@ -857,6 +875,17 @@ export default function CarpetasPage() {
                   </div>
                 )
               )}
+
+              {/* Descarga de la carpeta completa (reu Karen + Diego 08-oct). */}
+              <div className="mt-5">
+                <DescargarCarpetaBoton
+                  candidatoId={String(c.candidato_id ?? post?.candidato_id ?? '')}
+                  candidatoNombre={String(c.candidato_nombre ?? post?.candidato_nombre ?? '')}
+                  consecutivo={String(c.vacante_consecutivo ?? info.consecutivo ?? '')}
+                  documentos={docsPorPostulacion.get(c.postulacion_id) ?? []}
+                  driveCarpetaId={c.drive_carpeta_id ?? null}
+                />
+              </div>
 
               {/* Acciones según estado */}
               <div className="flex gap-2 justify-between flex-wrap items-center mt-5 pt-4 border-t border-slate-100">

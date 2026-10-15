@@ -9,8 +9,10 @@ import { formatearCOP } from '../../utils/moneda';
 import { formatearFecha } from '../../utils/fechas';
 import { puedeVerVacante } from '../../utils/accesoRutas';
 import { textoRodamiento } from '../../utils/rodamiento';
+import { motivosAval, textoMotivoAval } from '../../utils/avalSolicitud';
 import { Button, Card, Pill, type PillTono } from '../../components/brand';
 import { CondicionesVacante } from '../../components/vacantes/CondicionesVacante';
+import { VisorSolicitudOficial } from '../../components/vacantes/VisorSolicitudOficial';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 import {
@@ -408,6 +410,8 @@ function BloqueAval({
   contexto: 'pendiente' | 'historico';
 }) {
   const historico = contexto === 'historico';
+  // Aval obligatorio (reu 08-oct): aumento de planta o reemplazo con cambio.
+  const motivos = motivosAval(vacante);
 
   if (vacante.aval_url) {
     return (
@@ -422,6 +426,7 @@ function BloqueAval({
             </p>
             <p className="text-[11px] text-text-subtle">
               {historico ? 'PDF adjunto a la solicitud' : 'PDF adjunto · revisa antes de aprobar'}
+              {motivos.length > 0 && ` · obligatorio: ${textoMotivoAval(motivos).toLowerCase()}`}
             </p>
           </div>
         </div>
@@ -434,6 +439,27 @@ function BloqueAval({
           <ExternalLink size={11} strokeWidth={1.75} />
           Abrir PDF
         </a>
+      </div>
+    );
+  }
+
+  if (motivos.length > 0) {
+    return (
+      <div className="flex items-start gap-3 rounded-md border border-danger-500/30 bg-danger-50/60 p-4">
+        <div className="w-10 h-10 rounded-md bg-danger-500/10 text-danger-700 flex items-center justify-center shrink-0">
+          <FileText size={18} strokeWidth={1.75} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-danger-700">
+            Falta el aval firmado, y es obligatorio
+          </p>
+          <p className="text-[12px] text-danger-700 mt-0.5 leading-[1.5]">
+            {textoMotivoAval(motivos)}.{' '}
+            {historico
+              ? 'La solicitud se decidió sin el aval.'
+              : `No se puede aprobar sin él: recházala pidiendo el aval y ${vacante.lider_nombre || 'el líder'} lo adjunta al corregirla.`}
+          </p>
+        </div>
       </div>
     );
   }
@@ -467,15 +493,12 @@ function BloqueAval({
         </p>
         <p className="text-[12px] text-warning-700 mt-0.5 leading-[1.5]">
           {historico ? (
-            <>
-              La solicitud se decidió sin el aval firmado por Alejandro. Si llega después,
-              coordinación puede adjuntarlo desde el detalle de la vacante.
-            </>
+            <>La solicitud se decidió sin el aval firmado por Alejandro.</>
           ) : (
             <>
-              Pídele a <span className="font-semibold">{vacante.lider_nombre}</span> que suba el
-              aval firmado por Alejandro, o adjúntalo tú mismo desde el detalle de la vacante
-              antes de aprobar.
+              Para este tipo de solicitud el aval no es obligatorio. Si lo necesitas, recházala
+              pidiéndoselo a <span className="font-semibold">{vacante.lider_nombre}</span>: lo
+              adjunta al corregirla.
             </>
           )}
         </p>
@@ -499,6 +522,9 @@ function VacanteCardAprobacion({
 }) {
   const [nota, setNota] = useState('');
   const [mostrarRechazo, setMostrarRechazo] = useState(false);
+  const [verOficial, setVerOficial] = useState(false);
+  // Sin el aval obligatorio no se aprueba (reu 08-oct); el servidor también lo exige.
+  const faltaAvalObligatorio = motivosAval(vacante).length > 0 && !vacante.aval_url;
 
   return (
     <Card padding="lg">
@@ -533,6 +559,15 @@ function VacanteCardAprobacion({
             <FileText size={11} strokeWidth={1.75} />
             Solicitud de Integrantes
           </Link>
+          {/* El original que se descarga (reu 08-oct: "él quiere ver los dos"). */}
+          <button
+            type="button"
+            onClick={() => setVerOficial(true)}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-text-body hover:text-text-strong hover:underline whitespace-nowrap"
+          >
+            <FileText size={11} strokeWidth={1.75} />
+            Formato oficial (PDF)
+          </button>
           {puedeVerDetalle && (
             <Link
               to={`/vacantes/${vacante.id}`}
@@ -623,13 +658,18 @@ function VacanteCardAprobacion({
               type="button"
               variant="brand-primary"
               onClick={() => onAprobar(nota)}
-              disabled={procesando}
+              disabled={procesando || faltaAvalObligatorio}
               loading={procesando}
               icon={<Check size={13} strokeWidth={1.75} />}
             >
               {procesando ? 'Aprobando…' : 'Aprobar'}
             </Button>
           </div>
+          {faltaAvalObligatorio && (
+            <p className="text-right text-[11px] text-danger-700">
+              No se puede aprobar sin el aval obligatorio: recházala para que lo adjunten.
+            </p>
+          )}
         </div>
       )}
 
@@ -653,6 +693,7 @@ function VacanteCardAprobacion({
           <HistorialRevision vacanteId={vacante.id} />
         </div>
       )}
+      {verOficial && <VisorSolicitudOficial vacante={vacante} onClose={() => setVerOficial(false)} />}
     </Card>
   );
 }
@@ -789,6 +830,7 @@ function VacanteRowHistorica({
   puedeVerDetalle: boolean;
 }) {
   const [abierta, setAbierta] = useState(false);
+  const [verOficial, setVerOficial] = useState(false);
   const tonoEstado = ESTADO_TONO[vacante.estado] ?? 'neutral';
   const labelEstado = ESTADO_LABEL[vacante.estado] ?? vacante.estado.replace(/_/g, ' ');
 
@@ -883,6 +925,14 @@ function VacanteRowHistorica({
           >
             VIDA-F-01
           </Link>
+          <button
+            type="button"
+            onClick={() => setVerOficial(true)}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-text-body hover:text-text-strong hover:underline"
+            title="Formato oficial VIDA-F-01 en PDF"
+          >
+            Oficial (PDF)
+          </button>
           {puedeVerDetalle && (
             <Link
               to={`/vacantes/${vacante.id}`}
@@ -934,6 +984,7 @@ function VacanteRowHistorica({
           <HistorialRevision vacanteId={vacante.id} />
         </div>
       )}
+      {verOficial && <VisorSolicitudOficial vacante={vacante} onClose={() => setVerOficial(false)} />}
     </Card>
   );
 }

@@ -116,6 +116,14 @@ export function useVacantes() {
       const docRef = await addDoc(collection(db, 'vacantes'), payload);
       return { id: docRef.id };
     } catch (e) {
+      // Las reglas exigen el aval en aumento de planta y en reemplazos con cambio
+      // de cargo/condiciones (reu 08-oct); si se cuela una pestaña vieja, que el
+      // mensaje diga qué hacer en vez de "no tienes permisos".
+      if (typeof e === 'object' && e && 'code' in e && String((e as { code: unknown }).code) === 'permission-denied') {
+        throw new Error(
+          'No se pudo enviar la solicitud. Si es un aumento de planta o un reemplazo con cambio de cargo o de condiciones, adjunta el aval firmado. Si ya lo adjuntaste, recarga la página y vuelve a intentarlo.',
+        );
+      }
       throw new Error(mensajeError(e));
     }
   }, []);

@@ -30,12 +30,14 @@ import { SelectorCargo } from '../components/vacantes/SelectorCargo';
 import { CondicionesVacante } from '../components/vacantes/CondicionesVacante';
 import { CamposCondiciones } from '../components/vacantes/CamposCondiciones';
 import { CorregirSolicitudModal } from '../components/vacantes/CorregirSolicitudModal';
+import { AdjuntarAvalVacante } from '../components/vacantes/AdjuntarAvalVacante';
 import { EditarIdentificacionModal } from '../components/vacantes/EditarIdentificacionModal';
 import { useFestivosTodos } from '../hooks/useCatalogos';
 import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { functions, db } from '../lib/firebase';
 import { formatearFecha } from '../utils/fechas';
 import { tieneRodamiento } from '../utils/rodamiento';
+import { motivosAval, textoMotivoAval } from '../utils/avalSolicitud';
 import {
   condicionesDesdeVacante,
   validarCondiciones,
@@ -658,8 +660,23 @@ export default function VacanteDetallePage() {
               valor={TIPO_SOLICITUD_LABEL[vac.tipo_solicitud] ?? vac.tipo_solicitud}
             />
             {vac.tipo_solicitud === 'reemplazo_indefinido' && vac.reemplaza_a_nombre && (
-              <Dato label="Reemplaza a" valor={vac.reemplaza_a_nombre} />
+              <Dato
+                label="Reemplaza a"
+                valor={[vac.reemplaza_a_nombre, vac.reemplaza_a_cargo_nombre].filter(Boolean).join(' · ')}
+              />
             )}
+            {/* Reu 08-oct: si cambia el cargo o las condiciones frente a quien sale, exige aval. */}
+            {vac.tipo_solicitud === 'reemplazo_indefinido' &&
+              (vac.reemplaza_a_cargo_id || vac.reemplazo_mismas_condiciones != null) && (
+                <Dato
+                  label="Frente a quien sale"
+                  valor={
+                    motivosAval(vac).length
+                      ? `${textoMotivoAval(motivosAval(vac))} · exige aval`
+                      : 'Mismo cargo y condiciones'
+                  }
+                />
+              )}
             {vac.tipo_solicitud === 'necesidad_temporal' && vac.temporalidad_meses != null && (
               <Dato
                 label="Duración estimada"
@@ -704,11 +721,16 @@ export default function VacanteDetallePage() {
                   <FileText size={13} strokeWidth={1.5} />
                   Ver PDF firmado
                 </a>
-              ) : vac.aval_no_requiere ? (
+              ) : vac.aval_no_requiere && motivosAval(vac).length === 0 ? (
                 <p className="mt-1.5 text-[14px] font-medium text-text-strong">No requiere aval</p>
               ) : (
                 <p className="mt-1.5 text-[14px] font-medium text-warning-700">Pendiente de adjuntar</p>
               )}
+              {/* Antes del visto bueno de GH, el líder (o coordinación) lo adjunta aquí
+                  sin esperar a que le devuelvan la solicitud (reu 08-oct). */}
+              {!vac.aval_url &&
+                (vac.estado === 'borrador' || vac.estado === 'devuelta') &&
+                (esCreador || esCoord) && <AdjuntarAvalVacante vacante={vac} />}
             </div>
             <Dato
               label="Aval aprobado por GH"

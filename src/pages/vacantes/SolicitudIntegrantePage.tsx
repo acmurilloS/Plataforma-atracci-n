@@ -1,20 +1,24 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Download, Save } from 'lucide-react';
+import { ArrowLeft, Check, Download, Eye, Save } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
 import { formatearFecha } from '../../utils/fechas';
 import { RODAMIENTO_OPCIONES, RODAMIENTO_FIJOS } from '../../utils/rodamiento';
-import { lineasComisiones, textoComisiones } from '../../utils/comisiones';
+import { textoComisiones } from '../../utils/comisiones';
 import type { SolicitudIntegranteDoc, VacanteDoc } from '../../schemas';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Pill } from '../../components/brand';
+import { estamparSolicitudIntegrante } from '../../utils/estamparSolicitudIntegrante';
 import {
-  estamparSolicitudIntegrante,
-  type SolicitudEstampado,
-} from '../../utils/estamparSolicitudIntegrante';
+  camposEfectivos,
+  datosSolicitudOficial,
+  nombreArchivoSolicitud,
+  type CamposSolicitud,
+} from '../../utils/solicitudOficial';
+import { VisorSolicitudOficial } from '../../components/vacantes/VisorSolicitudOficial';
 
 /**
  * SolicitudIntegrantePage · controles brand + hoja oficial VIDA-F-01 v08.
@@ -32,22 +36,7 @@ const TIPO_LABEL: Record<string, string> = {
 };
 
 /** Campos editables del formato (los que la vacante no captura). */
-interface FormSolicitud {
-  cargo_solicitante: string;
-  cargo_reporta: string;
-  tipo_vinculacion: string;
-  sistemas: string;
-  preferible_poseer: string;
-  disponibilidad_viajar: string;
-  trabajo_en: string;
-  rodamiento_valor: string;
-  bonificaciones_texto: string;
-  garantizado_total: string;
-  valor_prestacional: string;
-  valor_no_prestacional: string;
-  garantizado_tiempo: string;
-  observaciones: string;
-}
+type FormSolicitud = CamposSolicitud;
 
 const FORM_VACIO: FormSolicitud = {
   cargo_solicitante: '',
@@ -69,24 +58,6 @@ const FORM_VACIO: FormSolicitud = {
 function pesos(n: number | undefined): string {
   if (n == null) return '—';
   return `$ ${n.toLocaleString('es-CO')}`;
-}
-
-/**
- * Deriva el "tipo de vinculación" del tipo de solicitud de la vacante, para
- * prellenar ese campo de la solicitud (antes salía en blanco en el PDF).
- * Reemplazo/aumento = De planta; necesidad temporal = Temporal.
- */
-function vinculacionDeTipoSolicitud(tipo: string | undefined | null): string {
-  if (tipo === 'necesidad_temporal') return 'Temporal';
-  if (
-    tipo === 'reemplazo_indefinido' ||
-    tipo === 'aumento_planta' ||
-    tipo === 'reemplazo' ||
-    tipo === 'aumento'
-  ) {
-    return 'De planta';
-  }
-  return '';
 }
 
 /**
@@ -116,47 +87,22 @@ export default function SolicitudIntegrantePage() {
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const [descargando, setDescargando] = useState(false);
+  const [verOficial, setVerOficial] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Prefill: lo guardado manda; lo vacío sale de la vacante (cargo del solicitante,
+  // tipo de vinculación, rodamiento y —reu 08-oct— el garantizado DESGLOSADO:
+  // total, valor prestacional = básico, no prestacional = diferencia, tiempo). Se
+  // carga una vez por vacante/solicitud para no pisar lo que se está editando.
+  const claveCarga = vacante ? `${vacante.id}:${solicitud?.id ?? ''}` : '';
+  const [cargadoPara, setCargadoPara] = useState('');
   useEffect(() => {
-    // Prefill desde la vacante: rodamiento (lo eligió el líder al crearla) y el
-    // tipo de vinculación (derivado del tipo de solicitud). Si la solicitud ya
-    // trae valor propio, ese manda. Antes salían en blanco en el PDF (reu Karen 27-jul).
-    const rodDeVacante = vacante?.rodamiento_valor ?? '';
-    const vincDeVacante = vinculacionDeTipoSolicitud(vacante?.tipo_solicitud);
-    // El líder captura su cargo al crear la vacante (lider_cargo) → prellena aquí
-    // el "cargo del solicitante" (antes salía en blanco en el PDF; reu Karen 27-jul).
-    const cargoSolicitanteDeVacante = vacante?.lider_cargo ?? '';
-    if (solicitud) {
-      const rv = solicitud.rodamiento_valor || rodDeVacante;
-      setForm({
-        cargo_solicitante: solicitud.cargo_solicitante || cargoSolicitanteDeVacante,
-        cargo_reporta: solicitud.cargo_reporta ?? '',
-        tipo_vinculacion: solicitud.tipo_vinculacion || vincDeVacante,
-        sistemas: solicitud.sistemas ?? '',
-        preferible_poseer: solicitud.preferible_poseer ?? '',
-        disponibilidad_viajar: solicitud.disponibilidad_viajar ?? '',
-        trabajo_en: solicitud.trabajo_en ?? '',
-        rodamiento_valor: rv,
-        bonificaciones_texto: solicitud.bonificaciones_texto ?? '',
-        garantizado_total: solicitud.garantizado_total ?? '',
-        valor_prestacional: solicitud.valor_prestacional ?? '',
-        valor_no_prestacional: solicitud.valor_no_prestacional ?? '',
-        garantizado_tiempo: solicitud.garantizado_tiempo ?? '',
-        observaciones: solicitud.observaciones ?? '',
-      });
-      setRodOtro(!!rv && !RODAMIENTO_FIJOS.has(rv));
-    } else {
-      // Aún no hay solicitud: prefila lo que se puede derivar de la vacante.
-      setForm((p) => ({
-        ...p,
-        cargo_solicitante: p.cargo_solicitante || cargoSolicitanteDeVacante,
-        rodamiento_valor: p.rodamiento_valor || rodDeVacante,
-        tipo_vinculacion: p.tipo_vinculacion || vincDeVacante,
-      }));
-      if (rodDeVacante) setRodOtro(!RODAMIENTO_FIJOS.has(rodDeVacante));
-    }
-  }, [solicitud, vacante]);
+    if (!vacante || claveCarga === cargadoPara) return;
+    const c = camposEfectivos(vacante, solicitud);
+    setForm(c);
+    setRodOtro(!!c.rodamiento_valor && !RODAMIENTO_FIJOS.has(c.rodamiento_valor));
+    setCargadoPara(claveCarga);
+  }, [vacante, solicitud, claveCarga, cargadoPara]);
 
   function set<K extends keyof FormSolicitud>(k: K, v: string) {
     setForm((prev) => ({ ...prev, [k]: v }));
@@ -192,7 +138,8 @@ export default function SolicitudIntegrantePage() {
     if (!vacante) return;
     // No dejar descargar con campos clave en blanco (reu Karen 27-jul: el cargo
     // del solicitante y el tipo de vinculación salían vacíos en el PDF oficial).
-    if (!form.cargo_solicitante.trim() || !form.tipo_vinculacion.trim()) {
+    // GH (solo consulta) no puede llenarlos: descarga lo que haya (reu 08-oct).
+    if (!soloLectura && (!form.cargo_solicitante.trim() || !form.tipo_vinculacion.trim())) {
       setErr(
         'Completa el "cargo del solicitante" y el "tipo de vinculación" antes de descargar el formato oficial.',
       );
@@ -201,50 +148,11 @@ export default function SolicitudIntegrantePage() {
     setDescargando(true);
     setErr(null);
     try {
-      const reemplazaNombre =
-        vacante.tipo_solicitud === 'reemplazo_indefinido' && vacante.reemplaza_a_nombre
-          ? vacante.reemplaza_a_nombre
-          : 'NA';
-      const tiempoReemp =
-        vacante.tipo_solicitud === 'necesidad_temporal' && vacante.temporalidad_meses != null
-          ? `${vacante.temporalidad_meses} mes${vacante.temporalidad_meses === 1 ? '' : 'es'}`
-          : 'NA';
-
-      const datos: SolicitudEstampado = {
-        consecutivo: vacante.consecutivo,
-        fecha_solicitud: formatearFecha((vacante.creado_en?.toDate?.() ?? new Date()) as Date),
-        solicitante: vacante.lider_nombre,
-        cargo_solicitante: form.cargo_solicitante,
-        cargo_solicita: vacante.cargo_nombre,
-        empresa: vacante.empresa_nombre,
-        unidad: vacante.unidad_nombre,
-        sede: vacante.sede_nombre,
-        cargo_reporta: form.cargo_reporta,
-        tipo_vinculacion: form.tipo_vinculacion,
-        cargo_reemplazo: vacante.cargo_nombre,
-        reemplaza_a: reemplazaNombre,
-        tiempo_reemplazo: tiempoReemp,
-        preferible_poseer: form.preferible_poseer,
-        disponibilidad_viajar: form.disponibilidad_viajar,
-        trabajo_en: form.trabajo_en,
-        salario_base: vacante.salario_base != null ? vacante.salario_base.toLocaleString('es-CO') : '',
-        rodamiento: vacante.rodamiento ? 'Sí' : 'No',
-        rodamiento_valor: form.rodamiento_valor,
-        // Una línea por renglón (tipo, presupuesto/indicadores, medición, bolsa, concepto).
-        comisiones: lineasComisiones(vacante).join('\n'),
-        bonificaciones: form.bonificaciones_texto,
-        garantizado_total: form.garantizado_total,
-        valor_prestacional: form.valor_prestacional,
-        valor_no_prestacional: form.valor_no_prestacional,
-        garantizado_tiempo: form.garantizado_tiempo,
-        observaciones: form.observaciones,
-      };
-
-      const blob = await estamparSolicitudIntegrante(datos);
+      const blob = await estamparSolicitudIntegrante(datosSolicitudOficial(vacante, form));
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Solicitud_Integrante_${vacante.consecutivo || vacante.id}.pdf`;
+      a.download = nombreArchivoSolicitud(vacante);
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -318,6 +226,14 @@ export default function SolicitudIntegrantePage() {
                 {guardando ? 'Guardando…' : 'Guardar'}
               </Button>
             )}
+            {/* Ver el original en pantalla (reu 08-oct: Diego "quiere ver los dos"). */}
+            <Button
+              onClick={() => setVerOficial(true)}
+              variant="neutral-secondary"
+              icon={<Eye size={13} strokeWidth={1.75} />}
+            >
+              Ver formato oficial
+            </Button>
             <Button
               onClick={descargarOficial}
               disabled={descargando}
@@ -335,6 +251,9 @@ export default function SolicitudIntegrantePage() {
         <div className="rounded-md border border-danger-500/20 bg-danger-50 px-3.5 py-2.5 text-[13px] text-danger-700 print:hidden">
           {err}
         </div>
+      )}
+      {verOficial && (
+        <VisorSolicitudOficial vacante={vacante} campos={form} onClose={() => setVerOficial(false)} />
       )}
 
       {/* Hoja oficial VIDA-F-01 */}

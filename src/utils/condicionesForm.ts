@@ -22,6 +22,12 @@ export interface CondicionesForm {
   rodamiento_valor: string;
   /** El desplegable está en "Otro valor…" (valor libre). */
   rodamiento_otro: boolean;
+  /** Garantizado desglosado (reu 08-oct): total mensual (incluye el básico) + duración. */
+  garantizado_aplica: boolean;
+  /** Solo dígitos. */
+  garantizado_total_mes: string;
+  garantizado_duracion: string;
+  /** Observaciones del garantizado (o el texto libre de las vacantes viejas). */
   garantizado_texto: string;
   horario_laboral: string;
   /** '' = vacante de antes del 19-ago, cuando el formulario no lo pedía. */
@@ -45,6 +51,9 @@ export function condicionesDesdeVacante(v: VacanteDoc): CondicionesForm {
     comisiones_texto: v.comisiones_texto ?? '',
     rodamiento_valor: rodamiento,
     rodamiento_otro: Boolean(v.rodamiento) && !RODAMIENTO_FIJOS.has(rodamiento),
+    garantizado_aplica: v.garantizado_total_mes != null,
+    garantizado_total_mes: v.garantizado_total_mes != null ? String(Math.round(v.garantizado_total_mes)) : '',
+    garantizado_duracion: v.garantizado_duracion ?? '',
     garantizado_texto: v.garantizado_texto ?? '',
     horario_laboral: v.horario_laboral ?? '',
     tipo_contrato: tipoContrato === 'indefinido' || tipoContrato === 'temporal' ? tipoContrato : '',
@@ -93,6 +102,21 @@ export function validarCondiciones(f: CondicionesForm, opts: OpcionesValidacion)
     return { ok: false, error: 'Elige el auxilio de rodamiento (o "No aplica").' };
   }
 
+  // Garantizado: el total incluye el básico, así que debe ser mayor (reu 08-oct).
+  const garantizadoTotal = Number(f.garantizado_total_mes);
+  if (f.garantizado_aplica) {
+    if (!Number.isFinite(garantizadoTotal) || garantizadoTotal <= Math.round(salario)) {
+      return {
+        ok: false,
+        error:
+          'El garantizado total mensual debe ser MAYOR que el salario básico (es básico + lo que se garantiza). Si no hay diferencia, desmarca «Aplica garantizado».',
+      };
+    }
+    if (!f.garantizado_duracion.trim()) {
+      return { ok: false, error: 'Indica por cuánto tiempo aplica el garantizado (ej. 3 meses).' };
+    }
+  }
+
   if (opts.exigirContrato && !f.tipo_contrato) {
     return { ok: false, error: 'Elige el tipo de contrato (indefinido o temporal).' };
   }
@@ -109,6 +133,8 @@ export function validarCondiciones(f: CondicionesForm, opts: OpcionesValidacion)
     comision_bolsa_detalle: hayComision && f.comision_aplica_bolsa ? f.comision_bolsa_detalle.trim() : '',
     // Sin comisión ("ninguna") el concepto no aplica; sin clasificar (null) se conserva.
     comisiones_texto: tipoComision === 'ninguna' ? '' : f.comisiones_texto.trim(),
+    garantizado_total_mes: f.garantizado_aplica ? Math.round(garantizadoTotal) : null,
+    garantizado_duracion: f.garantizado_aplica ? f.garantizado_duracion.trim() : '',
     garantizado_texto: f.garantizado_texto.trim(),
     horario_laboral: f.horario_laboral.trim(),
   };

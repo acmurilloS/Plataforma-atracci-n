@@ -7,6 +7,7 @@ import { AvalUploader } from './AvalUploader';
 import { CamposCondiciones } from './CamposCondiciones';
 import { formatearFecha } from '../../utils/fechas';
 import { tieneRodamiento } from '../../utils/rodamiento';
+import { motivosAval, textoMotivoAval } from '../../utils/avalSolicitud';
 import {
   condicionesDesdeVacante,
   validarCondiciones,
@@ -51,6 +52,9 @@ export function CorregirSolicitudModal({ vacante: v, onClose }: Props) {
   const [listo, setListo] = useState<Respuesta | null>(null);
 
   const rodamientoSinValorPrevio = Boolean(v.rodamiento) && !tieneRodamiento(v.rodamiento_valor);
+  // Aval obligatorio (reu 08-oct): aumento de planta o reemplazo con cambio.
+  const motivos = motivosAval(v);
+  const avalObligatorio = motivos.length > 0;
   const devueltaEn = v.devuelta_en?.toDate?.() ?? null;
 
   async function reenviar() {
@@ -63,6 +67,11 @@ export function CorregirSolicitudModal({ vacante: v, onClose }: Props) {
       setErr('La justificación debe tener al menos 20 caracteres.');
       return;
     }
+    if (avalObligatorio && !aval.url) {
+      setErr(`${textoMotivoAval(motivos)}: adjunta el aval firmado antes de reenviar.`);
+      return;
+    }
+    const sinAval = noRequiereAval && !avalObligatorio;
     setEnviando(true);
     setErr(null);
     try {
@@ -73,9 +82,9 @@ export function CorregirSolicitudModal({ vacante: v, onClose }: Props) {
         cambios: {
           ...r.patch,
           justificacion: justificacion.trim(),
-          aval_no_requiere: noRequiereAval,
-          aval_url: noRequiereAval ? '' : aval.url,
-          aval_drive_file_id: noRequiereAval ? '' : aval.driveFileId,
+          aval_no_requiere: sinAval,
+          aval_url: sinAval ? '' : aval.url,
+          aval_drive_file_id: sinAval ? '' : aval.driveFileId,
         },
       });
       setListo(res.data);
@@ -166,19 +175,26 @@ export function CorregirSolicitudModal({ vacante: v, onClose }: Props) {
                 <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-subtle">
                   Aval firmado
                 </span>
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={noRequiereAval}
-                    onChange={(e) => setNoRequiereAval(e.target.checked)}
-                    disabled={enviando}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
-                  />
-                  <span className="text-[13px] text-text-body leading-[1.5]">
-                    Este cargo no requiere aval (p. ej. un reemplazo en las mismas condiciones).
-                  </span>
-                </label>
-                {!noRequiereAval && (
+                {avalObligatorio ? (
+                  <p className="text-[12px] text-danger-700 leading-[1.5]">
+                    <span className="font-semibold">Obligatorio.</span> {textoMotivoAval(motivos)}: sin
+                    el aval firmado no se puede reenviar.
+                  </p>
+                ) : (
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={noRequiereAval}
+                      onChange={(e) => setNoRequiereAval(e.target.checked)}
+                      disabled={enviando}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
+                    />
+                    <span className="text-[13px] text-text-body leading-[1.5]">
+                      Este cargo no requiere aval (p. ej. un reemplazo en las mismas condiciones).
+                    </span>
+                  </label>
+                )}
+                {(!noRequiereAval || avalObligatorio) && (
                   <AvalUploader
                     empresaCodigo={v.empresa_codigo}
                     value={aval.url || undefined}

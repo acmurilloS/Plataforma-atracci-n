@@ -184,6 +184,18 @@ service cloud.firestore {
     }
 
     // ===== Vacantes =====
+
+    // Aval OBLIGATORIO (reu Karen + Diego 08-oct): aumento de planta, o reemplazo
+    // en el que cambia el cargo (del catálogo) o las condiciones respecto a la
+    // persona que sale. Espejo de src/utils/avalSolicitud.ts. Las vacantes de
+    // antes del cambio (sin los campos del reemplazo) no se evalúan por cambio.
+    function exigeAval(d) {
+      return d.tipo_solicitud in ['aumento_planta', 'aumento']
+        || (d.tipo_solicitud in ['reemplazo_indefinido', 'reemplazo']
+            && ((d.get('reemplaza_a_cargo_id', '') != ''
+                 && d.get('reemplaza_a_cargo_id', '') != d.get('cargo_id', ''))
+                || d.get('reemplazo_mismas_condiciones', null) == false));
+    }
     match /vacantes/{id} {
       // get totalmente público (sin requerir login ni Anonymous Auth).
       // Decisión 2026-06-01: la landing pública debe abrirse desde
@@ -230,7 +242,10 @@ service cloud.firestore {
         || isAdmin()
       ) && nuevoConAuditoria()
         && request.resource.data.estado == 'borrador'
-        && request.resource.data.aval_url is string;
+        && request.resource.data.aval_url is string
+        // Sin el aval firmado no se crea un aumento de planta ni un reemplazo
+        // con cambio de cargo/condiciones (reu 08-oct).
+        && (!exigeAval(request.resource.data) || request.resource.data.aval_url != '');
       allow update: if signedIn() && (
         staff()
         || (isAnalista() && (
@@ -243,7 +258,13 @@ service cloud.firestore {
         // analista_nombre por su cuenta — ni una analista autoasignarse vacantes
         // ajenas, ni el perfilamiento auto-asignarse (decisión 2026-06-28).
         && request.resource.data.analista_uid == resource.data.analista_uid
-        && request.resource.data.analista_nombre == resource.data.analista_nombre;
+        && request.resource.data.analista_nombre == resource.data.analista_nombre
+        // Sin el visto bueno de GH la vacante NO avanza (reu Karen + Diego 08-oct):
+        // desde borrador/devuelta el cliente solo puede suspenderla. Aprobar,
+        // devolver y reenviar van por callables (Admin SDK), igual que el
+        // movimiento interno.
+        && (!(resource.data.estado in ['borrador', 'devuelta'])
+            || request.resource.data.estado in [resource.data.estado, 'pausada']);
       allow delete: if false;
     }
 

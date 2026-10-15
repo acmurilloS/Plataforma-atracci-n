@@ -7,7 +7,9 @@ import { avisarCondicionesCultura } from './avisarCondicionesCultura';
 import {
   describirCambios,
   ErrorValidacion,
+  motivosAval,
   normalizarCambios,
+  textoMotivoAval,
   tomarSnapshot,
 } from './condicionesSolicitud';
 
@@ -148,6 +150,15 @@ export const decidirSolicitudVacante = onCall({ region: 'us-central1' }, async (
     const notifs: Notif[] = [];
 
     if (decision === 'aprobar') {
+      // Aval obligatorio (reu 08-oct): "una limitante para que más adelante yo
+      // continúe o no". Sin el PDF no se aprueba: se devuelve para que lo adjunten.
+      const motivos = motivosAval(v);
+      if (motivos.length && !String(v.aval_url ?? '').trim()) {
+        throw new HttpsError(
+          'failed-precondition',
+          `${textoMotivoAval(motivos)} y la solicitud no tiene el aval firmado. Recházala para que el líder lo adjunte.`,
+        );
+      }
       estadoNuevo = 'aprobada';
       patch = {
         estado: estadoNuevo,
@@ -296,8 +307,24 @@ export const reenviarSolicitudVacante = onCall(
         );
       }
 
+      const final = { ...v, ...cambios };
+      // Reglas que dependen de la vacante completa (no solo de lo que llegó):
+      // aval obligatorio y garantizado mayor que el básico (reu 08-oct).
+      const motivos = motivosAval(final);
+      if (motivos.length && !String(final.aval_url ?? '').trim()) {
+        throw new HttpsError(
+          'failed-precondition',
+          `${textoMotivoAval(motivos)}: adjunta el aval firmado antes de reenviar.`,
+        );
+      }
+      if (final.garantizado_total_mes != null && Number(final.garantizado_total_mes) <= Number(final.salario_base)) {
+        throw new HttpsError(
+          'invalid-argument',
+          'El garantizado total mensual debe ser MAYOR que el salario básico (es básico + lo que se garantiza).',
+        );
+      }
       const antes = (v.devolucion_snapshot as Record<string, unknown> | null | undefined) ?? tomarSnapshot(v);
-      const lista = describirCambios(antes, tomarSnapshot({ ...v, ...cambios }));
+      const lista = describirCambios(antes, tomarSnapshot(final));
       if (lista.length === 0 && !nota) {
         throw new HttpsError(
           'failed-precondition',

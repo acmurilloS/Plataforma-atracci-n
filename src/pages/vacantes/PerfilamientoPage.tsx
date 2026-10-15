@@ -15,6 +15,7 @@ import {
   Target,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { puedeAbrirRuta } from '../../utils/accesoRutas';
 import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { useMutacion } from '../../hooks/useMutacion';
@@ -32,6 +33,7 @@ import { Button, Card, Pill } from '../../components/brand';
 import { EncabezadoPagina } from '../../components/ui/EncabezadoPagina';
 import { cn } from '../../utils/cn';
 import { lineasComisiones } from '../../utils/comisiones';
+import { textoGarantizado } from '../../utils/garantizado';
 import type { CargoDoc, VacanteDoc } from '../../schemas';
 import type { ProcesoDoc } from '../../schemas/procesoSchema';
 
@@ -173,7 +175,8 @@ export default function PerfilamientoPage() {
         // Comisiones estructuradas (reu 16-sep) resumidas en una línea para la IA.
         comisiones_texto: lineasComisiones(vacante).join(' · '),
         rodamiento: vacante.rodamiento ?? false,
-        garantizado_texto: vacante.garantizado_texto ?? '',
+        // Con el desglose (total mes + duración) si la vacante lo trae (reu 08-oct).
+        garantizado_texto: textoGarantizado(vacante) === 'No aplica' ? '' : textoGarantizado(vacante),
       });
       setAnalisisIA({ ...res.data, cargando: false });
     } catch (e) {
@@ -221,10 +224,15 @@ export default function PerfilamientoPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!vacante || !user || !perfil) return;
-    // Devuelta por GH (reu 08-oct): no se perfila hasta que el líder la corrija y
-    // GH la revise; si no, el guardado la saltaba a "lista para publicar".
+    // Visto bueno de GH como requisito (reu Karen + Diego 08-oct): sin aprobar no
+    // se perfila; antes el guardado la saltaba de borrador a "lista para publicar".
+    // Las reglas de Firestore también lo bloquean.
     if (vacante.estado === 'devuelta') {
       setErr('GH devolvió esta solicitud al líder para corregirla: no se puede perfilar todavía.');
+      return;
+    }
+    if (vacante.estado === 'borrador') {
+      setErr('Esta solicitud todavía no tiene el visto bueno de GH: no se puede perfilar hasta que la aprueben.');
       return;
     }
     setEnviando(true);
@@ -363,6 +371,21 @@ export default function PerfilamientoPage() {
         </div>
       )}
 
+      {vacante.estado === 'borrador' && (
+        <div className="rounded-md border border-warning-500/30 bg-warning-50/60 px-4 py-3 text-[13px] text-text-body">
+          <span className="font-semibold text-warning-700">Esperando el visto bueno de GH.</span>{' '}
+          Cultura y Desarrollo debe aprobar las condiciones de la solicitud antes de perfilarla.
+          {puedeAbrirRuta(rol, '/aprobaciones-aval') && (
+            <>
+              {' '}
+              <Link to="/aprobaciones-aval" className="font-medium text-brand-700 hover:underline">
+                Ir a Aprobaciones →
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+
       {soloLectura && (
         <div className="rounded-md border border-brand-200 bg-brand-50/50 px-4 py-3 text-[13px] text-text-body">
           Vista de <strong>solo lectura</strong> (Conexión de Talentos): puedes consultar el
@@ -372,7 +395,7 @@ export default function PerfilamientoPage() {
 
       <form onSubmit={onSubmit}>
         <fieldset
-          disabled={soloLectura || vacante.estado === 'devuelta'}
+          disabled={soloLectura || vacante.estado === 'devuelta' || vacante.estado === 'borrador'}
           className="space-y-6 border-0 p-0 m-0 min-w-0"
         >
         {/* ─── Criterios y mercado ──────────────────────────────── */}

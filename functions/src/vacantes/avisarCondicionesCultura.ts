@@ -12,7 +12,7 @@ import {
   FOOTER_EMPRESAS_DEFAULT,
 } from '../notificaciones/plantillasMensajes';
 import { textoComisiones } from '../utils/comisiones';
-import { textoContrato } from './condicionesSolicitud';
+import { motivosAval, textoContrato, textoGarantizado, textoMotivoAval } from './condicionesSolicitud';
 
 const FROM = 'Plataforma de Atracción Equitel <Steve-noresponder@equitel.com.co>';
 const APP_URL = 'https://ptm-atraccion.web.app';
@@ -102,7 +102,8 @@ export async function avisarCondicionesCultura(
   const salario = Number(v.salario_base ?? 0);
   // Tipo · presupuesto/indicadores · medición · bolsa · concepto (reu 16-sep).
   const comisiones = textoComisiones(v, '\n');
-  const garantizado = String(v.garantizado_texto ?? '').trim();
+  // Desglose básico + no prestacional (reu 08-oct); las viejas traen texto libre.
+  const garantizado = textoGarantizado(v);
   // Rodamiento con VALOR (reu Karen 16-sep): Diego solo veía "Sí/No" y necesita
   // el monto que puso el líder. Manda el booleano; el valor solo si dice que sí.
   const rodamientoValor = String(v.rodamiento_valor ?? '').trim();
@@ -115,10 +116,13 @@ export async function avisarCondicionesCultura(
   // Tipo de solicitud + a quién reemplaza / duración (Diego cruza contra planta).
   const tipoRaw = String(v.tipo_solicitud ?? '').trim();
   const reemplaza = String(v.reemplaza_a_nombre ?? '').trim();
+  const cargoAnterior = String(v.reemplaza_a_cargo_nombre ?? '').trim();
   const meses = Number(v.temporalidad_meses);
   const tipoSolicitud =
     (TIPO_LABEL[tipoRaw] ?? tipoRaw) +
-    (tipoRaw === 'reemplazo_indefinido' && reemplaza ? ` · reemplaza a ${reemplaza}` : '') +
+    (tipoRaw === 'reemplazo_indefinido' && reemplaza
+      ? ` · reemplaza a ${reemplaza}${cargoAnterior ? ` (${cargoAnterior})` : ''}`
+      : '') +
     (tipoRaw === 'necesidad_temporal' && Number.isFinite(meses) && meses > 0
       ? ` · ${meses} mes${meses === 1 ? '' : 'es'}`
       : '');
@@ -145,13 +149,35 @@ export async function avisarCondicionesCultura(
 
   // Tabla de condiciones (escapeHtml a todo lo que viene del líder). El contrato
   // se agregó en la reu 08-oct (Diego veía solicitudes "sin contrato").
+  // Aval (reu 08-oct): obligatorio en aumento de planta y en reemplazos que
+  // cambian cargo o condiciones; Diego ve de una si viene o si falta.
+  const motivos = motivosAval(v);
+  const tieneAval = !!String(v.aval_url ?? '').trim();
+  const aval = tieneAval
+    ? `Adjunto${motivos.length ? ` (obligatorio: ${textoMotivoAval(motivos).toLowerCase()})` : ''}`
+    : v.aval_no_requiere === true && !motivos.length
+      ? 'No requiere'
+      : motivos.length
+        ? `FALTA — es obligatorio (${textoMotivoAval(motivos).toLowerCase()})`
+        : 'Pendiente';
+  const frenteAQuienSale =
+    tipoRaw === 'reemplazo_indefinido' && (v.reemplaza_a_cargo_id || v.reemplazo_mismas_condiciones != null)
+      ? [
+          motivos.includes('cambio_cargo')
+            ? `Cambia el cargo${cargoAnterior ? ` (${cargoAnterior} → ${cargo || 'nuevo cargo'})` : ''}`
+            : 'Mismo cargo',
+          v.reemplazo_mismas_condiciones === false ? 'cambian las condiciones' : 'mismas condiciones',
+        ].join(' · ')
+      : '';
   const condiciones: [string, string][] = [
     ['Tipo de solicitud', tipoSolicitud || '—'],
+    ...(frenteAQuienSale ? ([['Frente a quien sale', frenteAQuienSale]] as [string, string][]) : []),
     ['Salario base', formatearCOP(salario)],
     ['Comisiones', comisiones],
     ['Rodamiento', rodamiento],
-    ['Garantizado', garantizado || 'No aplica'],
+    ['Garantizado', garantizado],
     ['Contrato', textoContrato(v)],
+    ['Aval', aval],
   ];
   // Los saltos de línea se respetan (comisiones y garantizado son textareas: una
   // tabla por rangos pegada en una sola tira era ilegible para Diego).

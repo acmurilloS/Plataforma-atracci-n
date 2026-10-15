@@ -23,6 +23,15 @@ export const vacanteInputSchema = z.object({
    */
   reemplaza_a_nombre: z.string().max(120).default(''),
   /**
+   * Reemplazo (reu Karen + Diego 08-oct): cargo que tenía la persona que sale
+   * (del catálogo) y si el nuevo integrante entra con sus mismas condiciones. Si
+   * cambia el cargo o las condiciones, la solicitud EXIGE el aval (ver
+   * utils/avalSolicitud.ts). Vacíos/null en las vacantes de antes de este cambio.
+   */
+  reemplaza_a_cargo_id: z.string().max(120).default(''),
+  reemplaza_a_cargo_nombre: z.string().max(160).default(''),
+  reemplazo_mismas_condiciones: z.boolean().nullable().default(null),
+  /**
    * Si tipo_solicitud == 'necesidad_temporal', meses estimados de la
    * cobertura (1–36). null en los otros tipos.
    */
@@ -68,6 +77,15 @@ export const vacanteInputSchema = z.object({
   horario_laboral: z.string().max(200).default(''),
   tipo_contrato: z.enum(['indefinido', 'temporal']).default('indefinido'),
   tiempo_contrato: z.string().max(60).default(''),
+  /**
+   * Garantizado (reu 08-oct): Diego pidió el desglose automático. Se captura el
+   * TOTAL mensual garantizado (incluye el básico) y su duración; la plataforma
+   * calcula básico + diferencia "no prestacional" (utils/garantizado.ts).
+   * null = no aplica o vacante anterior (que solo tiene `garantizado_texto`).
+   */
+  garantizado_total_mes: z.number().positive().max(100_000_000).nullable().default(null),
+  garantizado_duracion: z.string().max(80).default(''),
+  /** Observaciones del garantizado (y el texto libre de las vacantes viejas). */
   garantizado_texto: z.string().max(500).default(''),
   en_banda: z.boolean().nullable(),
   sin_banda_validada: z.boolean().default(false),

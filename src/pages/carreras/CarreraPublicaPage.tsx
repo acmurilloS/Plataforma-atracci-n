@@ -19,6 +19,7 @@ import { auth, db, functions, storage } from '../../lib/firebase';
 import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
 import { MB, mensajeErrorSubida, prepararArchivo } from '../../utils/archivos';
 import { formatearCOP } from '../../utils/moneda';
+import { desgloseGarantizado } from '../../utils/garantizado';
 import { COMISION_TIPO_LABEL, tieneComisiones } from '../../utils/comisiones';
 import { cn } from '../../utils/cn';
 import type { VacanteDoc } from '../../schemas';
@@ -512,16 +513,29 @@ export default function CarreraPublicaPage() {
                   {vacante.rodamiento ? 'Sí incluye' : 'No aplica'}
                 </dd>
               </div>
-              {vacante.garantizado_texto && (
-                <div className="md:col-span-2">
-                  <dt className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-muted mb-1">
-                    Garantizado
-                  </dt>
-                  <dd className="text-[13px] text-text-body whitespace-pre-line leading-[1.5]">
-                    {vacante.garantizado_texto}
-                  </dd>
-                </div>
-              )}
+              {(() => {
+                // Garantizado (reu 08-oct): al candidato se le muestra el total mensual
+                // garantizado y su duración; el desglose interno (no prestacional) no.
+                const g = desgloseGarantizado(vacante);
+                const obs = vacante.garantizado_texto?.trim();
+                if (!g && !obs) return null;
+                return (
+                  <div className="md:col-span-2">
+                    <dt className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-muted mb-1">
+                      Garantizado
+                    </dt>
+                    <dd className="text-[13px] text-text-body whitespace-pre-line leading-[1.5]">
+                      {g && (
+                        <>
+                          {formatearCOP(g.total)} mensuales{g.duracion ? ` durante ${g.duracion}` : ''}
+                          {obs ? '\n' : ''}
+                        </>
+                      )}
+                      {obs}
+                    </dd>
+                  </div>
+                );
+              })()}
             </dl>
           </Card>
 

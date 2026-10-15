@@ -8,6 +8,7 @@ import {
   type ComisionTipo,
 } from '../../utils/comisiones';
 import type { CondicionesForm } from '../../utils/condicionesForm';
+import { desgloseGarantizado } from '../../utils/garantizado';
 
 /**
  * Campos de CONDICIONES de una vacante ya creada: salario, comisiones,
@@ -34,6 +35,12 @@ function Etiqueta({ children }: { children: ReactNode }) {
 
 export function CamposCondiciones({ form, onChange, disabled }: Props) {
   const hayComision = form.comision_tipo !== '' && form.comision_tipo !== 'ninguna';
+  const desglose = form.garantizado_aplica
+    ? desgloseGarantizado({
+        salario_base: Number(form.salario_base) || null,
+        garantizado_total_mes: Number(form.garantizado_total_mes) || null,
+      })
+    : null;
 
   return (
     <div className="space-y-3.5">
@@ -125,17 +132,65 @@ export function CamposCondiciones({ form, onChange, disabled }: Props) {
         </>
       )}
 
-      <label className="block">
+      {/* Garantizado desglosado (reu 08-oct): total mensual (incluye el básico) y
+          duración; la plataforma calcula básico + diferencia no prestacional. */}
+      <div className="space-y-2">
         <Etiqueta>Garantizado</Etiqueta>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.garantizado_aplica}
+            onChange={(e) => onChange({ garantizado_aplica: e.target.checked })}
+            disabled={disabled}
+            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
+          />
+          <span className="text-[13px] text-text-strong">Aplica garantizado</span>
+        </label>
+        {form.garantizado_aplica && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-[11px] text-text-muted">Total mensual (incluye el básico)</span>
+              <input
+                inputMode="numeric"
+                value={form.garantizado_total_mes ? formatearCOP(Number(form.garantizado_total_mes)) : ''}
+                onChange={(e) => onChange({ garantizado_total_mes: soloDigitos(e.target.value) })}
+                disabled={disabled}
+                placeholder="$ 0"
+                className={campoClass}
+              />
+            </label>
+            <label className="block">
+              <span className="text-[11px] text-text-muted">¿Por cuánto tiempo?</span>
+              <input
+                value={form.garantizado_duracion}
+                onChange={(e) => onChange({ garantizado_duracion: e.target.value })}
+                disabled={disabled}
+                placeholder="Ej.: 3 meses"
+                className={campoClass}
+              />
+            </label>
+            {desglose && (
+              <p
+                className={`sm:col-span-2 text-[12px] ${
+                  desglose.diferencia > 0 ? 'text-text-muted' : 'text-danger-700'
+                }`}
+              >
+                {desglose.diferencia > 0
+                  ? `Básico ${formatearCOP(desglose.basico)} + ${formatearCOP(desglose.diferencia)} no prestacional.`
+                  : 'El total debe ser mayor que el salario básico.'}
+              </p>
+            )}
+          </div>
+        )}
         <textarea
           value={form.garantizado_texto}
           onChange={(e) => onChange({ garantizado_texto: e.target.value })}
           disabled={disabled}
           rows={2}
-          placeholder="Monto, duración y condiciones · vacío = No aplica"
+          placeholder="Observaciones del garantizado (sin el rodamiento: ese va aparte)"
           className={`${campoClass} resize-none`}
         />
-      </label>
+      </div>
 
       <label className="block">
         <Etiqueta>Auxilio de rodamiento</Etiqueta>

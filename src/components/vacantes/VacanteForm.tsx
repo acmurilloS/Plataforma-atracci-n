@@ -18,6 +18,9 @@ import { useVacantes } from '../../hooks/useVacantes';
 import { useAuth } from '../../hooks/useAuth';
 import { RODAMIENTO_OPCIONES, RODAMIENTO_FIJOS } from '../../utils/rodamiento';
 import { COMISION_TIPOS, COMISION_TIPO_LABEL } from '../../utils/comisiones';
+import { motivosAval, textoMotivoAval } from '../../utils/avalSolicitud';
+import { desgloseGarantizado } from '../../utils/garantizado';
+import { formatearCOP, soloDigitos } from '../../utils/moneda';
 import {
   vacanteInputSchema,
   type CargoDoc,
@@ -59,6 +62,8 @@ const ETIQUETA_CAMPO: Record<string, string> = {
   criticidad: 'Criticidad',
   tipo_solicitud: 'Tipo de solicitud',
   reemplaza_a_nombre: 'A quién reemplaza',
+  reemplaza_a_cargo_id: 'Cargo de la persona que sale',
+  garantizado_total_mes: 'Garantizado total mensual',
   temporalidad_meses: 'Tiempo de temporalidad',
   justificacion: 'Justificación (mínimo 20 caracteres)',
   salario_base: 'Salario base mensual',
@@ -208,6 +213,9 @@ export function VacanteForm() {
       tipo_movimiento: null,
       fecha_entrevista_propuesta: null,
       reemplaza_a_nombre: '',
+      reemplaza_a_cargo_id: '',
+      reemplaza_a_cargo_nombre: '',
+      reemplazo_mismas_condiciones: null,
       temporalidad_meses: null,
       temporalidad_descripcion: '',
       justificacion: '',
@@ -223,6 +231,8 @@ export function VacanteForm() {
       horario_laboral: '',
       tipo_contrato: 'indefinido',
       tiempo_contrato: '',
+      garantizado_total_mes: null,
+      garantizado_duracion: '',
       garantizado_texto: '',
       en_banda: null,
       sin_banda_validada: false,
@@ -249,6 +259,25 @@ export function VacanteForm() {
   const tipoSolicitudActual = watch('tipo_solicitud');
   const esMovimientoInterno = watch('es_movimiento_interno');
   const liderUidActual = watch('lider_uid');
+  const cargoIdActual = watch('cargo_id');
+  const reemplazaCargoId = watch('reemplaza_a_cargo_id');
+  const mismasCondiciones = watch('reemplazo_mismas_condiciones');
+  const garantizadoTotal = watch('garantizado_total_mes');
+  // Aval obligatorio (reu Karen + Diego 08-oct): aumento de planta, o reemplazo en
+  // el que cambia el cargo o las condiciones respecto a la persona que sale.
+  const motivos = motivosAval({
+    tipo_solicitud: tipoSolicitudActual,
+    cargo_id: cargoIdActual,
+    reemplaza_a_cargo_id: reemplazaCargoId,
+    reemplazo_mismas_condiciones: mismasCondiciones,
+  });
+  const avalObligatorio = motivos.length > 0;
+  // Garantizado desglosado (reu 08-oct): el total mensual incluye el básico.
+  const [aplicaGarantizado, setAplicaGarantizado] = useState(false);
+  const desglose = desgloseGarantizado({
+    salario_base: typeof salario === 'number' ? salario : null,
+    garantizado_total_mes: garantizadoTotal,
+  });
   // Solo staff (admin/coord/gh) puede reasignar la vacante a otro líder: es quien
   // crea "en nombre de" y quien puede leer la colección `usuarios` (SelectorLider).
   const esStaffCreador = rol === 'admin' || rol === 'coordinador' || rol === 'gh';
@@ -299,6 +328,12 @@ export function VacanteForm() {
     setValue('requiere_validacion_gh', requiereGH);
   }, [salario, cargoSel, setValue]);
 
+  useEffect(() => {
+    if (!avalObligatorio) return;
+    setValue('aval_no_requiere', false);
+    setAbiertas((prev) => (prev.aval ? prev : { ...prev, aval: true }));
+  }, [avalObligatorio, setValue]);
+
   function toggle(key: string) {
     setAbiertas((prev) => ({ ...prev, [key]: !prev[key] }));
   }
@@ -326,6 +361,20 @@ export function VacanteForm() {
       setErrorSubmit('Indica el nombre de la persona que se reemplaza.');
       return;
     }
+    // Reemplazo (reu 08-oct): GH necesita el cargo que tenía la persona que sale y
+    // saber si el nuevo entra con sus mismas condiciones.
+    if (data.tipo_solicitud === 'reemplazo_indefinido' && !data.reemplaza_a_cargo_id) {
+      setEnviando(false);
+      setErrorSubmit('Indica el cargo que tenía la persona que se reemplaza.');
+      return;
+    }
+    if (data.tipo_solicitud === 'reemplazo_indefinido' && data.reemplazo_mismas_condiciones === null) {
+      setEnviando(false);
+      setErrorSubmit(
+        'Indica si el nuevo integrante entra con las mismas condiciones de la persona que sale.',
+      );
+      return;
+    }
     if (
       data.tipo_solicitud === 'necesidad_temporal' &&
       (data.temporalidad_meses == null || data.temporalidad_meses < 1)
@@ -343,6 +392,32 @@ export function VacanteForm() {
     if (!data.es_movimiento_interno && !data.fecha_entrevista_propuesta) {
       setEnviando(false);
       setErrorSubmit('Propón una fecha de entrevista con el líder.');
+      return;
+    }
+    // Garantizado desglosado: el total incluye el básico, así que debe ser mayor.
+    if (aplicaGarantizado) {
+      const total = data.garantizado_total_mes;
+      if (total == null || total <= data.salario_base) {
+        setEnviando(false);
+        setErrorSubmit(
+          'El garantizado total mensual debe ser MAYOR que el salario básico (es básico + lo que se garantiza). Si no hay diferencia, desmarca «Aplica garantizado».',
+        );
+        return;
+      }
+      if (!data.garantizado_duracion.trim()) {
+        setEnviando(false);
+        setErrorSubmit('Indica por cuánto tiempo aplica el garantizado (ej. 3 meses).');
+        return;
+      }
+    }
+    // Aval obligatorio (reu 08-oct): sin el PDF firmado no se envía la solicitud.
+    const motivosEnvio = motivosAval(data);
+    if (motivosEnvio.length > 0 && !data.aval_url) {
+      setEnviando(false);
+      setAbiertas((prev) => ({ ...prev, aval: true }));
+      setErrorSubmit(
+        `${textoMotivoAval(motivosEnvio)}: adjunta el aval firmado antes de enviar la solicitud.`,
+      );
       return;
     }
     // Contrato temporal sin duración: Cultura y Desarrollo no puede validarlo
@@ -382,15 +457,29 @@ export function VacanteForm() {
         // vacío o "No aplica" = sin rodamiento; cualquier otro valor = sí.
         rodamiento: data.rodamiento_valor.trim() !== '' && data.rodamiento_valor.trim() !== 'No aplica',
         // Aval pendiente solo si NO se adjuntó PDF y NO se marcó "no requiere".
-        aval_pendiente: (!data.aval_url || data.aval_url.length === 0) && !data.aval_no_requiere,
+        // Si el aval es obligatorio, "no requiere" no aplica (y ya se exigió el PDF).
+        aval_no_requiere: motivosEnvio.length > 0 ? false : data.aval_no_requiere,
+        aval_pendiente:
+          (!data.aval_url || data.aval_url.length === 0) &&
+          (motivosEnvio.length > 0 || !data.aval_no_requiere),
         // Si no requiere aval, no arrastramos URL/archivo.
-        aval_url: data.aval_no_requiere ? '' : data.aval_url,
-        aval_drive_file_id: data.aval_no_requiere ? '' : data.aval_drive_file_id,
+        aval_url: data.aval_no_requiere && motivosEnvio.length === 0 ? '' : data.aval_url,
+        aval_drive_file_id:
+          data.aval_no_requiere && motivosEnvio.length === 0 ? '' : data.aval_drive_file_id,
+        // Garantizado: si no aplica, sin total ni duración.
+        garantizado_total_mes: aplicaGarantizado ? data.garantizado_total_mes : null,
+        garantizado_duracion: aplicaGarantizado ? data.garantizado_duracion.trim() : '',
         // El tiempo solo aplica al contrato temporal.
         tiempo_contrato: data.tipo_contrato === 'temporal' ? data.tiempo_contrato.trim() : '',
         // Limpia campos que no aplican al tipo elegido (evita "basura" en Firestore).
         reemplaza_a_nombre:
           data.tipo_solicitud === 'reemplazo_indefinido' ? data.reemplaza_a_nombre.trim() : '',
+        reemplaza_a_cargo_id:
+          data.tipo_solicitud === 'reemplazo_indefinido' ? data.reemplaza_a_cargo_id : '',
+        reemplaza_a_cargo_nombre:
+          data.tipo_solicitud === 'reemplazo_indefinido' ? data.reemplaza_a_cargo_nombre : '',
+        reemplazo_mismas_condiciones:
+          data.tipo_solicitud === 'reemplazo_indefinido' ? data.reemplazo_mismas_condiciones : null,
         temporalidad_meses:
           data.tipo_solicitud === 'necesidad_temporal' ? data.temporalidad_meses : null,
         temporalidad_descripcion:
@@ -410,6 +499,7 @@ export function VacanteForm() {
   function onModalClose() {
     setCreadaId(null);
     setCargoSel(null);
+    setAplicaGarantizado(false);
     reset();
   }
 
@@ -524,8 +614,9 @@ export function VacanteForm() {
                 </span>
                 <span className="block text-[11px] text-text-muted leading-[1.5]">
                   La persona ya es empleada y solo cambia de cargo. Se saltan reclutamiento, pruebas
-                  y terna: solo se pedirá el reporte de novedad y la aceptación de condiciones
-                  (exámenes y aval quedan opcionales).
+                  y terna: solo se pedirá el reporte de novedad y la aceptación de condiciones (los
+                  exámenes quedan opcionales). Si es un aumento de planta o cambia el cargo, el aval
+                  sigue siendo obligatorio.
                 </span>
               </span>
             </label>
@@ -560,6 +651,65 @@ export function VacanteForm() {
               </Campo>
               <p className="mt-2 text-[11px] text-text-muted leading-[1.5]">
                 Este dato permite a GH cruzar contra el control de planta y validar la baja.
+              </p>
+              <div className="mt-4">
+                <Campo
+                  label="Cargo que tenía la persona que sale"
+                  requerido
+                  error={errors.reemplaza_a_cargo_id?.message}
+                >
+                  <SelectorCargo
+                    value={reemplazaCargoId || undefined}
+                    onChange={(c) => {
+                      setValue('reemplaza_a_cargo_id', c?.id ?? '');
+                      setValue('reemplaza_a_cargo_nombre', c?.nombre ?? '');
+                    }}
+                  />
+                </Campo>
+              </div>
+              <div className="mt-4">
+                <span className="block text-[13px] font-medium text-text-strong mb-1.5">
+                  ¿Entra con las mismas condiciones que tenía esa persona?{' '}
+                  <span className="text-brand-600">*</span>
+                </span>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  {[
+                    { valor: true, texto: 'Sí, mismas condiciones' },
+                    { valor: false, texto: 'No, cambian (salario, comisiones u otras)' },
+                  ].map((op) => (
+                    <button
+                      key={String(op.valor)}
+                      type="button"
+                      onClick={() => setValue('reemplazo_mismas_condiciones', op.valor)}
+                      className={cn(
+                        'rounded-md border px-3.5 py-2 text-[13px] text-left transition-colors',
+                        mismasCondiciones === op.valor
+                          ? 'border-brand-600 bg-brand-50 text-brand-800 font-medium'
+                          : 'border-slate-200 bg-white text-text-body hover:border-slate-300',
+                      )}
+                    >
+                      {op.texto}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {motivos.length > 0 && (
+                <div className="mt-4 rounded-md border border-danger-500/30 bg-danger-50/60 px-3.5 py-2.5">
+                  <p className="text-[12px] text-danger-700 leading-[1.55]">
+                    <span className="font-semibold">{textoMotivoAval(motivos)}:</span> para
+                    Cultura y Desarrollo es un cambio en la planta, así que debes adjuntar el aval
+                    firmado (sección «Aval firmado») antes de enviar.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tipoSolicitudActual === 'aumento_planta' && (
+            <div className="mt-4 rounded-md border border-danger-500/30 bg-danger-50/60 px-3.5 py-2.5">
+              <p className="text-[12px] text-danger-700 leading-[1.55]">
+                <span className="font-semibold">Aumento de planta:</span> el aval firmado es
+                obligatorio. Adjúntalo en la sección «Aval firmado» antes de enviar la solicitud.
               </p>
             </div>
           )}
@@ -639,14 +789,69 @@ export function VacanteForm() {
                 ))}
               </select>
             </Campo>
-            <Campo label="Garantizado (descripción)">
-              <textarea
-                {...register('garantizado_texto')}
-                rows={3}
-                placeholder="Monto, duración y condiciones"
-                className={textareaClass}
-              />
-            </Campo>
+            <div className="space-y-3">
+              <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={aplicaGarantizado}
+                  onChange={(e) => {
+                    setAplicaGarantizado(e.target.checked);
+                    if (!e.target.checked) {
+                      setValue('garantizado_total_mes', null);
+                      setValue('garantizado_duracion', '');
+                    }
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-300"
+                />
+                <span className="text-[13px] text-text-strong">
+                  Aplica garantizado{' '}
+                  <span className="text-text-muted">(un total mensual asegurado por un tiempo)</span>
+                </span>
+              </label>
+              {aplicaGarantizado && (
+                <>
+                  <Campo label="Garantizado total mensual (incluye el básico)" requerido>
+                    <input
+                      inputMode="numeric"
+                      value={garantizadoTotal ? formatearCOP(garantizadoTotal) : ''}
+                      onChange={(e) => {
+                        const d = soloDigitos(e.target.value);
+                        setValue('garantizado_total_mes', d ? Number(d) : null);
+                      }}
+                      placeholder="$ 0"
+                      className={inputClass}
+                    />
+                  </Campo>
+                  {desglose && (
+                    <p
+                      className={cn(
+                        'text-[12px] leading-[1.5]',
+                        desglose.diferencia > 0 ? 'text-text-muted' : 'text-danger-700',
+                      )}
+                    >
+                      {desglose.diferencia > 0
+                        ? `Básico ${formatearCOP(desglose.basico)} + ${formatearCOP(desglose.diferencia)} no prestacional (la diferencia).`
+                        : 'El total debe ser mayor que el salario básico.'}
+                    </p>
+                  )}
+                  <Campo label="¿Por cuánto tiempo?" requerido>
+                    <input
+                      {...register('garantizado_duracion')}
+                      placeholder="Ej.: 3 meses"
+                      className={inputClass}
+                    />
+                  </Campo>
+                </>
+              )}
+              <Campo label={aplicaGarantizado ? 'Observaciones del garantizado' : 'Observaciones (opcional)'}>
+                <textarea
+                  {...register('garantizado_texto')}
+                  rows={2}
+                  placeholder="Condiciones adicionales del garantizado (sin el rodamiento: ese va aparte)"
+                  className={textareaClass}
+                />
+              </Campo>
+            </div>
           </div>
           {/* Detalle de la comisión (reu Karen 16-sep): Cultura y Desarrollo
               necesita saber exactamente cómo se gana para armar el contrato;
@@ -829,7 +1034,17 @@ export function VacanteForm() {
           abierta={abiertas.aval}
           onToggle={() => toggle('aval')}
         >
-          {/* "No requiere aval" (ej. reemplazo): no quedará pendiente en Aprobaciones. */}
+          {avalObligatorio && (
+            <div className="mb-3 rounded-md border border-danger-500/30 bg-danger-50/60 px-3.5 py-2.5">
+              <p className="text-[12px] text-danger-700 leading-[1.55]">
+                <span className="font-semibold">Aval obligatorio.</span> {textoMotivoAval(motivos)}:
+                sin el aval firmado no se puede enviar la solicitud.
+              </p>
+            </div>
+          )}
+          {/* "No requiere aval" (ej. reemplazo): no quedará pendiente en Aprobaciones.
+              No se ofrece cuando el aval es obligatorio (reu 08-oct). */}
+          {!avalObligatorio && (
           <label className="flex items-start gap-2.5 cursor-pointer mb-3">
             <Controller
               control={control}
@@ -850,10 +1065,11 @@ export function VacanteForm() {
               )}
             />
             <span className="text-[13px] text-text-body leading-[1.5]">
-              <strong>Este cargo no requiere aval</strong> (p. ej. un reemplazo). No quedará marcado
-              como pendiente de aval.
+              <strong>Este cargo no requiere aval</strong> (p. ej. un reemplazo en las mismas
+              condiciones). No quedará marcado como pendiente de aval.
             </span>
           </label>
+          )}
 
           {!noRequiereAval && (
             <>
@@ -876,7 +1092,7 @@ export function VacanteForm() {
                 <p className="text-[11px] text-danger-700">{errors.aval_url.message}</p>
               )}
               {/* Aval opcional al crear: si no lo tiene, igual puede enviar (aval_pendiente). */}
-              {!avalUrl && (
+              {!avalUrl && !avalObligatorio && (
                 <div className="mt-3 rounded-md border border-warning-500/30 bg-warning-50/40 px-3.5 py-2.5">
                   <p className="text-[12px] text-warning-700 leading-[1.55]">
                     <span className="font-semibold">Aval pendiente.</span> Si aún no tienes el aval
