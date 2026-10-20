@@ -121,6 +121,9 @@ export const decidirSolicitudVacante = onCall({ region: 'us-central1' }, async (
   }
 
   const nombre = await nombreDe(uid, token);
+  // Coordinación (Karen/Mari) también aprueba sin esperar a Diego y se coordina con
+  // él por fuera (Karen, oct-2026): la bitácora dice quién lo hizo de verdad.
+  const area = rol === 'gh' ? 'GH' : 'Coordinación';
   const coordinacion = decision === 'devolver' ? await uidsCoordinacion() : [];
   const ref = db.collection('vacantes').doc(vacanteId);
 
@@ -168,7 +171,7 @@ export const decidirSolicitudVacante = onCall({ region: 'us-central1' }, async (
         actualizado_en: ahora,
         actualizado_por: uid,
       };
-      motivoNovedad = `Aprobada por ${nombre} (GH).${nota ? `\nObservaciones: ${nota}` : ''}`;
+      motivoNovedad = `Aprobada por ${nombre} (${area}).${nota ? `\nObservaciones: ${nota}` : ''}`;
       if (liderUid) {
         notifs.push({
           destinatario_uid: liderUid,
@@ -190,7 +193,7 @@ export const decidirSolicitudVacante = onCall({ region: 'us-central1' }, async (
         actualizado_en: ahora,
         actualizado_por: uid,
       };
-      motivoNovedad = `Devuelta por ${nombre} (GH) para corregir.\nMotivo: ${nota}`;
+      motivoNovedad = `Devuelta por ${nombre} (${area}) para corregir.\nMotivo: ${nota}`;
       if (liderUid) {
         notifs.push({
           destinatario_uid: liderUid,
