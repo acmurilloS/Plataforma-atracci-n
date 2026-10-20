@@ -8,6 +8,7 @@ import { useDoc } from '../../hooks/useDoc';
 import { useColeccion } from '../../hooks/useColeccion';
 import { Button, Card } from '../../components/brand';
 import { cn } from '../../utils/cn';
+import { TextoMarcado } from '../../utils/textoMarcado';
 import {
   MAX_TEXTO_AVISO,
   MAX_TEXTO_RELOJ,
@@ -120,6 +121,7 @@ function AvisoCompromisoCard() {
   const [enAnalista, setEnAnalista] = useState(true);
   const [enLider, setEnLider] = useState(true);
   const [enPortal, setEnPortal] = useState(true);
+  const [enPostulacion, setEnPostulacion] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
@@ -131,6 +133,7 @@ function AvisoCompromisoCard() {
     setEnAnalista(config.en_entrevista_analista !== false);
     setEnLider(config.en_entrevista_lider !== false);
     setEnPortal(config.en_portal !== false);
+    setEnPostulacion(config.en_postulacion !== false);
   }, [config]);
 
   const estado = validarAvisoCompromiso(config);
@@ -159,6 +162,7 @@ function AvisoCompromisoCard() {
           en_entrevista_analista: enAnalista,
           en_entrevista_lider: enLider,
           en_portal: enPortal,
+          en_postulacion: enPostulacion,
           actualizado_en: serverTimestamp(),
           actualizado_por: user.uid,
         },
@@ -190,7 +194,8 @@ function AvisoCompromisoCard() {
       </div>
       <p className="text-[12.5px] text-text-muted mb-4 leading-[1.5]">
         Se agrega automáticamente al correo de citación a entrevista que recibe el candidato (nunca al
-        del líder) y, si lo marcas, junto a la cita en su portal.
+        del líder) y, si lo marcas, junto a la cita en su portal y como anuncio al postularse en la
+        página de la vacante. Usa **así** para negrita y una línea en blanco entre párrafos.
       </p>
       <div className="rounded-md border border-warning-500/30 bg-warning-50 px-3 py-2 text-[12px] text-warning-700 mb-4 space-y-1">
         <p>
@@ -250,6 +255,10 @@ function AvisoCompromisoCard() {
             <input type="checkbox" checked={enPortal} onChange={(e) => setEnPortal(e.target.checked)} className="h-4 w-4 accent-brand-600" />
             Mostrar en el portal
           </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={enPostulacion} onChange={(e) => setEnPostulacion(e.target.checked)} className="h-4 w-4 accent-brand-600" />
+            Anuncio al postularse
+          </label>
         </div>
         {texto.trim() && (
           <div>
@@ -258,9 +267,10 @@ function AvisoCompromisoCard() {
             </p>
             <div className="rounded-md border-l-2 border-brand-600 bg-brand-50/60 px-3 py-2">
               {titulo.trim() && <p className="text-[13px] font-semibold text-text-strong">{titulo.trim()}</p>}
-              <p className="text-[13px] text-text-body whitespace-pre-line mt-0.5">
-                {interpolarEjemplo(texto.trim(), EJEMPLO_AVISO)}
-              </p>
+              <TextoMarcado
+                texto={interpolarEjemplo(texto.trim(), EJEMPLO_AVISO)}
+                className="text-[13px] text-text-body mt-0.5 leading-[1.5]"
+              />
             </div>
           </div>
         )}
@@ -521,9 +531,10 @@ function RelojLiderCard() {
               <p className="text-[11px] text-text-subtle mt-1">{t.ayuda}</p>
               <AvisoDesconocidas texto={valor} permitidas={VARIABLES_RELOJ} />
               {valor.trim() && (
-                <p className="mt-1.5 rounded-md bg-slate-50 border border-slate-200 px-3 py-2 text-[12px] text-text-body whitespace-pre-line">
-                  {interpolarEjemplo(valor.trim(), EJEMPLO_RELOJ)}
-                </p>
+                <TextoMarcado
+                  texto={interpolarEjemplo(valor.trim(), EJEMPLO_RELOJ)}
+                  className="mt-1.5 rounded-md bg-slate-50 border border-slate-200 px-3 py-2 text-[12px] text-text-body leading-[1.5]"
+                />
               )}
             </label>
           );

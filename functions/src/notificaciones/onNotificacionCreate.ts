@@ -190,7 +190,7 @@ function construirHtml(args: {
                 ${escapar(titulo)}
               </h1>
               <p style="margin:0 0 24px 0;font-size:14px;line-height:1.55;color:#334155;">
-                ${escapar(mensaje).replace(/\n/g, '<br>')}
+                ${conNegritas(escapar(mensaje)).replace(/\n/g, '<br>')}
               </p>
               <a href="${escaparAtributo(link)}"
                  style="display:inline-block;background:#be1e0d;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;">
@@ -223,6 +223,14 @@ function escapar(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * `**texto**` → negrita (textos de Mensajes y reglas, p. ej. el aviso al líder
+ * de Karen, 20-oct). Se aplica DESPUÉS de escapar: nunca se inyecta HTML.
+ */
+function conNegritas(escapado: string): string {
+  return escapado.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
 }
 
 function escaparAtributo(s: string): string {

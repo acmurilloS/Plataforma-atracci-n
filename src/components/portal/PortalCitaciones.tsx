@@ -1,4 +1,5 @@
 import { CalendarPlus, MapPin, Stethoscope, Video } from 'lucide-react';
+import { TextoMarcado } from '../../utils/textoMarcado';
 
 /**
  * PortalCitaciones · F3 · próximas citas del candidato.
@@ -140,9 +141,10 @@ export function PortalCitaciones({
                     {entrevista.aviso_compromiso.titulo}
                   </p>
                 )}
-                <p className="text-[12.5px] text-text-body mt-0.5 whitespace-pre-line">
-                  {entrevista.aviso_compromiso.texto}
-                </p>
+                <TextoMarcado
+                  texto={entrevista.aviso_compromiso.texto}
+                  className="text-[12.5px] text-text-body mt-0.5 leading-[1.5]"
+                />
               </div>
             )}
           </div>

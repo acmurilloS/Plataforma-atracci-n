@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { Check, Upload } from 'lucide-react';
+import { Check, Handshake, Upload } from 'lucide-react';
 import { EquitelLogo } from '../../components/EquitelLogo';
 import { Button, Card, Pill } from '../../components/brand';
 import { TIPO_SOLICITUD_LABEL } from '../../schemas';
@@ -22,6 +22,7 @@ import { formatearCOP } from '../../utils/moneda';
 import { desgloseGarantizado } from '../../utils/garantizado';
 import { COMISION_TIPO_LABEL, tieneComisiones } from '../../utils/comisiones';
 import { cn } from '../../utils/cn';
+import { TextoMarcado } from '../../utils/textoMarcado';
 import type { VacanteDoc } from '../../schemas';
 
 interface ReferidoResuelto {
@@ -95,6 +96,16 @@ export default function CarreraPublicaPage() {
   // quedó cerrada a interno() (auditoría de PII, 15-jul).
   const [habeasAceptado, setHabeasAceptado] = useState(false);
   const [consent, setConsent] = useState(CONSENT_DEFAULT);
+
+  // Aviso de compromiso (reu Karen 20-oct: "cuando se registren les salga este
+  // anuncio"). Lo entrega contextoOfertaPublica si está encendido en Mensajes y
+  // reglas; sale una vez, al empezar a llenar el formulario.
+  const [aviso, setAviso] = useState<{ titulo: string; texto: string } | null>(null);
+  const [avisoVisto, setAvisoVisto] = useState(false);
+  const [mostrarAviso, setMostrarAviso] = useState(false);
+  function abrirAvisoSiFalta() {
+    if (aviso && !avisoVisto) setMostrarAviso(true);
+  }
 
   // Referencias laborales: el candidato registra 2 contactos de empleos
   // anteriores, o marca "no aplica" si no tiene experiencia.
@@ -180,10 +191,15 @@ export default function CarreraPublicaPage() {
         try {
           const fn = httpsCallable<
             { vacante_id: string },
-            { contexto: string; consent: { version: string; politica_url: string } | null }
+            {
+              contexto: string;
+              consent: { version: string; politica_url: string } | null;
+              aviso?: { titulo: string; texto: string } | null;
+            }
           >(functions, 'contextoOfertaPublica');
           const res = await fn({ vacante_id: id });
           setContextoCargo(res.data.contexto ?? '');
+          if (res.data.aviso?.texto) setAviso(res.data.aviso);
           if (res.data.consent?.version && res.data.consent.politica_url) {
             setConsent({
               version: res.data.consent.version,
@@ -205,6 +221,10 @@ export default function CarreraPublicaPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!vacante) return;
+    if (aviso && !avisoVisto) {
+      setMostrarAviso(true);
+      return;
+    }
     // La sesión anónima puede no haber quedado lista (red que bloquea Firebase,
     // primer render). Antes se hacía `return` en silencio: el candidato pulsaba
     // "Enviar" y no pasaba NADA (revisión 16-jul). Ahora reintentamos una vez y,
@@ -564,7 +584,7 @@ export default function CarreraPublicaPage() {
 
         <aside>
           <Card padding="lg" className="sticky top-6">
-            <form onSubmit={onSubmit} className="space-y-4">
+            <form onSubmit={onSubmit} onFocusCapture={abrirAvisoSiFalta} className="space-y-4">
               <div>
                 <Pill tono="brand" dot>
                   Postularme
@@ -833,6 +853,45 @@ export default function CarreraPublicaPage() {
           </Card>
         </aside>
       </main>
+
+      {mostrarAviso && aviso && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="aviso-compromiso-titulo"
+        >
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl">
+            <div className="h-1 bg-brand-600" />
+            <div className="px-6 py-6 sm:px-8">
+              <div className="flex items-center gap-2.5">
+                <Handshake size={22} strokeWidth={1.75} className="text-teal-700 shrink-0" />
+                <h2
+                  id="aviso-compromiso-titulo"
+                  className="text-[19px] font-semibold tracking-[-0.01em] text-text-strong"
+                >
+                  {aviso.titulo || 'Antes de postularte'}
+                </h2>
+              </div>
+              <TextoMarcado
+                texto={aviso.texto}
+                className="mt-4 text-[14px] text-text-body leading-[1.6]"
+              />
+              <div className="mt-6 flex justify-end">
+                <Button
+                  variant="brand-primary"
+                  onClick={() => {
+                    setAvisoVisto(true);
+                    setMostrarAviso(false);
+                  }}
+                >
+                  Entendido, quiero continuar
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="max-w-5xl mx-auto px-6 py-10 flex items-center justify-center gap-3 text-[11px] text-text-muted">
         <EquitelLogo size={18} />

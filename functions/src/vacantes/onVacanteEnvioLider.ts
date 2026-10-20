@@ -106,7 +106,8 @@ export const onVacanteEnvioLider = onDocumentUpdated(
       tx.set(notiRef, {
         destinatario_uid: liderUid,
         tipo: 'reloj_lider_aviso',
-        titulo: `Plazo para agendar la entrevista · ${String(v.consecutivo ?? '')}`,
+        // Encabezado del diseño de Karen (20-oct).
+        titulo: `¡Líder, necesitamos tu respuesta! · ${String(v.consecutivo ?? '')}`,
         mensaje: textoReloj(cfg.textoAvisoLider, {
           nombre: String(v.lider_nombre ?? '').split(' ')[0] ?? '',
           cargo: String(v.cargo_nombre ?? ''),

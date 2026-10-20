@@ -21,6 +21,8 @@ export interface ConfigAvisoCompromisoDoc {
   en_entrevista_analista?: boolean;
   en_entrevista_lider?: boolean;
   en_portal?: boolean;
+  /** Anuncio al postularse en la página de la vacante (reu Karen 20-oct). */
+  en_postulacion?: boolean;
   actualizado_en?: Timestamp | null;
   actualizado_por?: string;
 }

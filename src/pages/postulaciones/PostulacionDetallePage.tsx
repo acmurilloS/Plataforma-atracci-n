@@ -1176,7 +1176,11 @@ function FechaVinculacionInline({ postulacion }: SubProps) {
  *  + "Queremos conocerte". Las que son PDF se cargan con el botón "Subir PDF". */
 const PRUEBAS_ESTANDAR = {
   filas: [
-    { nombre: 'Test 1', link: 'https://forms.gle/RXXbMJrRteqGiy1L7' },
+    // Link nuevo pedido por Karen (20-oct).
+    {
+      nombre: 'Test 1',
+      link: 'https://docs.google.com/forms/d/e/1FAIpQLSdea3Gp5untHo5pmfD4eCD4S5O4kzVKBmO_d9omuoAnYw0FMg/viewform',
+    },
     {
       nombre: 'Test 2',
       link: 'https://docs.google.com/forms/d/e/1FAIpQLSfCvLYIM1V_zjn6K37BxrPY67mzNV2goMIv1UShYGYYQDh_rg/viewform',
@@ -1672,6 +1676,9 @@ function EntrevistasTab({
     const porUbicacion = new Map<string, (typeof sedes)[number]>();
     for (const s of sedes) {
       if (s.activo === false) continue;
+      // Sin dirección no sirve para citar presencial (reu Karen 20-oct: Bogotá no
+      // tiene sede propia y su opción confundía). Se carga en Catálogos → Sedes.
+      if (!(s.direccion ?? '').trim()) continue;
       // Por ciudad + dirección: colapsa los duplicados por empresa (misma sede
       // física) pero conserva direcciones genuinamente distintas en una ciudad.
       const clave = `${(s.ciudad || s.nombre).trim().toLowerCase()}|${(s.direccion || '')
@@ -1831,12 +1838,15 @@ function EntrevistasTab({
                     return (
                       <option key={s.id} value={valor}>
                         {s.nombre}
-                        {s.ciudad ? ` · ${s.ciudad}` : ''}
-                        {s.direccion ? ` · ${s.direccion}` : ' · (sin dirección)'}
+                        {s.ciudad && s.ciudad !== s.nombre ? ` · ${s.ciudad}` : ''}
+                        {` · ${s.direccion}`}
                       </option>
                     );
                   })}
               </select>
+              <span className="block text-[11px] text-text-subtle mt-1">
+                Solo aparecen las sedes con dirección registrada (Catálogos → Sedes).
+              </span>
             </label>
           )}
 

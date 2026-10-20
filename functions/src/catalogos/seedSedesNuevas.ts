@@ -17,6 +17,8 @@ const NUEVAS = [
   { codigo: 'CUC', ciudad: 'Cúcuta', nombre: 'Cúcuta' },
   { codigo: 'CTG', ciudad: 'Cartagena', nombre: 'Cartagena' },
   { codigo: 'MON', ciudad: 'Montería', nombre: 'Montería' },
+  // Reu Karen 20-oct (Quibdó, Buenaventura y Cúcuta ya existían).
+  { codigo: 'SAI', ciudad: 'San Andrés', nombre: 'San Andrés' },
 ];
 
 export const seedSedesNuevas = onCall({ region: 'us-central1' }, async (req) => {

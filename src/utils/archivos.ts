@@ -19,7 +19,7 @@
  * (src/lib/sesionAnonima.ts) para el portal y la landing.
  */
 
-export type FamiliaArchivo = 'pdf' | 'imagen' | 'word';
+export type FamiliaArchivo = 'pdf' | 'imagen' | 'word' | 'excel';
 
 export const MB = 1024 * 1024;
 
@@ -58,6 +58,8 @@ interface Detectado {
 }
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const XLS = 'application/vnd.ms-excel';
 
 /** Tipos que se aceptan si la firma no se pudo leer pero el navegador sí los informó. */
 const POR_TIPO_NAVEGADOR: Record<string, Detectado> = {
@@ -70,6 +72,8 @@ const POR_TIPO_NAVEGADOR: Record<string, Detectado> = {
   'image/heif': { contentType: 'image/heif', familia: 'imagen', extension: 'heic' },
   'application/msword': { contentType: 'application/msword', familia: 'word', extension: 'doc' },
   [DOCX]: { contentType: DOCX, familia: 'word', extension: 'docx' },
+  [XLSX]: { contentType: XLSX, familia: 'excel', extension: 'xlsx' },
+  [XLS]: { contentType: XLS, familia: 'excel', extension: 'xls' },
 };
 
 function extensionDe(nombre: string): string {
@@ -112,6 +116,10 @@ export function detectarPorFirma(b: Uint8Array, ext: string, tipoNavegador = '')
     return { contentType: 'image/tiff', familia: 'imagen', extension: 'tif' };
   }
   if (ascii(b, 0, 2) === 'BM' && ext === 'bmp') return { contentType: 'image/bmp', familia: 'imagen', extension: 'bmp' };
+  // Excel 97-2003: mismo contenedor OLE que Word; lo decide la extensión .xls.
+  if (empiezaCon(b, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]) && ext === 'xls') {
+    return { contentType: XLS, familia: 'excel', extension: 'xls' };
+  }
   // Word 97-2003 (contenedor OLE). Excel/PowerPoint usan el mismo contenedor: solo
   // se acepta si el nombre dice .doc o no trae extensión.
   if (empiezaCon(b, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]) && (ext === 'doc' || ext === '')) {
@@ -120,6 +128,10 @@ export function detectarPorFirma(b: Uint8Array, ext: string, tipoNavegador = '')
   // .docx es un ZIP: se acepta si el nombre o el navegador dicen Word.
   if (empiezaCon(b, [0x50, 0x4b, 0x03, 0x04]) && (ext === 'docx' || tipoNavegador === DOCX)) {
     return { contentType: DOCX, familia: 'word', extension: 'docx' };
+  }
+  // .xlsx también es un ZIP: se acepta si el nombre o el navegador dicen Excel.
+  if (empiezaCon(b, [0x50, 0x4b, 0x03, 0x04]) && (ext === 'xlsx' || tipoNavegador === XLSX)) {
+    return { contentType: XLSX, familia: 'excel', extension: 'xlsx' };
   }
   return null;
 }
@@ -166,6 +178,7 @@ const NOMBRE_FAMILIA: Record<FamiliaArchivo, string> = {
   pdf: 'PDF',
   imagen: 'foto (JPG o PNG)',
   word: 'Word',
+  excel: 'Excel',
 };
 
 function listaPermitidos(permitidos: FamiliaArchivo[]): string {

@@ -26,6 +26,14 @@ service firebase.storage {
             || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 
+    // PDF o Excel (.xlsx/.xls): informe de atracción en archivo (reu Karen 20-oct).
+    function esPdfOExcel() {
+      return request.resource.contentType != null
+        && (request.resource.contentType == 'application/pdf'
+            || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            || request.resource.contentType == 'application/vnd.ms-excel');
+    }
+
     // Avales de vacante (PDF). Solo usuarios internos suben y leen.
     match /avales/{empresa}/{file} {
       allow read: if tieneRol();
@@ -102,6 +110,17 @@ service firebase.storage {
     match /formatos_corregidos/{postulacion}/{file} {
       allow read: if tieneRol();
       allow write: if tieneRol() && esPdf() && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // Informe de atracción en archivo (PDF o Excel) que el equipo de Atracción sube
+    // para el líder en el Concepto (reu Karen 20-oct: los líderes no entendían la
+    // tabla). Lo suben analista/coordinación/admin/gh; lo lee cualquier usuario
+    // interno (el líder lo abre desde el Concepto). No se borra (trazabilidad).
+    match /conceptos/{vacante}/{file} {
+      allow read: if tieneRol();
+      allow write: if request.auth != null
+        && request.auth.token.rol in ['analista', 'coordinador', 'admin', 'gh']
+        && esPdfOExcel() && request.resource.size < 15 * 1024 * 1024;
     }
 
     // Plantillas editables de formatos (hoy: carta de bienvenida, #4b reu 18-ago).

@@ -30,6 +30,8 @@ export interface AvisoCompromiso {
   enAnalista: boolean;
   enLider: boolean;
   enPortal: boolean;
+  /** Anuncio al postularse en la landing (reu Karen 20-oct). */
+  enPostulacion: boolean;
   /** Hash corto de título+texto: trazabilidad de qué versión se envió. */
   version: string;
 }
@@ -41,6 +43,7 @@ export const AVISO_APAGADO: AvisoCompromiso = {
   enAnalista: false,
   enLider: false,
   enPortal: false,
+  enPostulacion: false,
   version: '',
 };
 
@@ -68,6 +71,7 @@ export async function leerAvisoCompromiso(): Promise<AvisoCompromiso> {
         enAnalista: c.en_entrevista_analista !== false,
         enLider: c.en_entrevista_lider !== false,
         enPortal: c.en_portal !== false,
+        enPostulacion: c.en_postulacion !== false,
         version: createHash('sha1').update(`${titulo}\n${texto}`).digest('hex').slice(0, 10),
       };
     }
@@ -98,7 +102,8 @@ export function textoAviso(cfg: AvisoCompromiso, vars: VarsAviso): string {
 /**
  * Bloque HTML para el correo. PRIMERO se escapa el texto de la config y LUEGO
  * se interpola con valores también escapados: el HTML que traiga la config se ve
- * literal, nunca se inyecta. Saltos → <br> (Outlook ignora pre-line).
+ * literal, nunca se inyecta. Saltos → <br> (Outlook ignora pre-line) y
+ * `**texto**` → negrita (diseño de Karen, 20-oct).
  */
 export function bloqueAvisoHtml(cfg: AvisoCompromiso, vars: VarsAviso): string {
   const v = { nombre: escapeHtml(vars.nombre), cargo: escapeHtml(vars.cargo) };
@@ -106,7 +111,9 @@ export function bloqueAvisoHtml(cfg: AvisoCompromiso, vars: VarsAviso): string {
     .split(/\n\s*\n/)
     .map(
       (p) =>
-        `<p style="margin:0 0 8px;">${interpolar(escapeHtml(p), v).replace(/\n/g, '<br>')}</p>`,
+        `<p style="margin:0 0 8px;">${interpolar(escapeHtml(p), v)
+          .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+          .replace(/\n/g, '<br>')}</p>`,
     )
     .join('');
   const titulo = cfg.titulo

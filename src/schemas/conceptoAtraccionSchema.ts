@@ -35,4 +35,21 @@ export interface ConceptoAtraccionDoc extends CamposAuditoria {
   analista_nombre: string;
   fecha_concepto: Timestamp;
   candidatos: CandidatoConcepto[];
+  /**
+   * Informe en archivo (PDF o Excel) que la analista sube en vez de, o además
+   * de, llenar la tabla (reu Karen 20-oct: los líderes no entendían la tabla).
+   * El líder lo ve en el Concepto. null = quitado.
+   */
+  archivo_informe?: ArchivoInformeConcepto | null;
+}
+
+export interface ArchivoInformeConcepto {
+  url: string;
+  path: string;
+  nombre: string;
+  content_type: string;
+  tamano: number;
+  subido_en: Timestamp;
+  subido_por: string;
+  subido_por_nombre: string;
 }

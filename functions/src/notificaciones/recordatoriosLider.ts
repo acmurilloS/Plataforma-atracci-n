@@ -189,7 +189,7 @@ async function procesarVacante(
         notificacion(
           String(r.lider_uid ?? v.lider_uid ?? ''),
           'reloj_lider_recordatorio',
-          `Recordatorio: agenda la entrevista · ${consecutivo}`,
+          `Recordatorio: confirma tu agenda de entrevistas · ${consecutivo}`,
           textoReloj(cfg.textoRecordatorioLider, varsDe(v, doc.id, venceFinalMs, cfg)),
           linkConcepto,
           doc.id,
@@ -272,7 +272,7 @@ async function procesarVacante(
     if (liderUid) {
       tx.set(
         db.collection('notificaciones').doc(),
-        notificacion(liderUid, 'reloj_lider_pausa', `Proceso suspendido · ${consecutivo}`, textoReloj(cfg.textoPausaLider, vars), linkConcepto, s.id),
+        notificacion(liderUid, 'reloj_lider_pausa', `Proceso temporalmente congelado · ${consecutivo}`, textoReloj(cfg.textoPausaLider, vars), linkConcepto, s.id),
       );
     }
     for (const uid of equipo) {

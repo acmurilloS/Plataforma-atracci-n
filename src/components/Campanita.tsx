@@ -9,6 +9,7 @@ import type { NotificacionDoc } from '../schemas';
 import { puedeAbrirRuta } from '../utils/accesoRutas';
 import { cn } from '../utils/cn';
 import { rutaHome } from '../utils/rutaHome';
+import { sinMarcas } from '../utils/textoMarcado';
 
 /**
  * Campanita de notificaciones en el topbar (sistema brand).
@@ -135,7 +136,7 @@ export function Campanita() {
                         {n.titulo}
                       </p>
                       <p className="text-[12px] text-text-muted mt-0.5 line-clamp-2 leading-[1.45]">
-                        {n.mensaje}
+                        {sinMarcas(n.mensaje)}
                       </p>
                       {n.creado_en && (
                         <p className="text-[10px] text-text-subtle mt-1 tabular-nums">

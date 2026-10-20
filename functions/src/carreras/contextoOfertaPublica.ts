@@ -1,6 +1,7 @@
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from '../utils/admin';
+import { leerAvisoCompromiso, textoAviso } from '../notificaciones/avisoCompromiso';
 
 /**
  * Contexto público de una oferta para la landing (`/carreras/:id`).
@@ -21,6 +22,10 @@ import { db } from '../utils/admin';
  *
  * Acepta anónimos (y hasta sin auth): es una oferta pública, igual que
  * `resolverRefSlug`. No expone nada que no estuviera ya destinado al candidato.
+ *
+ * También devuelve el aviso de compromiso al candidato (reu Karen 20-oct: "que
+ * cuando se registren les salga este anuncio") si está encendido y marcado
+ * "al postularse" en Mensajes y reglas; si no, `aviso: null`.
  */
 export const contextoOfertaPublica = onCall({ region: 'us-central1' }, async (req) => {
   const vacanteId = String(req.data?.vacante_id ?? '').trim();
@@ -44,16 +49,25 @@ export const contextoOfertaPublica = onCall({ region: 'us-central1' }, async (re
     logger.warn('[carreras] no se pudo leer el consentimiento', { e });
   }
 
+  // Aviso de compromiso (fail-closed: apagado o con error → null).
+  const cfgAviso = await leerAvisoCompromiso();
+  const avisoDe = (cargo: string) =>
+    cfgAviso.activo && cfgAviso.enPostulacion
+      ? { titulo: cfgAviso.titulo, texto: textoAviso(cfgAviso, { nombre: '', cargo }) }
+      : null;
+
   // Contexto del cargo: primero los criterios del perfilamiento (lo que el líder
   // definió para ESTA vacante); si no hay, la descripción del catálogo. La
   // justificación de la vacante NUNCA sale — es interna.
   let contexto = '';
+  let cargo = '';
   try {
     const vs = await db.collection('vacantes').doc(vacanteId).get();
     if (!vs.exists) {
-      return { contexto: '', consent };
+      return { contexto: '', consent, aviso: null };
     }
-    const vac = vs.data() as { proceso_activo_id?: string; cargo_id?: string };
+    const vac = vs.data() as { proceso_activo_id?: string; cargo_id?: string; cargo_nombre?: string };
+    cargo = String(vac.cargo_nombre ?? '').trim();
 
     if (vac.proceso_activo_id) {
       const ps = await db.collection('procesos').doc(vac.proceso_activo_id).get();
@@ -72,5 +86,5 @@ export const contextoOfertaPublica = onCall({ region: 'us-central1' }, async (re
     logger.warn('[carreras] no se pudo armar el contexto del cargo', { vacanteId, e });
   }
 
-  return { contexto, consent };
+  return { contexto, consent, aviso: avisoDe(cargo) };
 });

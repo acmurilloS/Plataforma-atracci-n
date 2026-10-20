@@ -27,6 +27,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatearFecha } from '../../utils/fechas';
 import { validarRelojLider } from '../../schemas';
 import type {
+  ArchivoInformeConcepto,
   CandidatoConcepto,
   ConceptoAtraccionDoc,
   ConfigRelojLiderDoc,
@@ -35,6 +36,7 @@ import type {
   VacanteDoc,
 } from '../../schemas';
 import { EquitelLogo } from '../../components/EquitelLogo';
+import { InformeArchivoConcepto } from '../../components/vacantes/InformeArchivoConcepto';
 import { Button, Pill } from '../../components/brand';
 
 /**
@@ -146,6 +148,7 @@ export default function ConceptoAtraccionPage() {
   }
 
   const concepto = conceptos[0] ?? null;
+  const archivoInforme: ArchivoInformeConcepto | null = concepto?.archivo_informe ?? null;
   // El líder "puro" (rol lider) ve la hoja en solo-lectura, solo para revisar/imprimir.
   const esDuenoVacante = !!user && !!vacante && vacante.lider_uid === user.uid;
   // Diego (C&D, rol gh) es "líder solicitante" de los cargos que le reportan. Al ser
@@ -264,7 +267,7 @@ export default function ConceptoAtraccionPage() {
     setGuardado(false);
   }
 
-  async function guardar(): Promise<boolean> {
+  async function guardar(extra: Record<string, unknown> = {}): Promise<boolean> {
     if (!vacante || !user) return false;
     setGuardando(true);
     setErr(null);
@@ -285,6 +288,7 @@ export default function ConceptoAtraccionPage() {
           vacante.analista_nombre ?? (perfil ? `${perfil.nombre} ${perfil.apellido}` : ''),
         fecha_concepto: Timestamp.now(),
         candidatos: filas,
+        ...extra,
       };
       if (concepto) {
         await actualizar('conceptos_atraccion', concepto.id, payload);
@@ -313,6 +317,10 @@ export default function ConceptoAtraccionPage() {
       setErr('Esta vacante no tiene un líder asignado, así que no hay a quién enviarle el concepto.');
       return;
     }
+    if (filas.length === 0 && !archivoInforme) {
+      setErr('Llena la tabla o sube el informe en PDF o Excel antes de enviárselo al líder.');
+      return;
+    }
     // Guarda anti-doble-envío: si ya se le envió el concepto al líder, confirmar.
     const yaEnviado = (vacante as unknown as Record<string, unknown>).concepto_enviado_lider_en;
     if (yaEnviado && !window.confirm('Ya le enviaste el concepto a este líder. ¿Reenviar?')) {
@@ -330,11 +338,17 @@ export default function ConceptoAtraccionPage() {
       const analista = perfil ? `${perfil.nombre} ${perfil.apellido}` : 'El equipo de Atracción';
       const nombres = filas.map((f) => f.nombre).filter(Boolean);
       const lista = nombres.length > 0 ? `: ${nombres.join(', ')}` : '';
+      const finalistas =
+        nombres.length > 0 ? ` con ${nombres.length} integrante(s) finalista(s)${lista}` : '';
       await crear('notificaciones', {
         destinatario_uid: vacante.lider_uid,
         tipo: 'concepto_listo',
-        titulo: 'Concepto de atracción listo para tu revisión',
-        mensaje: `${analista} te compartió el concepto de atracción de ${vacante.cargo_nombre} (${vacante.consecutivo}) con ${nombres.length} integrante(s) finalista(s)${lista}. Ábrelo para revisarlo desde la plataforma.`,
+        titulo: archivoInforme
+          ? 'Informe de atracción listo para tu revisión'
+          : 'Concepto de atracción listo para tu revisión',
+        mensaje: archivoInforme
+          ? `${analista} te compartió el informe de ${vacante.cargo_nombre} (${vacante.consecutivo})${finalistas}. Ábrelo desde la plataforma: el archivo (${archivoInforme.content_type === 'application/pdf' ? 'PDF' : 'Excel'}) está en el concepto.`
+          : `${analista} te compartió el concepto de atracción de ${vacante.cargo_nombre} (${vacante.consecutivo})${finalistas}. Ábrelo para revisarlo desde la plataforma.`,
         link: `/vacantes/${vacante.id}/concepto-atraccion`,
         // Con vacante_id el correo sale con reply-to a la analista del proceso.
         vacante_id: vacante.id,
@@ -448,7 +462,7 @@ export default function ConceptoAtraccionPage() {
                   Volver a llenar
                 </Button>
                 <Button
-                  onClick={guardar}
+                  onClick={() => guardar()}
                   disabled={guardando || enviandoLider}
                   loading={guardando}
                   variant="neutral-secondary"
@@ -551,7 +565,17 @@ export default function ConceptoAtraccionPage() {
         );
       })()}
 
-      {/* Hoja oficial imprimible · mantiene formato VIDA-F-03 */}
+      {/* Informe en archivo (reu Karen 20-oct). El líder solo lo ve si existe. */}
+      <InformeArchivoConcepto
+        vacanteId={vacante.id}
+        archivo={archivoInforme}
+        puedeEditar={!esLider}
+        onGuardar={(a) => guardar({ archivo_informe: a })}
+      />
+
+      {/* Hoja oficial imprimible · mantiene formato VIDA-F-03. Si el informe va en
+          archivo y la tabla quedó vacía, el líder no ve una hoja en blanco. */}
+      {!(esLider && archivoInforme && filas.length === 0) && (
       <div className="bg-white border border-slate-300 print:border-0 print:p-0 p-8 shadow-brand-card print:shadow-none">
         <header className="flex items-center justify-between gap-6 border border-text-strong">
           <div className="flex items-center gap-4 px-4 py-3 border-r border-text-strong">
@@ -702,6 +726,7 @@ export default function ConceptoAtraccionPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       {!esLider && (
         <div className="flex justify-end print:hidden">

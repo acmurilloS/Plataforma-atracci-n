@@ -155,13 +155,19 @@ export const onEntrevistaCreate = onDocumentCreated(
       bloqueLugar = `<p style="margin:0 0 6px;"><strong>Link de la videollamada:</strong><br>
         <a href="${escapeAttr(salaOLink)}" style="color:#be1e0d;">${escapeHtml(salaOLink)}</a></p>`;
     } else if (modalidad === 'presencial') {
+      // Lo que eligió la analista (dirección de la sede donde se hace la entrevista)
+      // manda. La sede de la VACANTE solo se usa si no eligió lugar: una vacante de
+      // "Bogotá" se entrevista en Mosquera y el correo decía las dos (reu Karen 20-oct).
       const partes: string[] = [];
-      const sedeTexto = [sedeNombre, sedeDireccion].filter(Boolean).join(' — ');
-      if (sedeTexto) partes.push(`<strong>Sede:</strong><br>${escapeHtml(sedeTexto)}`);
-      if (salaOLink) partes.push(`<strong>Lugar / indicaciones:</strong><br>${escapeHtml(salaOLink)}`);
+      if (salaOLink) {
+        partes.push(`<strong>Lugar de la entrevista:</strong><br>${escapeHtml(salaOLink)}`);
+      } else {
+        const sedeTexto = [sedeNombre, sedeDireccion].filter(Boolean).join(' — ');
+        if (sedeTexto) partes.push(`<strong>Sede:</strong><br>${escapeHtml(sedeTexto)}`);
+      }
       if (!partes.length) partes.push('Te confirmaremos la dirección exacta por este medio.');
       bloqueLugar = partes.map((p) => `<p style="margin:0 0 6px;">${p}</p>`).join('');
-      locationCal = [sedeDireccion, salaOLink].filter(Boolean).join(' · ') || sedeNombre;
+      locationCal = salaOLink || sedeDireccion || sedeNombre;
     } else if (modalidad === 'telefonica') {
       bloqueLugar = `<p style="margin:0 0 6px;">Te llamaremos al número que registraste.</p>`;
     }
