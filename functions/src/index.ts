@@ -10,6 +10,7 @@ export { preasignarRoles } from './auth/preasignarRoles';
 // Pestaña de Usuarios (admin): listar con último login + activar/desactivar (reu 03-jul).
 export { listarUsuariosAdmin } from './auth/listarUsuariosAdmin';
 export { cambiarEstadoUsuario } from './auth/cambiarEstadoUsuario';
+export { editarNombreUsuario } from './auth/editarNombreUsuario';
 
 // Subir PDFs (avales, CVs, docs) a la Shared Drive corporativa de Equitel.
 export { subirArchivoADrive } from './drive/subirArchivoADrive';

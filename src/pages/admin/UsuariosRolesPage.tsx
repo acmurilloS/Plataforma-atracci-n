@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUnidadesDeSede } from '../../hooks/useCatalogos';
 import { Button, Card, Pill } from '../../components/brand';
 import { cn } from '../../utils/cn';
+import { AnalistasPanel } from '../../components/admin/AnalistasPanel';
 
 /**
  * UsuariosRolesPage · /admin/usuarios (admin).
@@ -69,7 +70,7 @@ function haceTiempo(iso: string | null): string {
   return formatDistanceToNow(d, { locale: es, addSuffix: true });
 }
 
-type Tab = 'todos' | 'activos' | 'inactivos' | 'invitados';
+type Tab = 'analistas' | 'todos' | 'activos' | 'inactivos' | 'invitados';
 
 export default function UsuariosRolesPage() {
   const { user } = useAuth();
@@ -131,6 +132,7 @@ export default function UsuariosRolesPage() {
       activos: usuariosVisibles.filter((u) => u.activo).length,
       inactivos: usuariosVisibles.filter((u) => !u.activo).length,
       invitados: invitados.length,
+      analistas: usuariosVisibles.filter((u) => u.rol === 'analista' && u.activo).length,
     }),
     [usuariosVisibles, invitados],
   );
@@ -225,6 +227,7 @@ export default function UsuariosRolesPage() {
   }
 
   const TABS: { key: Tab; label: string }[] = [
+    { key: 'analistas', label: 'Analistas' },
     { key: 'todos', label: 'Todos' },
     { key: 'activos', label: 'Activos' },
     { key: 'inactivos', label: 'Inactivos' },
@@ -289,7 +292,19 @@ export default function UsuariosRolesPage() {
         </div>
       )}
 
-      {tab !== 'invitados' && (
+      {/* Analistas (Karen, 27-oct): tabla para editar, agregar o quitar. */}
+      {tab === 'analistas' && (
+        <AnalistasPanel
+          usuarios={usuariosVisibles}
+          onCambio={async (msg) => {
+            setErrCarga('');
+            setAviso(msg);
+            await cargar();
+          }}
+        />
+      )}
+
+      {tab !== 'invitados' && tab !== 'analistas' && (
         <>
           {/* Búsqueda + filtro por rol */}
           <div className="flex gap-3 flex-wrap">
