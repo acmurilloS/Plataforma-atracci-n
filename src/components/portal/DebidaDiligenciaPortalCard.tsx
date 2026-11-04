@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { Check, Plus, Trash2 } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
+import { useBorradorSesion } from '../../hooks/useBorradorSesion';
 import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
 import { mensajeErrorSubida } from '../../utils/archivos';
 import { Button } from '../brand';
@@ -18,6 +19,11 @@ import {
  * `DatosBasicosPortalCard`: llena bloques 1–7, firma, se estampa el PDF OFICIAL y
  * se registra vía `registrarDebidaDiligenciaPortal`. El bloque 8 (verificación de
  * listas + VoBo) lo completa después el oficial de cumplimiento (staff).
+ *
+ * Reu Karen 04-nov (Edwin, CU-VIL-1260: "la plataforma se reinicia por completo"):
+ * lo escrito se guarda como borrador en la pestaña (sobrevive a una recarga), al
+ * enviar se avisa al portal (`onEnviado`) para que no vuelva a mostrar el
+ * formulario vacío, y el cónyuge tiene "No tengo cónyuge" (no es obligatorio).
  */
 
 const inp =
@@ -34,7 +40,22 @@ interface Props {
   correo?: string;
   yaEnviado: boolean;
   firmaUrl?: string;
+  /** El portal marca la Debida Diligencia como enviada (con la URL del PDF). */
+  onEnviado?: (pdfUrl: string) => void;
 }
+
+/** Campos del bloque 3 (cónyuge). */
+const CAMPOS_CONYUGE = [
+  'conyuge_primer_apellido',
+  'conyuge_segundo_apellido',
+  'conyuge_nombres',
+  'conyuge_identificacion',
+  'conyuge_tipo_documento',
+  'conyuge_telefono',
+  'conyuge_ocupacion',
+  'conyuge_empleador',
+  'conyuge_parentesco',
+] as const;
 
 interface Pep {
   nombre: string;
@@ -69,9 +90,11 @@ export function DebidaDiligenciaPortalCard({
   correo,
   yaEnviado,
   firmaUrl,
+  onEnviado,
 }: Props) {
   const ini = splitNombre(nombreCompleto);
-  const [f, setF] = useState<Record<string, string>>({
+  const clave = token ? `portal:${token}:debida_diligencia` : null;
+  const [f, setF, borrarF] = useBorradorSesion<Record<string, string>>(clave && `${clave}:campos`, {
     departamento: '',
     ciudad_municipio: '',
     cargo: cargoNombre || '',
@@ -94,7 +117,8 @@ export function DebidaDiligenciaPortalCard({
     nombre_apellidos_familiar: '',
     parentesco_familiar: '',
     cargo_familiar: '',
-    // Cónyuge
+    // Cónyuge ('si' = no tiene: el bloque se marca "No aplica")
+    sin_conyuge: 'no',
     conyuge_primer_apellido: '',
     conyuge_segundo_apellido: '',
     conyuge_nombres: '',
@@ -115,8 +139,12 @@ export function DebidaDiligenciaPortalCard({
     posee_reconocimiento_publico: 'no',
     posee_vinculo_pep: 'no',
   });
-  const [pep, setPep] = useState<Pep[]>([]);
-  const [checks, setChecks] = useState({ anticorrupcion: false, origenes: false, laft: false });
+  const [pep, setPep, borrarPep] = useBorradorSesion<Pep[]>(clave && `${clave}:pep`, []);
+  const [checks, setChecks, borrarChecks] = useBorradorSesion(clave && `${clave}:declaraciones`, {
+    anticorrupcion: false,
+    origenes: false,
+    laft: false,
+  });
   const [firma, setFirma] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -124,6 +152,7 @@ export function DebidaDiligenciaPortalCard({
 
   const set = (k: string, v: string) => setF((s) => ({ ...s, [k]: v }));
   const esSi = (k: string) => f[k] === 'si';
+  const sinConyuge = esSi('sin_conyuge');
 
   async function enviar() {
     if (!f.nombres.trim() || !f.primer_apellido.trim() || !f.identificacion.trim()) {
@@ -140,9 +169,16 @@ export function DebidaDiligenciaPortalCard({
     }
     setEnviando(true);
     setErr(null);
+    // Sin cónyuge: el bloque 3 sale como "NO APLICA" en el formato (no en blanco).
+    const { sin_conyuge: _sinConyuge, ...campos } = f;
+    void _sinConyuge;
+    if (sinConyuge) {
+      for (const k of CAMPOS_CONYUGE) campos[k] = '';
+      campos.conyuge_nombres = 'NO APLICA';
+    }
     try {
       const estampado: DebidaDiligenciaEstampado = {
-        ...f,
+        ...campos,
         fecha_diligenciamiento: isoADisplay(new Date().toISOString().slice(0, 10)),
         fecha_nacimiento: isoADisplay(f.fecha_nacimiento),
         fecha_expedicion_documento: isoADisplay(f.fecha_expedicion_documento),
@@ -166,7 +202,7 @@ export function DebidaDiligenciaPortalCard({
       const firmaImgUrl = await getDownloadURL(rImg);
 
       const datos = {
-        ...f,
+        ...campos,
         tiene_familiar_empresa: esSi('tiene_familiar_empresa'),
         realiza_operaciones_moneda_extranjera: esSi('realiza_operaciones_moneda_extranjera'),
         posee_productos_financieros_extranjero: esSi('posee_productos_financieros_extranjero'),
@@ -181,6 +217,10 @@ export function DebidaDiligenciaPortalCard({
       const fn = httpsCallable(functions, 'registrarDebidaDiligenciaPortal');
       await fn({ token, cedula, datos, pdf_url: pdfUrl, firma_imagen_url: firmaImgUrl });
       setEnviado(true);
+      borrarF();
+      borrarPep();
+      borrarChecks();
+      onEnviado?.(pdfUrl);
     } catch (e) {
       setErr(mensajeErrorSubida(e, 'No se pudo enviar. Reintenta.'));
     } finally {
@@ -271,7 +311,22 @@ export function DebidaDiligenciaPortalCard({
           )}
         </Bloque>
 
-        <Bloque titulo="3. Información del cónyuge">
+        <Bloque titulo="3. Información del cónyuge (si aplica)">
+          <label className="sm:col-span-2 flex items-center gap-2 text-[13px] text-text-strong">
+            <input
+              type="checkbox"
+              checked={sinConyuge}
+              onChange={(e) => set('sin_conyuge', e.target.checked ? 'si' : 'no')}
+              className="h-4 w-4 accent-brand-600"
+            />
+            No tengo cónyuge ni compañero(a) permanente
+          </label>
+          {sinConyuge ? (
+            <p className="sm:col-span-2 text-[12px] text-text-muted">
+              Este bloque quedará como «No aplica» en tu formato. Puedes continuar con el punto 4.
+            </p>
+          ) : (
+          <>
           <Campo label="Primer apellido"><input value={f.conyuge_primer_apellido} onChange={(e) => set('conyuge_primer_apellido', e.target.value)} className={inp} /></Campo>
           <Campo label="Segundo apellido"><input value={f.conyuge_segundo_apellido} onChange={(e) => set('conyuge_segundo_apellido', e.target.value)} className={inp} /></Campo>
           <Campo label="Nombres"><input value={f.conyuge_nombres} onChange={(e) => set('conyuge_nombres', e.target.value)} className={inp} /></Campo>
@@ -286,6 +341,8 @@ export function DebidaDiligenciaPortalCard({
           <Campo label="Ocupación"><input value={f.conyuge_ocupacion} onChange={(e) => set('conyuge_ocupacion', e.target.value)} className={inp} /></Campo>
           <Campo label="Empleador"><input value={f.conyuge_empleador} onChange={(e) => set('conyuge_empleador', e.target.value)} className={inp} /></Campo>
           <Campo label="Parentesco"><input value={f.conyuge_parentesco} onChange={(e) => set('conyuge_parentesco', e.target.value)} className={inp} /></Campo>
+          </>
+          )}
         </Bloque>
 
         <Bloque titulo="4. Información financiera">

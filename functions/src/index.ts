@@ -121,7 +121,7 @@ export { decidirTerna } from './decisiones/decidirTerna';
 // Solicitud de dotación con tallas (subpaso de entrega de carpeta, reu 26-jun).
 export { enviarSolicitudDotacion } from './dotacion/enviarSolicitudDotacion';
 // Dotación AUTOMÁTICA al diligenciar las tallas en Datos Básicos (reu Karen 02-jul).
-export { onDatosBasicosTallas } from './dotacion/onDatosBasicosTallas';
+export { onDatosBasicosTallas, onPostulacionDotacion } from './dotacion/onDatosBasicosTallas';
 
 // Portal del candidato (público, sin login): consentimientos digitales (2026-06-13).
 export { enviarPortalCandidato } from './portal/enviarPortalCandidato';

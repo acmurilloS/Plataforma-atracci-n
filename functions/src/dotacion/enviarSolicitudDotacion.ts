@@ -50,8 +50,9 @@ export async function cargoRequiereDotacion(post: Record<string, unknown>): Prom
 /**
  * Núcleo del envío de la solicitud de dotación. Lo usan las DOS vías:
  *  - Manual (callable `enviarSolicitudDotacion`): la analista/GH edita tallas y envía.
- *  - Automática (trigger `onDatosBasicosTallas`): al diligenciar las tallas en
- *    Datos Básicos, si el cargo requiere dotación, se dispara solo (reu Karen 02-jul).
+ *  - Automática (triggers `onDatosBasicosTallas` / `onPostulacionDotacion`): con
+ *    las tallas de Datos Básicos, si el cargo requiere dotación, y SOLO cuando la
+ *    persona ya está en contratación (reu Karen 02-jul y 04-nov).
  *
  * No valida auth ni "aplica" (eso lo hace cada llamador). Envía a GESTORES + COMPRAS
  * (config `configuracion_global/dotacion`), reply-to al analista, respeta modo prueba,
@@ -295,7 +296,7 @@ export async function enviarSolicitudDotacionCore(opts: {
  * integrante (traídas de Datos Básicos, editables en el modal) + datos del cargo.
  *
  * Vía MANUAL (la analista/GH revisa/corrige tallas y reenvía). La vía AUTOMÁTICA
- * vive en el trigger `onDatosBasicosTallas` (dispara al diligenciar las tallas).
+ * vive en `onDatosBasicosTallas` / `onPostulacionDotacion` (solo en contratación).
  */
 export const enviarSolicitudDotacion = onCall(
   { region: 'us-central1', secrets: [GMAIL_USER, GMAIL_APP_PASSWORD] },

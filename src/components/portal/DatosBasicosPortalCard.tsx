@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { Check, Plus, Trash2 } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
+import { useBorradorSesion } from '../../hooks/useBorradorSesion';
 import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
 import { mensajeErrorSubida } from '../../utils/archivos';
 import { Button } from '../brand';
@@ -21,6 +22,8 @@ interface Props {
   yaEnviado: boolean;
   /** URL del PDF oficial firmado, para descargar (B12). */
   firmaUrl?: string;
+  /** El portal marca los Datos Básicos como enviados (con la URL del PDF). */
+  onEnviado?: (pdfUrl: string) => void;
 }
 
 interface Contacto {
@@ -109,6 +112,9 @@ function aEstampado(
  * DatosBasicosPortalCard · el INTEGRANTE diligencia y firma sus Datos Básicos
  * (DGH-F-05) desde su portal (reu 26-jun). Genera el PDF oficial estampado y lo
  * envía a la callable registrarDatosBasicosPortal (token + cédula).
+ *
+ * Lo escrito se guarda como borrador en la pestaña (sobrevive a una recarga en el
+ * celular) y al enviar se avisa al portal (reu Karen 04-nov).
  */
 export function DatosBasicosPortalCard({
   token,
@@ -118,9 +124,11 @@ export function DatosBasicosPortalCard({
   documentoNumero,
   yaEnviado,
   firmaUrl,
+  onEnviado,
 }: Props) {
   const ini = splitNombre(nombreCompleto);
-  const [f, setF] = useState<Record<string, string>>({
+  const clave = token ? `portal:${token}:datos_basicos` : null;
+  const [f, setF, borrarF] = useBorradorSesion<Record<string, string>>(clave && `${clave}:campos`, {
     tipo_contratacion: 'directo',
     nombres: ini.nombres,
     apellidos: ini.apellidos,
@@ -164,11 +172,11 @@ export function DatosBasicosPortalCard({
     talla_camisa_blusa: '',
     talla_otros: '',
   });
-  const [emerg, setEmerg] = useState<Contacto[]>([
+  const [emerg, setEmerg, borrarEmerg] = useBorradorSesion<Contacto[]>(clave && `${clave}:emergencia`, [
     { nombre: '', telefono: '' },
     { nombre: '', telefono: '' },
   ]);
-  const [hijos, setHijos] = useState<HijoForm[]>([]);
+  const [hijos, setHijos, borrarHijos] = useBorradorSesion<HijoForm[]>(clave && `${clave}:hijos`, []);
   const [firma, setFirma] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -216,6 +224,10 @@ export function DatosBasicosPortalCard({
       const fn = httpsCallable(functions, 'registrarDatosBasicosPortal');
       await fn({ token, cedula, datos, pdf_url: pdfUrl, firma_imagen_url: firmaImgUrl });
       setEnviado(true);
+      borrarF();
+      borrarEmerg();
+      borrarHijos();
+      onEnviado?.(pdfUrl);
     } catch (e) {
       setErr(mensajeErrorSubida(e, 'No se pudo enviar. Reintenta.'));
     } finally {
@@ -323,7 +335,7 @@ export function DatosBasicosPortalCard({
           <p className="text-[11px] text-text-subtle sm:col-span-2">Caja de compensación, ARL y riesgo (%) los completa Gestión Humana.</p>
         </Bloque>
 
-        <Bloque titulo="3. Información familiar">
+        <Bloque titulo="3. Información familiar (si aplica)">
           <Campo label="Nombre del cónyuge"><input value={f.conyuge_nombre} onChange={(e) => set('conyuge_nombre', e.target.value)} className={inp} /></Campo>
           <Campo label="Documento del cónyuge"><input value={f.conyuge_documento} onChange={(e) => set('conyuge_documento', e.target.value)} className={inp} /></Campo>
           <Campo label="Profesión / actividad del cónyuge"><input value={f.conyuge_profesion_actividad} onChange={(e) => set('conyuge_profesion_actividad', e.target.value)} className={inp} /></Campo>

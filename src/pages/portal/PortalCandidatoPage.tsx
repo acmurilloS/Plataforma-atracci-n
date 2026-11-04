@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
 import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
+import { useBorradorSesion } from '../../hooks/useBorradorSesion';
 import { reportarFalloSubidaPortal } from '../../lib/reportarFalloSubida';
 import { MB, mensajeErrorSubida, prepararArchivo, type ArchivoListo } from '../../utils/archivos';
 import { cn } from '../../utils/cn';
@@ -318,7 +319,10 @@ export default function PortalCandidatoPage() {
           </div>
         </nav>
 
-        {tab === 'proceso' && (
+        {/* Las pestañas se OCULTAN, no se desmontan (reu Karen 04-nov): al cambiar de
+            pestaña se perdía todo lo escrito en los formularios largos y el candidato
+            sentía que "la plataforma se reinicia por completo". */}
+        <div hidden={tab !== 'proceso'}>
           <div className="space-y-6">
             {mensajeFase(data.fase) && (
               <div
@@ -349,28 +353,35 @@ export default function PortalCandidatoPage() {
               cargo={data.cargo_nombre}
             />
           </div>
-        )}
+        </div>
 
-        {tab === 'documentos' && (
-          <div className="space-y-6">
-            <PortalDocumentos token={token ?? ''} cedula={cedula} slots={data.slots} />
-            <SubirDocumentos token={token ?? ''} cedula={cedula} iniciales={data.documentos} />
+        {!data.movimiento_interno && (
+          <div hidden={tab !== 'documentos'}>
+            <div className="space-y-6">
+              <PortalDocumentos token={token ?? ''} cedula={cedula} slots={data.slots} />
+              <SubirDocumentos token={token ?? ''} cedula={cedula} iniciales={data.documentos} />
+            </div>
           </div>
         )}
 
-        {tab === 'datos_basicos' && (
-          <DatosBasicosPortalCard
-            token={token ?? ''}
-            cedula={cedula}
-            empresaNombre={empresa.nombre}
-            nombreCompleto={data.candidato_nombre}
-            documentoNumero={data.documento_numero}
-            yaEnviado={data.firma_datos_basicos}
-            firmaUrl={data.firma_datos_basicos_url}
-          />
+        {!data.movimiento_interno && (
+          <div hidden={tab !== 'datos_basicos'}>
+            <DatosBasicosPortalCard
+              token={token ?? ''}
+              cedula={cedula}
+              empresaNombre={empresa.nombre}
+              nombreCompleto={data.candidato_nombre}
+              documentoNumero={data.documento_numero}
+              yaEnviado={data.firma_datos_basicos}
+              firmaUrl={data.firma_datos_basicos_url}
+              onEnviado={(url) =>
+                setData((d) => (d ? { ...d, firma_datos_basicos: true, firma_datos_basicos_url: url } : d))
+              }
+            />
+          </div>
         )}
 
-        {tab === 'autorizaciones' && (
+        <div hidden={tab !== 'autorizaciones'}>
           <AutorizacionesTab
             token={token ?? ''}
             cedula={cedula}
@@ -389,12 +400,20 @@ export default function PortalCandidatoPage() {
             condiciones={data.condiciones}
             condicionesAceptadas={data.condiciones_aceptadas}
             aceptar={aceptar}
+            onDebidaDiligenciaEnviada={(url) =>
+              setData((d) =>
+                d ? { ...d, firma_debida_diligencia: true, firma_debida_diligencia_url: url } : d,
+              )
+            }
+            onCondicionesAceptadas={() =>
+              setData((d) => (d ? { ...d, condiciones_aceptadas: true } : d))
+            }
           />
-        )}
+        </div>
 
-        {tab === 'ayuda' && (
+        <div hidden={tab !== 'ayuda'}>
           <PortalAyuda analistaEmail={data.analista_email} cargo={data.cargo_nombre} />
-        )}
+        </div>
 
         <PieEmpresa empresa={empresa} />
       </div>
@@ -631,6 +650,8 @@ function AutorizacionesTab({
   condiciones,
   condicionesAceptadas,
   aceptar,
+  onDebidaDiligenciaEnviada,
+  onCondicionesAceptadas,
 }: {
   token: string;
   cedula: string;
@@ -650,10 +671,20 @@ function AutorizacionesTab({
   condiciones?: Record<string, string> | null;
   condicionesAceptadas: boolean;
   aceptar: (tipo: 'datos' | 'imagen', url: string, img: string) => Promise<void>;
+  onDebidaDiligenciaEnviada: (pdfUrl: string) => void;
+  onCondicionesAceptadas: () => void;
 }) {
-  const [ciudadExpedicion, setCiudadExpedicion] = useState('');
-  const [celular, setCelular] = useState('');
-  const [correo, setCorreo] = useState('');
+  // Borrador en la pestaña: sin estos 3 datos el consentimiento de tratamiento de
+  // datos queda bloqueado, y se perdían con una recarga (reu Karen 04-nov).
+  const [datosAut, setDatosAut] = useBorradorSesion(token ? `portal:${token}:autorizaciones` : null, {
+    ciudadExpedicion: '',
+    celular: '',
+    correo: '',
+  });
+  const { ciudadExpedicion, celular, correo } = datosAut;
+  const setCiudadExpedicion = (v: string) => setDatosAut((d) => ({ ...d, ciudadExpedicion: v }));
+  const setCelular = (v: string) => setDatosAut((d) => ({ ...d, celular: v }));
+  const setCorreo = (v: string) => setDatosAut((d) => ({ ...d, correo: v }));
   const completo = !!(ciudadExpedicion.trim() && celular.trim() && correo.trim());
   const inputCls =
     'mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] ' +
@@ -793,6 +824,7 @@ function AutorizacionesTab({
           correo={correo}
           yaEnviado={debidaDiligenciaEnviada}
           firmaUrl={debidaDiligenciaFirmaUrl}
+          onEnviado={onDebidaDiligenciaEnviada}
         />
       </Acordeon>
       )}
@@ -803,6 +835,7 @@ function AutorizacionesTab({
             cedula={cedula}
             condiciones={condiciones}
             aceptadas={condicionesAceptadas}
+            onAceptadas={onCondicionesAceptadas}
           />
         </Acordeon>
       )}
@@ -859,7 +892,10 @@ function Acordeon({
           />
         </span>
       </button>
-      {abierto && <div className="border-t border-slate-100 p-3 sm:p-4">{children}</div>}
+      {/* Oculto, no desmontado: cerrar la sección borraba lo escrito (reu Karen 04-nov). */}
+      <div hidden={!abierto} className="border-t border-slate-100 p-3 sm:p-4">
+        {children}
+      </div>
     </div>
   );
 }
@@ -1027,11 +1063,13 @@ function CondicionesCard({
   cedula,
   condiciones,
   aceptadas,
+  onAceptadas,
 }: {
   token: string;
   cedula: string;
   condiciones: Record<string, string>;
   aceptadas: boolean;
+  onAceptadas?: () => void;
 }) {
   const [aceptado, setAceptado] = useState(aceptadas);
   const [enviando, setEnviando] = useState(false);
@@ -1064,6 +1102,7 @@ function CondicionesCard({
       );
       await fn({ token, cedula });
       setAceptado(true);
+      onAceptadas?.();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'No se pudo registrar. Reintenta.');
     } finally {
