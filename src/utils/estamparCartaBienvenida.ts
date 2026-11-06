@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { PDFFont } from 'pdf-lib';
+import { textoWinAnsi } from './textoPdf';
 
 /**
  * Estampa la CARTA DE BIENVENIDA oficial de Equitel (firmada por el CEO) sobre el
@@ -84,14 +85,14 @@ export async function estamparCartaBienvenida(datos: CartaBienvenidaDatos): Prom
   const fecha = (datos.fecha || '').trim() || fechaLargaBogotaHoy();
 
   // 1) Fecha (tapar la baked + reescribir, alineada a la derecha como el original).
-  const dateStr = `Medellín, ${fecha}`;
+  const dateStr = textoWinAnsi(`Medellín, ${fecha}`);
   const dateW = reg.widthOfTextAtSize(dateStr, 12);
   page.drawRectangle({ x: 340, y: H - 137, width: 225, height: 18, color: blanco });
   page.drawText(dateStr, { x: 561 - dateW, y: H - 133.5, size: 12, font: reg, color: tinta });
 
   // 2) Saludo + nombre del candidato (negrita, como el original).
   page.drawRectangle({ x: 49, y: H - 165, width: 300, height: 18, color: blanco });
-  page.drawText(`Apreciado ${nombre},`, { x: 51.2, y: H - 160.8, size: 12, font: bold, color: tinta });
+  page.drawText(textoWinAnsi(`Apreciado ${nombre},`), { x: 51.2, y: H - 160.8, size: 12, font: bold, color: tinta });
 
   // 3) Familia: solo si se pasan nombres, se reescribe la frase insertándolos.
   if (familiares) {
@@ -100,7 +101,7 @@ export async function estamparCartaBienvenida(datos: CartaBienvenidaDatos): Prom
       `Hacemos extensiva esta bienvenida también a tu familia (${familiares}); pues para ` +
       'nosotros es importante mantener una relación cercana con tu familia y contar con su ' +
       'participación y apoyo.';
-    envolver(parrafo, reg, 12, 512)
+    envolver(textoWinAnsi(parrafo), reg, 12, 512)
       .slice(0, 3)
       .forEach((linea, i) => {
         page.drawText(linea, { x: 51.2, y: H - 256.5 - i * 13.4, size: 12, font: reg, color: tinta });

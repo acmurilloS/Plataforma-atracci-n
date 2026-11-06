@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { PDFFont } from 'pdf-lib';
+import { textoWinAnsi } from './textoPdf';
 
 /**
  * Estampa la Solicitud de Integrantes sobre el formato OFICIAL Equitel
@@ -143,7 +144,7 @@ export async function estamparSolicitudIntegrante(datos: SolicitudEstampado): Pr
   const tinta = rgb(0.05, 0.05, 0.12);
 
   const draw = (texto: unknown, x: number, yTop: number, maxAncho?: number, size = 6.5) => {
-    const s0 = texto === undefined || texto === null ? '' : String(texto);
+    const s0 = texto === undefined || texto === null ? '' : textoWinAnsi(String(texto));
     if (!s0) return;
     let size2 = size;
     if (maxAncho) {
@@ -155,7 +156,7 @@ export async function estamparSolicitudIntegrante(datos: SolicitudEstampado): Pr
   for (const [k, x, yTop, maxA, size] of CAMPOS) draw(datos[k], x, yTop, maxA, size);
 
   for (const [k, x, yTop, maxA, size, lh] of AREAS) {
-    const s0 = datos[k] ? String(datos[k]) : '';
+    const s0 = datos[k] ? textoWinAnsi(String(datos[k])) : '';
     if (!s0) continue;
     const { lineas, size: sz } = ajustarArea(s0, font, size, maxA, MAX_LINEAS[k] ?? 6);
     // Con fuente reducida, interlineado proporcional para que sigan cabiendo.

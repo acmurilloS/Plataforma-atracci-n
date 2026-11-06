@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { textoWinAnsi } from './textoPdf';
 
 /**
  * Estampa los Datos Básicos del Integrante sobre el formato OFICIAL Equitel
@@ -161,7 +162,7 @@ export async function estamparDatosBasicos(
     size = 9,
     f = font,
   ) => {
-    const s0 = texto === undefined || texto === null ? '' : String(texto);
+    const s0 = texto === undefined || texto === null ? '' : textoWinAnsi(String(texto));
     if (!s0) return;
     let size2 = size;
     if (maxAncho) {

@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { recortarFirma } from './recortarFirma';
+import { textoWinAnsi } from './textoPdf';
 
 /**
  * Estampa la Debida Diligencia / SAGRILAFT del integrante sobre el PDF OFICIAL
@@ -182,7 +183,7 @@ export async function estamparDebidaDiligencia(
   const d: DebidaDiligenciaEstampado = { ...datos, tipo_registro: pretty(datos.tipo_registro) };
 
   const draw = (texto: unknown, x: number, yTop: number, maxAncho?: number, size = 8, f = font) => {
-    const s0 = texto === undefined || texto === null ? '' : String(texto);
+    const s0 = texto === undefined || texto === null ? '' : textoWinAnsi(String(texto));
     if (!s0) return;
     let size2 = size;
     if (maxAncho) {

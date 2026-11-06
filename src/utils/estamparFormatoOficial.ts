@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { recortarFirma } from './recortarFirma';
+import { textoWinAnsi } from './textoPdf';
 
 /**
  * Estampa los datos del integrante + su firma digital sobre el PDF OFICIAL
@@ -193,7 +194,7 @@ export async function estamparFormatoOficial(
     if (!page) continue;
     const valor = typeof c.valor === 'function' ? c.valor(datos) : datos[c.valor];
     if (!valor) continue;
-    const texto = String(valor);
+    const texto = textoWinAnsi(String(valor));
     const { height } = page.getSize();
     // Si hay ancho máximo (blanco corto, p.ej. el cargo), reduce la fuente
     // hasta que quepa — así un cargo largo no se monta sobre el texto siguiente.
