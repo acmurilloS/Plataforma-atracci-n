@@ -32,6 +32,7 @@ import { CamposCondiciones } from '../components/vacantes/CamposCondiciones';
 import { CorregirSolicitudModal } from '../components/vacantes/CorregirSolicitudModal';
 import { AdjuntarAvalVacante } from '../components/vacantes/AdjuntarAvalVacante';
 import { EditarIdentificacionModal } from '../components/vacantes/EditarIdentificacionModal';
+import { QuitarMovimientoInterno } from '../components/vacantes/QuitarMovimientoInterno';
 import { useFestivosTodos } from '../hooks/useCatalogos';
 import { useResumenesVacantes } from '../hooks/useResumenesVacantes';
 import { functions, db } from '../lib/firebase';
@@ -685,6 +686,9 @@ export default function VacanteDetallePage() {
             )}
             <Dato label="Líder solicitante" valor={vac.lider_nombre} />
           </div>
+          {vac.es_movimiento_interno && (esCoord || rol === 'gh') && (
+            <QuitarMovimientoInterno vacanteId={vac.id} />
+          )}
         </Card>
       </section>
 

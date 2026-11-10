@@ -145,6 +145,33 @@ export const editarDatosVacante = onCall({ region: 'us-central1' }, async (req) 
     }
   }
 
+  // Quitar la marca de movimiento interno (Karen 10-nov, CU-CAL-1266: la casilla
+  // se marcó por error al crear la solicitud y el flujograma saltaba perfilamiento
+  // y publicación). Solo coordinación / admin / GH, y solo si nadie entró ya a la
+  // vacante como movimiento interno (esa persona quedaría en un proceso que no es).
+  let quitoMovimiento = false;
+  if (c.es_movimiento_interno === false && vac.es_movimiento_interno === true) {
+    if (!['coordinador', 'admin', 'gh'].includes(rol)) {
+      throw new HttpsError('permission-denied', 'Solo coordinación puede quitar la marca de movimiento interno.');
+    }
+    const mov = await db
+      .collection('postulaciones')
+      .where('vacante_id', '==', vacanteId)
+      .where('movimiento_interno', '==', true)
+      .limit(1)
+      .get();
+    if (!mov.empty) {
+      const quien = String(mov.docs[0].data().candidato_nombre ?? '').trim() || 'Una persona';
+      throw new HttpsError(
+        'failed-precondition',
+        `${quien} ya entró a esta vacante como movimiento interno, así que la marca no se puede quitar.`,
+      );
+    }
+    patch.es_movimiento_interno = false;
+    patch.tipo_movimiento = null;
+    quitoMovimiento = true;
+  }
+
   if (Object.keys(patch).length === 0) {
     throw new HttpsError('invalid-argument', 'No hay cambios para guardar.');
   }
@@ -169,6 +196,29 @@ export const editarDatosVacante = onCall({ region: 'us-central1' }, async (req) 
   patch.actualizado_por = uid;
 
   await ref.update(patch);
+
+  if (quitoMovimiento) {
+    // Queda en la bitácora: cambia qué pasos aplican a la vacante.
+    const usr = (await db.collection('usuarios').doc(uid).get()).data() ?? {};
+    const nombreActor = `${String(usr.nombre ?? '')} ${String(usr.apellido ?? '')}`.trim() || 'Coordinación';
+    const novRef = db.collection('vacante_novedades').doc();
+    await novRef.set({
+      id: novRef.id,
+      vacante_id: vacanteId,
+      vacante_consecutivo: String(vac.consecutivo ?? ''),
+      tipo: 'observacion',
+      motivo:
+        'Se quitó la marca de movimiento interno: la vacante sigue el proceso completo ' +
+        '(perfilamiento, publicación y selección).',
+      estado_anterior: null,
+      estado_nuevo: null,
+      registrado_por_nombre: nombreActor,
+      creado_en: FieldValue.serverTimestamp(),
+      creado_por: uid,
+      actualizado_en: FieldValue.serverTimestamp(),
+      actualizado_por: uid,
+    });
+  }
 
   await db.collection('eventos').add({
     tipo: 'vacante.identificacion_editada',
