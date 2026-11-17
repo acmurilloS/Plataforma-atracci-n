@@ -129,7 +129,15 @@ export const enviarPortalCandidato = onCall(
       const batch = db.batch();
       batch.set(
         tokensCol.doc(token),
-        { ...snapshot, revocado: false, expira_en: nuevaCaducidad() },
+        // Reenviar también DESBLOQUEA el 2º factor (intentos de cédula): es lo que
+        // hace la analista cuando el candidato dice que no puede entrar (17-nov).
+        {
+          ...snapshot,
+          revocado: false,
+          expira_en: nuevaCaducidad(),
+          intentos_cedula: 0,
+          bloqueado_hasta: null,
+        },
         { merge: true },
       );
       if (post.portal_revocado_en) batch.update(postRef, { portal_revocado_en: null });

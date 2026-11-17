@@ -100,7 +100,14 @@ export async function verificarCedula(
       };
     }
 
-    const intentosPrevios = Number(t.intentos_cedula ?? 0);
+    // Si ya pasó un bloqueo, el candidato vuelve a tener todos sus intentos: antes
+    // el contador seguía arriba y UN solo error lo re-bloqueaba (Yony, ET-MOS-1020,
+    // 17-nov: 12 intentos acumulados).
+    const bloqueoVencido =
+      !!bloqueadoHasta &&
+      typeof bloqueadoHasta.toMillis === 'function' &&
+      bloqueadoHasta.toMillis() <= ahora;
+    const intentosPrevios = bloqueoVencido ? 0 : Number(t.intentos_cedula ?? 0);
     if (!entrada) {
       return {
         ok: false,

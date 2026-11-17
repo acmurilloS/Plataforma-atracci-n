@@ -522,10 +522,14 @@ function CedulaGate({
     );
   }
 
+  // Si su número "no coincide", lo más probable es que quedó mal escrito al
+  // postularse: se le dice cómo destrabarlo (Yony, ET-MOS-1020, 17-nov).
+  const ayudaCedula =
+    ' Escribe solo los números de tu cédula. Si estás seguro de que es la correcta, responde el correo con el que recibiste este link: es posible que haya quedado mal registrada y te la corregimos.';
   const error = bloqueoActivo
     ? `Demasiados intentos. Espera unos ${minutosBloqueo} minuto${
         minutosBloqueo === 1 ? '' : 's'
-      } e inténtalo de nuevo.`
+      } e inténtalo de nuevo.${ayudaCedula}`
     : gate.captcha_fallido
       ? 'No pudimos verificar que no eres un robot. Vuelve a marcar la casilla e inténtalo de nuevo.'
       : gate.cedula_incorrecta
@@ -535,7 +539,7 @@ function CedulaGate({
                   gate.intentos_restantes === 1 ? '' : 's'
                 }.`
               : ''
-          }`
+          }${gate.intentos_restantes <= 2 ? ayudaCedula : ''}`
         : undefined;
 
   return (

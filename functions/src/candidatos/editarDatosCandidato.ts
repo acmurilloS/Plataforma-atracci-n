@@ -164,7 +164,12 @@ export const editarDatosCandidato = onCall({ region: 'us-central1' }, async (req
       .where('candidato_id', '==', candidatoId)
       .get();
     for (const t of toks.docs) {
-      batch.update(t.ref, { documento_numero: limpio.documento_numero });
+      // Con la cédula corregida, los intentos fallidos anteriores ya no cuentan.
+      batch.update(t.ref, {
+        documento_numero: limpio.documento_numero,
+        intentos_cedula: 0,
+        bloqueado_hasta: null,
+      });
     }
   }
 
