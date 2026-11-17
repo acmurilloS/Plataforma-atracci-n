@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -214,6 +214,24 @@ export default function PerfilamientoPage() {
       }
     }
   }, [procesoActivo, vacante]);
+
+  // Perfilamiento NUEVO: las herramientas arrancan con lo sugerido para el cargo en
+  // el catálogo (p. ej. la lista de cargos con dotación de Cultura y Desarrollo,
+  // DotaTrack 17-nov). La analista puede agregar o quitar. Una sola vez.
+  const sugeridasAplicadas = useRef(false);
+  useEffect(() => {
+    if (sugeridasAplicadas.current || procesoActivo?.perfilamiento || !cargo) return;
+    const sug = cargo.herramientas_sugeridas;
+    if (!sug) return;
+    sugeridasAplicadas.current = true;
+    setHerramientas((h) => ({
+      computador: h.computador || !!sug.computador,
+      office: h.office || !!sug.office,
+      labroides: h.labroides || !!sug.labroides,
+      dotacion: h.dotacion || !!sug.dotacion,
+      celular_plan_datos: h.celular_plan_datos || !!sug.celular_plan_datos,
+    }));
+  }, [procesoActivo, cargo]);
 
   // La fecha mínima es hoy: el analista decide si tiene sentido operativo.
   // Antes había un mínimo de 3 días hábiles que bloqueaba fechas válidas

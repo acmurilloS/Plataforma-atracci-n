@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { esNoAplica, NO_APLICA, prendasFaltantes } from '../../utils/tallas';
+import { mensajeErrorFuncion } from '../../utils/errores';
 import { httpsCallable } from 'firebase/functions';
 import { useColeccion } from '../../hooks/useColeccion';
 import { functions } from '../../lib/firebase';
@@ -67,6 +69,12 @@ export function DotacionModal({
   }, [dato, listo]);
 
   async function enviar() {
+    // Sin las 6 prendas no se pide (DotaTrack 17-nov, A3). El servidor lo repite.
+    const faltan = prendasFaltantes(tallas);
+    if (faltan.length) {
+      setErr(`Faltan tallas: ${faltan.join(', ')}. Escríbelas o marca «No aplica» si no usa esa prenda.`);
+      return;
+    }
     setEnviando(true);
     setErr(null);
     try {
@@ -75,7 +83,7 @@ export function DotacionModal({
       onDone?.();
       onClose();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No pudimos enviar la solicitud de dotación.');
+      setErr(mensajeErrorFuncion(e, 'No pudimos enviar la solicitud de dotación.'));
     } finally {
       setEnviando(false);
     }
@@ -107,18 +115,39 @@ export function DotacionModal({
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {TALLAS.map((t) => (
-              <label key={t.key} className="block">
-                <span className="block text-[10px] font-bold tracking-[0.06em] uppercase text-text-subtle mb-1">
-                  {t.label}
-                </span>
-                <input
-                  value={tallas[t.key]}
-                  onChange={(e) => setTallas((s) => ({ ...s, [t.key]: e.target.value }))}
-                  className={INPUT}
-                />
-              </label>
-            ))}
+            {TALLAS.map((t) => {
+              // "Otros" es libre; las demás llevan talla o "No aplica" (DotaTrack 17-nov).
+              const opcional = t.key === 'talla_otros';
+              const noAplica = !opcional && esNoAplica(tallas[t.key]);
+              return (
+                <div key={t.key}>
+                  <span className="block text-[10px] font-bold tracking-[0.06em] uppercase text-text-subtle mb-1">
+                    {t.label}
+                    {opcional ? ' (opcional)' : ''}
+                  </span>
+                  <input
+                    value={noAplica ? '' : tallas[t.key]}
+                    onChange={(e) => setTallas((s) => ({ ...s, [t.key]: e.target.value }))}
+                    disabled={noAplica}
+                    placeholder={noAplica ? 'No aplica' : ''}
+                    className={`${INPUT} disabled:bg-slate-100 disabled:text-text-subtle`}
+                  />
+                  {!opcional && (
+                    <label className="mt-1 flex items-center gap-1 text-[11px] text-text-muted">
+                      <input
+                        type="checkbox"
+                        checked={noAplica}
+                        onChange={(e) =>
+                          setTallas((s) => ({ ...s, [t.key]: e.target.checked ? NO_APLICA : '' }))
+                        }
+                        className="h-3.5 w-3.5 accent-brand-600"
+                      />
+                      No aplica
+                    </label>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <label className="block">

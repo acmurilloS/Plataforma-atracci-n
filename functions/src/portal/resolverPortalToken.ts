@@ -10,6 +10,7 @@ import { esContratado, esEstadoFinalizado, faseDeEstado } from './faseProceso';
 import { avisoAplicaTipo, leerAvisoCompromiso, textoAviso } from '../notificaciones/avisoCompromiso';
 import { CLAVES_APORTA_CANDIDATO, ITEM_POR_CLAVE } from '../documentos/catalogoCarpeta';
 import { archivosDe } from './registrarDocumentoCarpetaPortal';
+import { cargoRequiereDotacion } from '../dotacion/enviarSolicitudDotacion';
 
 // CAPTCHA (Cloudflare Turnstile). En el emulador no se setea y validarTurnstile
 // usa la test secret oficial; en prod hay que sembrarlo en Secret Manager.
@@ -138,6 +139,9 @@ export const resolverPortalToken = onCall(
   let mensajeDescarte = '';
   // Movimiento interno (reu Karen sep-2026): persona ya empleada → portal simplificado.
   let movimientoInterno = false;
+  // ¿Su cargo lleva dotación? Entonces las tallas de Datos Básicos son obligatorias
+  // (DotaTrack 17-nov, A3: sin talla no se puede pedir ni entregar la prenda).
+  let requiereDotacion = false;
   let vacanteId = String(t.vacante_id ?? '');
   try {
     if (postulacionId) {
@@ -160,6 +164,11 @@ export const resolverPortalToken = onCall(
         mensajeDescarte = String(pd.mensaje_portal_descarte ?? '').trim();
         movimientoInterno = !!pd.movimiento_interno;
         if (!vacanteId) vacanteId = String(pd.vacante_id ?? '');
+        try {
+          requiereDotacion = await cargoRequiereDotacion(pd);
+        } catch (e) {
+          logger.warn('[portal] no se pudo saber si el cargo lleva dotación', { token, e: String(e) });
+        }
       }
     }
   } catch (e) {
@@ -374,6 +383,7 @@ export const resolverPortalToken = onCall(
     finalizado: esEstadoFinalizado(estado),
     contratado: esContratado(estado),
     movimiento_interno: movimientoInterno,
+    requiere_dotacion: requiereDotacion,
     consentimiento_datos_aceptado: datosAceptado,
     consentimiento_imagen_aceptado: imagenAceptado,
     consentimiento_datos_firma_url: datosFirmaUrl,

@@ -7,6 +7,7 @@ import { db } from '../utils/admin';
 import { enviarConGmail } from '../notificaciones/enviarConGmail';
 import { envolverMarca, escapeHtml, interpolar } from '../notificaciones/plantillasMensajes';
 import { leerConfigDotacion } from './configDotacion';
+import { esNoAplica, NO_APLICA, prendasFaltantes } from './tallas';
 
 // El correo a compras/gestores sale por Gmail → hay que enlazar los secrets.
 const GMAIL_USER = defineSecret('GMAIL_USER');
@@ -35,16 +36,30 @@ const CUERPO_DEFAULT = `<p>Buen día,</p>
 <p>Quedamos atentos. Gracias por la gestión.</p>`;
 
 /**
- * ¿El cargo de la postulación requiere dotación? Fuente de verdad = el flag
- * `herramientas_requeridas.dotacion` que marca la analista en el perfilamiento.
+ * ¿El cargo de la postulación requiere dotación? Sí si lo marca CUALQUIERA de:
+ *  - el perfilamiento de la vacante (`herramientas_requeridas.dotacion`, la analista);
+ *  - el catálogo de cargos (`herramientas_sugeridas.dotacion`): la lista de cargos
+ *    con dotación de Cultura y Desarrollo, que se marca en Catálogos → Cargos.
+ * DotaTrack 17-nov: el flag del perfilamiento se marcaba a mano y de forma
+ * dispareja (7 técnicos contratados con dotación y 7 sin ella), y los movimientos
+ * internos no tienen perfilamiento: la lista del cargo cubre los dos casos.
  */
 export async function cargoRequiereDotacion(post: Record<string, unknown>): Promise<boolean> {
   const procId = String(post.proceso_id ?? '');
-  if (!procId) return false;
-  const proc = await db.collection('procesos').doc(procId).get();
-  const perf = proc.data()?.perfilamiento as Record<string, unknown> | undefined;
-  const h = perf?.herramientas_requeridas as Record<string, unknown> | undefined;
-  return h?.dotacion === true;
+  if (procId) {
+    const proc = await db.collection('procesos').doc(procId).get();
+    const perf = proc.data()?.perfilamiento as Record<string, unknown> | undefined;
+    const h = perf?.herramientas_requeridas as Record<string, unknown> | undefined;
+    if (h?.dotacion === true) return true;
+  }
+  const vacId = String(post.vacante_id ?? '');
+  if (!vacId) return false;
+  const vac = await db.collection('vacantes').doc(vacId).get();
+  const cargoId = String(vac.data()?.cargo_id ?? '');
+  if (!cargoId) return false;
+  const cargo = await db.collection('cargos_catalogo').doc(cargoId).get();
+  const sug = cargo.data()?.herramientas_sugeridas as Record<string, unknown> | undefined;
+  return sug?.dotacion === true;
 }
 
 /**
@@ -91,9 +106,21 @@ export async function enviarSolicitudDotacionCore(opts: {
     /* noop */
   }
 
-  // Tallas normalizadas (solo las 7 conocidas).
+  // Tallas normalizadas (solo las 7 conocidas). "No aplica" se guarda siempre igual.
   const tallas: Record<string, string> = {};
-  for (const t of TALLAS) tallas[t.key] = String(tallasIn[t.key] ?? '').trim().slice(0, 60);
+  for (const t of TALLAS) {
+    const v = String(tallasIn[t.key] ?? '').trim().slice(0, 60);
+    tallas[t.key] = esNoAplica(v) ? NO_APLICA : v;
+  }
+  // Sin las 6 prendas no se pide la dotación (DotaTrack 17-nov, A3): sin talla no se
+  // puede comprar ni entregar. La que no se usa va como "NO APLICA", no vacía.
+  const faltan = prendasFaltantes(tallas);
+  if (faltan.length) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Faltan tallas: ${faltan.join(', ')}. Escríbelas o marca «No aplica» si la persona no usa esa prenda.`,
+    );
+  }
 
   // Persiste las tallas corregidas en Datos Básicos (solo la vía manual del modal).
   if (guardarTallas) {

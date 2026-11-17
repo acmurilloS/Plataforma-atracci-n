@@ -19,7 +19,7 @@ export const PERMISOS = [
     id: 'ingresos:read',
     nombre: 'Leer nuevos ingresos',
     descripcion:
-      'Personas contratadas: identificación, cargo, empresa/sede/unidad, fechas, si el cargo requiere dotación y sus tallas.',
+      'Ingresos (desde que se pide la dotación hasta que entran, o si no ingresan): identificación, cargo, empresa/sede/unidad, fechas, si el cargo requiere dotación y sus tallas. Incluye las listas de sedes y cargos.',
   },
 ] as const;
 

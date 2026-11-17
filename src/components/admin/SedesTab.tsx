@@ -231,6 +231,7 @@ function FilaSede({
   const [nombre, setNombre] = useState(sede.nombre);
   const [ciudad, setCiudad] = useState(sede.ciudad);
   const [direccion, setDireccion] = useState(sede.direccion ?? '');
+  const [sedeEntrega, setSedeEntrega] = useState(sede.sede_entrega ?? '');
   const [guardando, setGuardando] = useState(false);
   const inactiva = sede.activo === false;
 
@@ -240,13 +241,15 @@ function FilaSede({
       setNombre(sede.nombre);
       setCiudad(sede.ciudad);
       setDireccion(sede.direccion ?? '');
+      setSedeEntrega(sede.sede_entrega ?? '');
     }
-  }, [sede.nombre, sede.ciudad, sede.direccion, editando]);
+  }, [sede.nombre, sede.ciudad, sede.direccion, sede.sede_entrega, editando]);
 
   function cancelar() {
     setNombre(sede.nombre);
     setCiudad(sede.ciudad);
     setDireccion(sede.direccion ?? '');
+    setSedeEntrega(sede.sede_entrega ?? '');
     setEditando(false);
   }
 
@@ -257,6 +260,7 @@ function FilaSede({
         nombre: nombre.trim(),
         ciudad: ciudad.trim(),
         direccion: direccion.trim(),
+        sede_entrega: sedeEntrega.trim(),
       });
       setEditando(false);
     } catch {
@@ -273,8 +277,15 @@ function FilaSede({
         <td className="px-2 py-2 align-top">
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
         </td>
-        <td className="px-2 py-2 align-top">
+        <td className="px-2 py-2 align-top space-y-1.5">
           <input value={ciudad} onChange={(e) => setCiudad(e.target.value)} className={inputClass} />
+          <input
+            value={sedeEntrega}
+            onChange={(e) => setSedeEntrega(e.target.value)}
+            className={inputClass}
+            placeholder="Sede de entrega de dotación"
+            title="Una de las sedes oficiales de entrega de dotación (DotaTrack)"
+          />
         </td>
         <td className="px-2 py-2 align-top">
           <input
@@ -330,6 +341,11 @@ function FilaSede({
           <MapPin size={11} strokeWidth={1.5} className="text-text-subtle shrink-0" />
           {sede.ciudad}
         </span>
+        {sede.sede_entrega && (
+          <span className="block text-[11px] text-text-muted mt-0.5">
+            Dotación se entrega en {sede.sede_entrega}
+          </span>
+        )}
       </td>
       <td className="px-4 py-3 text-text-muted text-[12px]">{sede.direccion || '—'}</td>
       <td className="px-4 py-3 text-right whitespace-nowrap">

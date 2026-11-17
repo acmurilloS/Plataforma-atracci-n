@@ -221,6 +221,12 @@ export interface PostulacionDoc extends PostulacionInput, CamposAuditoria {
    * en ningún lado y lo necesitamos para el indicador".
    */
   fecha_vinculacion?: Timestamp | null;
+  /**
+   * Primer día de trabajo PREVISTO (DotaTrack 17-nov): lo registra la analista en
+   * contratación, sin cerrar el proceso, para que la dotación esté lista ese día.
+   * Sale por la API como `fecha_ingreso_prevista`.
+   */
+  fecha_ingreso_prevista?: Timestamp | null;
   fecha_vinculacion_registrada_por?: string | null;
   fecha_vinculacion_registrada_en?: Timestamp | null;
   /**

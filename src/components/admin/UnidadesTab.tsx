@@ -4,6 +4,7 @@ import { useUnidadesDeSede } from '../../hooks/useCatalogos';
 import { useAdminCatalogos } from '../../hooks/useAdminCatalogos';
 import { useMutacion } from '../../hooks/useMutacion';
 import { Button, Card } from '../../components/brand';
+import { CargaCentrosCostos } from './CargaCentrosCostos';
 import { cn } from '../../utils/cn';
 
 const inputClass = cn(
@@ -108,6 +109,7 @@ export function UnidadesTab() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-4">
+        <CargaCentrosCostos unidades={unidades} />
         <div className="relative">
           <Search
             size={15}

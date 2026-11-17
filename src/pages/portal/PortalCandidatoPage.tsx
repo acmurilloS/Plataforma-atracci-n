@@ -83,6 +83,8 @@ interface PortalData {
   slots: PortalSlot[];
   /** Movimiento interno: la persona ya es empleada → portal simplificado. */
   movimiento_interno?: boolean;
+  /** Su cargo lleva dotación: tallas obligatorias en Datos Básicos (DotaTrack 17-nov). */
+  requiere_dotacion?: boolean;
   citaciones: { entrevista: CitaEntrevista | null; examen: CitaExamen | null };
   mensaje_descarte: string;
   analista_email: string;
@@ -377,6 +379,7 @@ export default function PortalCandidatoPage() {
               onEnviado={(url) =>
                 setData((d) => (d ? { ...d, firma_datos_basicos: true, firma_datos_basicos_url: url } : d))
               }
+              requiereDotacion={!!data.requiere_dotacion}
             />
           </div>
         )}

@@ -686,6 +686,7 @@ export default function PostulacionDetallePage() {
               Solicitar exámenes médicos
             </button>
           )}
+          {post.estado === 'en_contratacion' && <FechaIngresoPrevistaInline postulacion={post} />}
           {(post.estado === 'en_contratacion' || post.estado === 'contratado') && (
             <FechaVinculacionInline postulacion={post} />
           )}
@@ -1092,6 +1093,71 @@ export default function PostulacionDetallePage() {
 
 interface SubProps {
   postulacion: PostulacionDoc;
+}
+
+// ───────────────────────────────────────────────────────────────
+// Fecha PREVISTA de ingreso (DotaTrack 17-nov): el primer día de trabajo acordado,
+// registrado en contratación SIN cerrar el proceso (eso lo hace la fecha de
+// vinculación). DotaTrack la recibe por la API para tener la dotación ese día.
+// Escritura directa: las reglas permiten a staff/analista/documentación
+// actualizar la postulación sin cambiar el estado.
+// ───────────────────────────────────────────────────────────────
+function FechaIngresoPrevistaInline({ postulacion }: SubProps) {
+  const { actualizar } = useMutacion();
+  const actual = postulacion.fecha_ingreso_prevista?.toDate?.();
+  const [fecha, setFecha] = useState(actual ? formatearFecha(actual, 'yyyy-MM-dd') : '');
+  const [guardando, setGuardando] = useState(false);
+  const [ok, setOk] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function guardar() {
+    setError(null);
+    setGuardando(true);
+    setOk(false);
+    try {
+      await actualizar('postulaciones', postulacion.id, {
+        // Mediodía de Bogotá: la fecha no se corre de día por la zona horaria.
+        fecha_ingreso_prevista: fecha ? Timestamp.fromDate(new Date(`${fecha}T12:00:00-05:00`)) : null,
+      });
+      setOk(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar la fecha.');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-3 py-2.5 print:hidden">
+      <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-text-muted mb-1.5">
+        Fecha prevista de ingreso
+      </p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="date"
+          value={fecha}
+          onChange={(e) => {
+            setFecha(e.target.value);
+            setOk(false);
+          }}
+          className="rounded-md border border-slate-300 px-2 py-1.5 text-[12px] text-text-strong"
+        />
+        <button
+          onClick={guardar}
+          disabled={guardando}
+          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-text-strong hover:bg-slate-50 disabled:opacity-50"
+        >
+          {guardando ? 'Guardando…' : 'Guardar'}
+        </button>
+        {ok && <span className="text-[11px] text-success-700 font-medium">✓ Guardada</span>}
+      </div>
+      <p className="text-[11px] text-text-subtle mt-1">
+        Primer día de trabajo acordado. No cierra el proceso; lo recibe DotaTrack para tener lista la
+        dotación.
+      </p>
+      {error && <p className="text-[11px] text-danger-700 mt-1">{error}</p>}
+    </div>
+  );
 }
 
 // ───────────────────────────────────────────────────────────────

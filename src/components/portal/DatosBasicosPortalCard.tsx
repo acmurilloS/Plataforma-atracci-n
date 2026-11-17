@@ -4,6 +4,7 @@ import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage
 import { Check, Plus, Trash2 } from 'lucide-react';
 import { auth, functions, storage } from '../../lib/firebase';
 import { useBorradorSesion } from '../../hooks/useBorradorSesion';
+import { esNoAplica, NO_APLICA, PRENDAS, prendasFaltantes } from '../../utils/tallas';
 import { asegurarSesionAnonima } from '../../lib/sesionAnonima';
 import { mensajeErrorSubida } from '../../utils/archivos';
 import { Button } from '../brand';
@@ -24,6 +25,11 @@ interface Props {
   firmaUrl?: string;
   /** El portal marca los Datos Básicos como enviados (con la URL del PDF). */
   onEnviado?: (pdfUrl: string) => void;
+  /**
+   * Su cargo lleva dotación: las 6 tallas son obligatorias (talla o "No aplica").
+   * DotaTrack 17-nov (A3): sin talla no se puede pedir ni entregar la prenda.
+   */
+  requiereDotacion?: boolean;
 }
 
 interface Contacto {
@@ -125,6 +131,7 @@ export function DatosBasicosPortalCard({
   yaEnviado,
   firmaUrl,
   onEnviado,
+  requiereDotacion = false,
 }: Props) {
   const ini = splitNombre(nombreCompleto);
   const clave = token ? `portal:${token}:datos_basicos` : null;
@@ -188,6 +195,20 @@ export function DatosBasicosPortalCard({
     if (!f.nombres.trim() || !f.apellidos.trim() || !f.documento_numero.trim()) {
       setErr('Nombres, apellidos y número de documento son obligatorios.');
       return;
+    }
+    // Con el género se elige la prenda de dama o de caballero (DotaTrack 17-nov).
+    if (!f.genero) {
+      setErr('Elige tu género (punto 1): con él se define tu dotación.');
+      return;
+    }
+    if (requiereDotacion) {
+      const faltan = prendasFaltantes(f);
+      if (faltan.length) {
+        setErr(
+          `Completa tus tallas (punto 5): ${faltan.join(', ')}. Si no usas una prenda, marca «No aplica».`,
+        );
+        return;
+      }
     }
     if (!firma) {
       setErr('Dibuja tu firma para continuar.');
@@ -306,7 +327,7 @@ export function DatosBasicosPortalCard({
             </select>
           </Campo>
           <Campo label="Profesión / actividad actual" full><input value={f.profesion_actividad} onChange={(e) => set('profesion_actividad', e.target.value)} className={inp} /></Campo>
-          <Campo label="Género">
+          <Campo label="Género *">
             <select value={f.genero} onChange={(e) => set('genero', e.target.value)} className={inp}>
               <option value="">—</option>
               <option value="masculino">Masculino</option>
@@ -368,14 +389,39 @@ export function DatosBasicosPortalCard({
           ))}
         </Bloque>
 
-        <Bloque titulo="5. Dotación · tallajes">
-          <Campo label="No. calzado"><input value={f.talla_calzado} onChange={(e) => set('talla_calzado', e.target.value)} className={inp} /></Campo>
-          <Campo label="Pantalón"><input value={f.talla_pantalon} onChange={(e) => set('talla_pantalon', e.target.value)} className={inp} /></Campo>
-          <Campo label="Chaleco"><input value={f.talla_chaleco} onChange={(e) => set('talla_chaleco', e.target.value)} className={inp} /></Campo>
-          <Campo label="Guantes"><input value={f.talla_guantes} onChange={(e) => set('talla_guantes', e.target.value)} className={inp} /></Campo>
-          <Campo label="Overol"><input value={f.talla_overol} onChange={(e) => set('talla_overol', e.target.value)} className={inp} /></Campo>
-          <Campo label="Camisa / blusa"><input value={f.talla_camisa_blusa} onChange={(e) => set('talla_camisa_blusa', e.target.value)} className={inp} /></Campo>
-          <Campo label="Otros"><input value={f.talla_otros} onChange={(e) => set('talla_otros', e.target.value)} className={inp} /></Campo>
+        <Bloque titulo={requiereDotacion ? '5. Dotación · tallajes *' : '5. Dotación · tallajes'}>
+          {requiereDotacion && (
+            <p className="sm:col-span-2 text-[12px] text-text-muted">
+              Tu cargo lleva dotación: escribe la talla de cada prenda. Si no usas alguna, marca
+              «No aplica».
+            </p>
+          )}
+          {PRENDAS.map((p) => {
+            const noAplica = esNoAplica(f[p.key]);
+            return (
+              <Campo key={p.key} label={p.label}>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={noAplica ? '' : f[p.key]}
+                    onChange={(e) => set(p.key, e.target.value)}
+                    disabled={noAplica}
+                    placeholder={noAplica ? 'No aplica' : p.ayuda}
+                    className={`${inp} disabled:bg-slate-100 disabled:text-text-subtle`}
+                  />
+                  <label className="flex shrink-0 items-center gap-1 text-[11px] text-text-muted">
+                    <input
+                      type="checkbox"
+                      checked={noAplica}
+                      onChange={(e) => set(p.key, e.target.checked ? NO_APLICA : '')}
+                      className="h-3.5 w-3.5 accent-brand-600"
+                    />
+                    No aplica
+                  </label>
+                </div>
+              </Campo>
+            );
+          })}
+          <Campo label="Otros (opcional)"><input value={f.talla_otros} onChange={(e) => set('talla_otros', e.target.value)} className={inp} /></Campo>
         </Bloque>
 
         <Bloque titulo="6. Observaciones">
