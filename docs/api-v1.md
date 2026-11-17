@@ -13,7 +13,7 @@ plataforma queda siempre en medio: valida quién pregunta y qué puede ver.
 - **Tope:** por defecto 60 peticiones por minuto por llave. Al pasarse: `429` con cabecera
   `Retry-After` (segundos).
 
-> **Novedades del 18-nov-2026** (pedidas por DotaTrack el 17-nov, todas compatibles: lo que
+> **Novedades del 17-nov-2026** (pedidas por DotaTrack el 17-nov, todas compatibles: lo que
 > ya funcionaba sigue igual):
 > - Los ingresos salen **desde que se pide la dotación** (`estado: en_proceso`), no solo al
 >   quedar contratados, y avisan si la persona **no ingresa** (`estado: no_ingresa`).
@@ -174,7 +174,7 @@ Notas de los campos:
 - `movimiento_interno`: la persona ya era empleada y cambia de cargo o de sede.
 - `persona.*`: sale del formato de datos básicos (DGH-F-05) que llena el integrante; si aún no
   lo llenó, se completa con lo registrado en la postulación. `genero`: `masculino`,
-  `femenino`, `otro` o `null` (desde el 18-nov es obligatorio en el formato).
+  `femenino`, `otro` o `null` (desde el 17-nov es obligatorio en el formato).
 - `vacante.sede.codigo` y `cargo.id`: empareja con `GET /sedes` y `GET /cargos`.
 - `vacante.unidad.centro_costos`: lo llena Atracción en el catálogo de unidades con la tabla
   de contabilidad. Mientras esté `null`, cruza por `unidad.nombre`/`unidad.id`.
@@ -182,7 +182,7 @@ Notas de los campos:
   en la lista de cargos con dotación de Cultura y Desarrollo (`GET /cargos` → `dotacion`).
 - `dotacion.tallas`: `null` si el integrante aún no diligenció el DGH-F-05. Cada talla trae la
   talla, `"no_aplica"` (esa prenda no se usa) o `""` (falta). `tallas_completas` y
-  `prendas_faltantes` resumen las seis prendas (`otros` es libre). Desde el 18-nov la
+  `prendas_faltantes` resumen las seis prendas (`otros` es libre). Desde el 17-nov la
   plataforma **no pide la dotación** sin las seis prendas.
 
 ### `GET /ingresos/{id}` · un ingreso
